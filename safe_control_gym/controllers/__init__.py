@@ -49,3 +49,7 @@ register(idx='rarl',
 register(idx='rap',
          entry_point='safe_control_gym.controllers.rarl.rap:RAP',
          config_entry_point='safe_control_gym.controllers.rarl:rap.yaml')
+
+register(idx='lqr_c',
+            entry_point='safe_control_gym.controllers.lqr.lqr_c:LQR_C',
+            config_entry_point='safe_control_gym.controllers.lqr:lqr_c.yaml')
