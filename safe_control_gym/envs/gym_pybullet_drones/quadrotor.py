@@ -19,6 +19,7 @@ from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import (AttitudeC
                                                                        pwm2rpm)
 from safe_control_gym.math_and_models.symbolic_systems import SymbolicModel
 from safe_control_gym.math_and_models.transformations import csRotXYZ, transform_trajectory
+from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import DiscreteObserver
 
 
 class Quadrotor(BaseAviary):
@@ -370,6 +371,9 @@ class Quadrotor(BaseAviary):
         # Set prior/symbolic info.
         self._setup_symbolic()
 
+        # Setup observer for pitch rate filtering.
+        self.observer = DiscreteObserver(self.PYB_TIMESTEP)
+
     def reset(self, seed=None):
         """(Re-)initializes the environment to start an episode.
 
@@ -498,7 +502,17 @@ class Quadrotor(BaseAviary):
         rew = self._get_reward()
         done = self._get_done()
         info = self._get_info()
+
+        # apply observer to filter pitch rate
+        if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            obs[-1] = self.observer.update(obs[-1], action[-1])[-1, :]
         obs, rew, done, info = super().after_step(obs, rew, done, info)
+        # add zero mean gaussian noise to the observation
+        # noise_std = 0.1
+        # obs += np.random.normal(0, noise_std, obs.shape)
+        # Only to the last dimension
+        # obs[-1] += np.random.normal(0, noise_std)
+
         return obs, rew, done, info
 
     def render(self, mode='human', close=False):
@@ -596,7 +610,7 @@ class Quadrotor(BaseAviary):
                                z_dot,
                                (18.112984649321753 * T + 3.7613154938448576) * cs.cos(theta) - g,
                                theta_dot,
-                               -267.8 * theta - 13.41 * theta_dot + 187.5 * P)
+                               -140.8 * theta - 13.4 * theta_dot + 124.8 * P)
             # Define observation.
             Y = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:

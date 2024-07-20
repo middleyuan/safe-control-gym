@@ -6,6 +6,7 @@ from enum import IntEnum
 import numpy as np
 import pybullet as p
 from scipy.spatial.transform import Rotation
+from scipy.linalg import expm
 
 
 class QuadType(IntEnum):
@@ -99,21 +100,21 @@ class AttitudeControl(ABC):
             max_pwm (float, optional): Maximum PWM.
         """
 
-        self.g = g
-        self.KF = kf
-        self.KM = km
-        self.P_COEFF_TOR = np.array(p_coeff_tor)
-        self.I_COEFF_TOR = np.array(i_coeff_tor)
-        self.D_COEFF_TOR = np.array(d_coeff_tor)
-        self.PWM2RPM_SCALE = np.array(pwm2rpm_scale)
-        self.PWM2RPM_CONST = np.array(pwm2rpm_const)
-        self.MIN_PWM = np.array(min_pwm)
-        self.MAX_PWM = np.array(max_pwm)
+        self.g = g # checked
+        self.KF = kf # 
+        self.KM = km # 
+        self.P_COEFF_TOR = np.array(p_coeff_tor) # checked (but need to check onbroard melinger further)
+        self.I_COEFF_TOR = np.array(i_coeff_tor) # checked
+        self.D_COEFF_TOR = np.array(d_coeff_tor) # checked
+        self.PWM2RPM_SCALE = np.array(pwm2rpm_scale) # checked
+        self.PWM2RPM_CONST = np.array(pwm2rpm_const) # checked
+        self.MIN_PWM = np.array(min_pwm) # checked
+        self.MAX_PWM = np.array(max_pwm) # checked
         self.MIXER_MATRIX = np.array([[.5, -.5, -1], [.5, .5, 1], [-.5, .5, -1], [-.5, -.5, 1]])
 
-        self.a_coeff = -1.1264
-        self.b_coeff = 2.2541
-        self.c_coeff = 0.0209
+        self.a_coeff = -1.1264 # checked
+        self.b_coeff = 2.2541 # checked
+        self.c_coeff = 0.0209 # checked
 
         self.last_rpy = np.zeros(3)
         self.integral_rpy_e = np.zeros(3)
@@ -194,3 +195,26 @@ class AttitudeControl(ABC):
         pwm = np.minimum(pwm, 1.0)
         thrust_pwm = pwm * self.MAX_PWM
         return thrust_pwm
+
+class DiscreteObserver:
+    def __init__(self, dt):
+        # initialize the observer with the identified second-order pitch dynamics
+        self.A = np.array([[0, 1], [-140.8, -13.4]])
+        self.B = np.array([[0], [124.8]])
+        self.C = np.array([[1, 0]])
+        self.L = np.array([[2.01], [18.474]])
+        self.BL = np.hstack((self.B, self.L))
+        self.x_hat = np.zeros((2, 1))
+        # discretize the linear system
+        self.A_d = expm(self.A * dt)
+        self.B_d = np.linalg.inv(self.A) @ (self.A_d - np.eye(2)) @ self.BL
+        self.Bd_size = self.B.shape[1]
+        self.Bd_b = self.B_d[:, :self.Bd_size]
+        self.Bd_L = self.B_d[:, self.Bd_size:]
+
+    def update(self, y, u):
+        # update the state estimate with pre-defined observer gain
+        self.x_hat = np.dot(self.A_d, self.x_hat) \
+                   + np.dot(self.Bd_b, u) \
+                   + np.dot(self.Bd_L, y - np.dot(self.C, self.x_hat))
+        return self.x_hat
