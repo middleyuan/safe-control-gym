@@ -115,7 +115,7 @@ def set_acados_constraint_bound(constraint,
     return bound_value * np.ones(constraint.shape)
 
 
-def plot_open_loop_sol(ctrl):
+def plot_open_loop_sol(ctrl, save_path=None):
     ''' Plot the open loop predction of the MPC controller.
 
     Args:
@@ -134,7 +134,6 @@ def plot_open_loop_sol(ctrl):
 
         # Plot the open loop prediction
         fig, axs = plt.subplots(nx + nu, 1, figsize=(5, 8))
-        fig.tight_layout()
         for i in range(nx):
             axs[i].plot(np.arange(steps + 1) * dt, x[i, :], 'b', label='pred')
             axs[i].plot(np.arange(steps + 1) * dt, goal_states[i, :], 'r--', label='ref', )
@@ -143,8 +142,12 @@ def plot_open_loop_sol(ctrl):
         for i in range(nu):
             axs[nx + i].plot(np.arange(steps) * dt, u[i, :], 'b', label='pred')
             axs[nx + i].set_ylabel(f'$u_{i}$')
-
         plt.xlabel('Time [s]')
-        plt.show()
+        fig.tight_layout()
+        if save_path is not None:
+            plt.savefig(save_path)
+            plt.close()
+        else:
+            plt.show()
     else:
         print(colored('[Warning] No open loop solution to plot.', 'yellow'))

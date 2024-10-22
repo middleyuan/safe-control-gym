@@ -644,9 +644,13 @@ class Quadrotor(BaseAviary):
                                z_dot,
                                (beta_1 * T + beta_2) * cs.cos(theta + pitch_bias) - g,
                                theta_dot,
-                               alpha_1 * (theta + pitch_bias ) + alpha_2 * theta_dot + alpha_3 * P)
+                               alpha_1 * (theta + pitch_bias) + alpha_2 * theta_dot + alpha_3 * P)
             # Define observation.
             Y = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+
+            T_mapping = beta_1 * T + beta_2
+            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
+
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
             nx, nu = 5, 2
             # Define states.

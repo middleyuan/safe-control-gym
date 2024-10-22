@@ -255,8 +255,10 @@ class GPMPC(MPC):
                         - self.prior_dynamics_func(x0=x, p=u)['xf']
         self.residual_func = cs.Function('residual_func', [z], [residual])
         self.fc_func = self.env_func(gui=False).symbolic.fc_func # argument x, u
-        self.residual_func_c = self.fc_func(x=x, u=u)['f'] \
+        residual_c = self.fc_func(x=x, u=u)['f'] \
                                 - self.prior_dynamcis_func_c(x=x, u=u)['f']
+        self.residual_func_c = cs.Function('residual_func_c', [z], [residual_c])
+        self.T_prior = self.prior_ctrl.env.T_mapping_func
 
     def set_gp_dynamics_func(self, n_ind_points):
         '''Updates symbolic dynamics.
