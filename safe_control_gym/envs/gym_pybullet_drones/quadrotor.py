@@ -404,7 +404,7 @@ class Quadrotor(BaseAviary):
                 # ref_traj_steps = traj_data['obs'][0].shape[0]
                 # if ref_traj_steps >= max_ref_steps + traj_overhead_steps:
                     # traj_data['obs'][0] = traj_data['obs'][0][:max_ref_steps+traj_overhead_steps]
-                # if 
+                # if
                 POS_REF = np.array(
                     [traj_data['obs'][:, 0], 0 * traj_data['obs'][:, 0], traj_data['obs'][:, 2]]).T
                 VEL_REF = np.array(
@@ -609,7 +609,7 @@ class Quadrotor(BaseAviary):
                     else:
                         # process and observation disturbances
                         self.disturbances[keys].disturbances[0].std = values[0]['std']
-            
+
             # then randomize the disturbances #TODO: need a more elegant way to do this
             self.disturbance_before_rand = self.disturbances.copy()
             for keys, values in self.DISTURBABCE_RAND_INFO.items():
@@ -631,7 +631,7 @@ class Quadrotor(BaseAviary):
 
         # Update task goals
         # NOTE: Task info will be randomized when set_goals() is called.
-        self.set_goals()
+        # self.set_goals()
 
         # Return either an observation and dictionary or just the observation.
         if self.INFO_IN_RESET:
@@ -696,7 +696,7 @@ class Quadrotor(BaseAviary):
                 disturb_force = np.asarray(disturb_force).flatten()
             elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
                 disturb_force = np.asarray(disturb_force).flatten()
-            
+
         # handle downwash force
         if 'downwash' in self.disturbances:
             assert self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY\
@@ -716,13 +716,13 @@ class Quadrotor(BaseAviary):
                 pos = np.array([state[0], 0, state[2]])
             elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10]:
                 pos = np.array([state[0], state[2], state[4]])
-            
+
             if self.DISTURBANCES['downwash'][0]['mode'] == 'track':
                 # update the position of the downwash model
                 self.dw_model.update_pos(pos=pos+self.DISTURBANCES['downwash'][0]['pos'])
             dw_force_mag = self.dw_model.get_dw_force_mag(target_pos=pos, mode='absolute')
             # print(f'dw_force_mag: {dw_force_mag:2f} [N]')
-            
+
             # print(f'dw_force_mag: {dw_force_mag:2f} [N]')
             disturb_force[-1] += -dw_force_mag
 
@@ -1339,7 +1339,7 @@ class Quadrotor(BaseAviary):
         # Custom disturbance info.
         self.DISTURBANCE_MODES['observation']['dim'] = self.obs_dim
         self.DISTURBANCE_MODES['action']['dim'] = self.action_dim
-        self.DISTURBANCE_MODES['dynamics']['dim'] = int(self.QUAD_TYPE) 
+        self.DISTURBANCE_MODES['dynamics']['dim'] = int(self.QUAD_TYPE)
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
             self.DISTURBANCE_MODES['dynamics']['dim'] = 2
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10]:
