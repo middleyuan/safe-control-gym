@@ -458,7 +458,7 @@ class MPCPolicyFunction:
         """Sets up nonlinear optimization problem."""
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
-        etau = 1e-4  # barrier parameter for interior point method
+        etau = 1e-5  # barrier parameter for interior point method
 
         # Optimization variable: [x0, u0, sigma0, x1, u1, ...]
         opt_vars = []
@@ -660,8 +660,12 @@ class MPCPolicyFunction:
 
         # Generate sensitivity of the optimal solution
         dzdP = -cs.inv(dRdz) @ dRdP
-        dPi = cs.Function('dPi', [z, fixed_param, ref_param, theta], [dzdP[nx: nx + nu, :].T])
-        dPi_train = dPi.map(self.n_train_solver, "thread")
+        dPi = dzdP[nx: nx + nu, :].T
+        dPi_zeros = cs.MX.zeros(dPi.shape)
+        f_true = cs.Function('f_true', [z, fixed_param, ref_param, theta], [dPi])
+        f_false = cs.Function('f_false', [z, fixed_param, ref_param, theta], [dPi_zeros])
+        dPi_fn = cs.Function.if_else('dPi_fn', f_true, f_false)
+        dPi_train = dPi_fn.map(self.n_train_solver, "thread")
 
         self.solver_dict = {
             'x_var': x_var,
@@ -683,7 +687,7 @@ class MPCPolicyFunction:
             'rkkt_fn': rkkt_fn,
             'rkkt_fn_parallel': rkkt_fn_parallel,
             'rkkt_fn_train': rkkt_fn_parallel_train,
-            'dpi_fn': dPi,
+            'dpi_fn': dPi_fn,
             'dpi_fn_train': dPi_train
         }
 
@@ -870,7 +874,6 @@ class MPCPolicyFunction:
         lang_mult_fn_train = solver_dict['lang_mult_fn_train']
         rkkt_fn = solver_dict['rkkt_fn_train']
         opt_act_fn = solver_dict['opt_act_fn']
-        dpi_fn = solver_dict['dpi_fn']
         dpi_fn_train = solver_dict['dpi_fn_train']
 
         x0, fixed_p, ref_p = [], [], []
@@ -898,10 +901,10 @@ class MPCPolicyFunction:
         rkkt_batch = rkkt_fn(z, fixed_p, ref_p, theta.T)
         optimal_batch = [True if np.linalg.norm(rkkt_batch[:, i]) ** 2 <= 1e-3 else False for i in
                          range(obs_batch.shape[0])]
+        optimal_batch = np.array(optimal_batch)[None, :]
 
         action_batch = opt_act_fn(soln_batch['x']).full().T
-        # dpi_fn_train = dpi_fn.map(sum(optimal_batch), "thread")
-        dpi_cs = dpi_fn_train(z, fixed_p, ref_p, theta.T).full()
+        dpi_cs = dpi_fn_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
         nabla_pi_ref_batch = []
         nabla_pi_theta_batch = []
         for i in range(obs_batch.shape[0]):
