@@ -68,6 +68,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.env = env_func(normalized_rl_action_space=False)
         self.training_env = env_func(randomized_init=True,
                                      init_state=None,
+                                     cost='quadratic',
                                      normalized_rl_action_space=False,
                                      )
 
@@ -232,7 +233,7 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
 
         ocp_solver = self.ocp_solver
-        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(uncertified_action)))))
+        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.array(uncertified_action).reshape((self.model.nu,)))))
 
         if isinstance(self.cost_function, PRECOMPUTED_COST):
             uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
@@ -244,11 +245,11 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
             self.cost_prev = ocp_solver.get_cost()
-            self.slack_prev = np.zeros((self.horizon, self.model.nx + self.model.nu))
+            self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
             u_val = np.zeros((self.horizon, self.model.nu))
             for i in range(self.horizon):
-                # self.slack_prev[i, :] = ocp_solver.get(i, 'su')
+                self.slack_prev[i, :] = ocp_solver.get(i, 'su')
                 x_val[i, :] = ocp_solver.get(i, 'x')
                 u_val[i, :] = ocp_solver.get(i, 'u')
             x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')

@@ -119,7 +119,7 @@ class PPO(BaseController):
         self.logger.close()
 
     def save(self,
-             path
+             path,
              ):
         """Saves model params and experiment state to checkpoint path."""
         path_dir = os.path.dirname(path)
@@ -140,7 +140,7 @@ class PPO(BaseController):
         torch.save(state_dict, path)
 
     def load(self,
-             path
+             path,
              ):
         """Restores model and experiment given checkpoint path."""
         state = torch.load(path)
@@ -179,8 +179,7 @@ class PPO(BaseController):
         while self.total_steps < self.max_env_steps:
             results = self.train_step()
             # Checkpoint.
-            if (self.total_steps >= self.max_env_steps
-                    or (self.save_interval and self.total_steps % self.save_interval == 0)):
+            if (self.total_steps >= self.max_env_steps or (self.save_interval and self.total_steps % self.save_interval == 0)):
                 # Latest/final checkpoint.
                 self.save(self.checkpoint_path)
                 self.logger.info(f'Checkpoint | {self.checkpoint_path}')
@@ -227,7 +226,7 @@ class PPO(BaseController):
             obs = torch.FloatTensor(obs).to(self.device)
             start = time.time()
             action, v, logp = self.agent.ac.act(obs, True)
-            self.results_dict['inference_time'].append(time.time()-start)
+            self.results_dict['inference_time'].append(time.time() - start)
         if extra_info:
             return action, v, logp
         return action
@@ -253,10 +252,10 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                else:
+                elif not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
-            action = np.atleast_2d(np.squeeze([action]))
+            action = np.array(action).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
             if self.penalize_sf_diff and success:
                 rew = np.log(rew)
@@ -334,7 +333,7 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success:
                     action = env.normalize_action(certified_action)
-                else:
+                elif self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
@@ -426,7 +425,8 @@ class PPO(BaseController):
                     },
                     step,
                     prefix='stat_eval')
-        except:
+        except Exception as e:
+            print(e)
             pass
         # Print summary table
         self.logger.dump_scalars()

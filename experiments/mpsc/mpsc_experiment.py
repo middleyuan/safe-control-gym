@@ -16,6 +16,10 @@ from safe_control_gym.utils.registration import make
 def run(plot=False, model='ppo'):
     '''Main function to run MPSC experiments.
 
+    Args:
+        plot (bool): Whether to plot the results.
+        model (str): Optional model name to use for RL agent.
+
     Returns:
         X_GOAL (np.ndarray): The goal (stabilization or reference trajectory) of the experiment.
         uncert_results (dict): The results of the uncertified experiment.
@@ -161,5 +165,5 @@ def run_multiple_models(plot, all_models):
 
 
 if __name__ == '__main__':
-    run(plot=True, model='mpsf7')
+    run(plot=True, model='mpsf')
     # run_multiple_models(plot=True, all_models=['mpsf7'])

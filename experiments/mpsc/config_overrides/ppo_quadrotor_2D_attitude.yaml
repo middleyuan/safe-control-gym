@@ -25,10 +25,10 @@ algo_config:
   eval_batch_size: 10
 
   # misc
-  log_interval: 66000
-  save_interval: 1320000
+  log_interval: 33000
+  save_interval: 0
   num_checkpoints: 0
-  eval_interval: 66000
+  eval_interval: 33000
   eval_save_best: True
   tensorboard: False
 

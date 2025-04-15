@@ -177,43 +177,51 @@ class NL_MPSC(MPSC):
         raise NotImplementedError('Casadi not implemented')
 
     def setup_acados_optimizer(self):
-        '''setup_optimizer_acados'''
-        # create ocp object to formulate the OCP
+        '''Setup the certifying MPC problem in acados.'''
+        # Create ocp object to formulate the OCP
         ocp = AcadosOcp()
 
         # Setup model
-        acados_model = AcadosModel()
-        acados_model.x = self.model.x_sym
-        acados_model.u = self.model.u_sym
-        acados_model.name = self.env.NAME
+        model = AcadosModel()
+        model.x = self.model.x_sym
+        model.u = self.model.u_sym
+        model.name = self.env.NAME
 
-        acados_model.f_expl_expr = self.model.fc_func(acados_model.x, acados_model.u)
-        acados_model.x_labels = self.env.STATE_LABELS
-        acados_model.u_labels = self.env.ACTION_LABELS
-        acados_model.t_label = 'time'
-        ocp.model = acados_model
+        model.f_expl_expr = self.model.fc_func(model.x, model.u)
+        model.x_labels = self.env.STATE_LABELS
+        model.u_labels = self.env.ACTION_LABELS
+        model.t_label = 'time'
+        ocp.model = model
 
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
 
-        ocp.dims.N = self.horizon
-
-        # set cost module
+        # Set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
+        ocp.cost.cost_type_e = 'LINEAR_LS'
 
         Q_mat = np.zeros((nx, nx))
+        ocp.cost.W_e = np.zeros((nx, nx))
         R_mat = np.eye(nu)
         ocp.cost.W = block_diag(Q_mat, R_mat)
 
         ocp.cost.Vx = np.zeros((ny, nx))
+        ocp.cost.Vx[:nx, :] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
         ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
+        ocp.cost.Vx_e = np.eye(nx)
+
+        ocp.model.cost_y_expr = cs.vertcat(model.x, model.u)
+        ocp.model.cost_y_expr_e = model.x
 
         # Updated on each iteration
         ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
+        ocp.cost.yref_e = self.model.X_EQ
 
-        # set constraints
+        # Setup constraints
         ocp.constraints.constr_type = 'BGH'
+        ocp.constraints.constr_type_e = 'BGH'
+
         ocp.constraints.x0 = self.model.X_EQ
         ocp.constraints.C = self.L_x
         ocp.constraints.D = self.L_u
@@ -223,21 +231,20 @@ class NL_MPSC(MPSC):
         # Slack
         if self.soften_constraints:
             ocp.constraints.Jsg = np.eye(self.p)
-            ocp.cost.Zu = self.slack_cost * np.ones(self.p)
-            ocp.cost.Zl = self.slack_cost * np.ones(self.p)
-            ocp.cost.zl = self.slack_cost * np.ones(self.p)
-            ocp.cost.zu = self.slack_cost * np.ones(self.p)
+            ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+            ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+            ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+            ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
 
         # Options
+        ocp.solver_options.N_horizon = self.horizon
+        ocp.solver_options.tf = self.dt * self.horizon
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
         ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
         ocp.solver_options.hpipm_mode = 'BALANCE'
         ocp.solver_options.integrator_type = 'ERK'
         ocp.solver_options.nlp_solver_type = 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 200
-
-        # set prediction horizon
-        ocp.solver_options.tf = self.dt * self.horizon
 
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)

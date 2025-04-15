@@ -7,10 +7,10 @@ ALGO='ppo'
 SAFETY_FILTER='nl_mpsc'
 MPSC_COST='one_step_cost'
 FILTER=True
-SF_PEN=0.03
+SF_PEN=0.3
 
 if [ "$FILTER" == 'True' ]; then
-    TAG=mpsf8
+    TAG="mpsf_${SF_PEN}"
 else
     TAG=none
 fi
