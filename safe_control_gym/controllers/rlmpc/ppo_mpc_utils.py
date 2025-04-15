@@ -12,8 +12,8 @@ from gymnasium.spaces import Box
 
 from safe_control_gym.controllers.mpc.mpc_utils import (compute_discrete_lqr_gain_from_cont_linear_system,
                                                         compute_state_rmse, get_cost_weight_matrix,
-                                                        reset_constraints, rk_discrete)
-from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, euler_discrete
+                                                        reset_constraints)
+from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, euler_discrete, rk_discrete
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, create_constraint_list
 from safe_control_gym.math_and_models.distributions import Categorical, Normal
@@ -65,6 +65,7 @@ class PPO_MPC_Agent:
             gamma,
             model,
             hidden_dims=[hidden_dim] * 2,
+            exploration_init=self.exploration_init,
             activation=self.activation,
             actor_config=actor_config,
         )
@@ -442,15 +443,16 @@ class MPCPolicyFunction:
 
     def set_dynamics_func(self):
         """Updates symbolic dynamics with actual control frequency."""
-        # self.dynamics_func = rk_discrete(self.model.fc_func,
-        #                                  self.model.nx,
-        #                                  self.model.nu,
-        #                                  self.dt)
-        self.dynamics_func = euler_discrete(self.model.param_fc_func,
-                                            self.model.nx,
-                                            self.model.nu,
-                                            self.model.npl,
-                                            self.dt)
+        self.dynamics_func = rk_discrete(self.model.param_fc_func,
+                                         self.model.nx,
+                                         self.model.nu,
+                                         self.model.npl,
+                                         self.dt)
+        # self.dynamics_func = euler_discrete(self.model.param_fc_func,
+        #                                     self.model.nx,
+        #                                     self.model.nu,
+        #                                     self.model.npl,
+        #                                     self.dt)
 
     def setup_optimizer(self):
         """Sets up nonlinear optimization problem."""
@@ -617,9 +619,9 @@ class MPCPolicyFunction:
             # 'jit_options.flags': ['-03'],
             # 'jit_options.compiler': 'ccache gcc',
             'fatrop.mu_init': etau,
-            'fatrop.max_iter': 200,
+            'fatrop.max_iter': 500,
             'fatrop.print_level': 0,
-            'fatrop.acceptable_tol': 1e-4,
+            'fatrop.acceptable_tol': 1e-5,
         }
         vnlp_prob = {
             'f': cost,
@@ -1071,23 +1073,11 @@ def _create_semi_definite_matrix(n):
     # W = W_upper(p)
     # WW = W.T @ W
 
-    np = n
+    n_param = n
     P = cs.MX.sym('P', n)
     W = cs.diag(P)
     WW = cs.sqrt(W.T @ W)
-    return WW, P, np
-
-
-def soft_update(source, target, tau):
-    """Synchronizes target networks with exponential moving average."""
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
-
-
-def hard_update(source, target):
-    """Synchronizes target networks by copying over parameters directly."""
-    for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(param.data)
+    return WW, P, n_param
 
 
 def random_sample(indices,

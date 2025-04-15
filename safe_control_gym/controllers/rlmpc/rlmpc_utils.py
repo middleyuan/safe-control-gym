@@ -23,6 +23,32 @@ def euler_discrete(f, n, m, k, dt):
     return eu_dyn
 
 
+def rk_discrete(f, n, m, k, dt):
+    '''Runge Kutta discretization for the function.
+
+    Args:
+        f (casadi function): Function to discretize.
+        n (int): state dimensions.
+        m (int): input dimension.
+        dt (float): discretization time.
+
+    Return:
+        x_next (casadi function?):
+    '''
+    X = cs.SX.sym('X', n)
+    U = cs.SX.sym('U', m)
+    P = cs.SX.sym('P', k)
+    # Runge-Kutta 4 integration
+    k1 = f(X, U, P)
+    k2 = f(X + dt / 2 * k1, U, P)
+    k3 = f(X + dt / 2 * k2, U, P)
+    k4 = f(X + dt * k3, U, P)
+    x_next = X + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+    rk_dyn = cs.Function('rk_f', [X, U, P], [x_next], ['x0', 'u', 'p'], ['xf'])
+
+    return rk_dyn
+
+
 # Adam Optimizer (use the class from the previous response)
 class AdamOptimizer:
     def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8):
