@@ -367,7 +367,7 @@ class PPO_MPC(BaseController):
             self.logger.add_scalars(
                 {
                     k: results['train'][k]
-                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss']
+                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss', 'ref_loss']
                 },
                 step,
                 prefix='loss')

@@ -151,17 +151,17 @@ class PPO_MPC_Agent:
 
                     # Passing the gradients through the mpc
                     theta = self.ac.actor.get_theta_param(batch_th['obs'])
-                    # traj_ref = self.ac.actor.get_ref_param(batch['info'])
+                    traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
-                    # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ theta.unsqueeze(2)
-                    theta_loss.mean().backward()
+                    ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
+                    (theta_loss.mean() + ref_loss.mean()).backward()
                     self.actor_opt.step()
 
                     p_loss_epoch += policy_loss.item()
                     e_loss_epoch += entropy_loss.item()
                     kl_epoch += approx_kl.item()
                     theta_loss_epoch += theta_loss.mean().item()
-                    # model_loss_epoch += temp2.mean().item()
+                    ref_loss_epoch += ref_loss.mean().item()
                 # Critic update.
                 value_loss = self.compute_value_loss(batch_th)
                 self.critic_opt.zero_grad()
@@ -173,7 +173,9 @@ class PPO_MPC_Agent:
             results['entropy_loss'].append(e_loss_epoch / num_mini_batch)
             results['approx_kl'].append(kl_epoch / num_mini_batch)
             results['theta_loss'].append(theta_loss_epoch / num_mini_batch)
+            results['ref_loss'].append(ref_loss_epoch / num_mini_batch)
         print(self.ac.actor.mpc_param.detach().numpy())
+        print(self.ac.actor.logstd.detach().numpy())
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -308,28 +310,28 @@ class MPCActor(nn.Module):
 
     def get_theta_param(self, obs):
         if obs.ndim > 1:
-            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.1 * self.param_net.forward(torch.FloatTensor(obs))
+            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
         else:
-            theta = self.mpc_param + 0.1 * self.param_net.forward(torch.FloatTensor(obs))
+            theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
         return theta
 
-    # def get_ref_param(self, info_batch):
-    #     if self.mpc.env.TASK == Task.TRAJ_TRACKING:
-    #         for info in info_batch:
-    #             traj_step = info['traj_step']
-    #             # Slice trajectory for horizon steps, if not long enough, repeat last state.
-    #             start = min(traj_step, self.mpc.traj.shape[-1])
-    #             end = min(traj_step + self.mpc.T + 1, self.mpc.traj.shape[-1])
-    #             remain = max(0, self.mpc.T + 1 - (end - start))
-    #             goal_states = torch.cat((
-    #                 self.traj_param[:, start:end],
-    #                 torch.tile(self.traj_param[:, -1:], (1, remain))
-    #             ), -1)
-    #             print(goal_states)
-    #             p()
-    #     else:
-    #         raise Exception('Reference update for this mode is not implemented.')
-    #     return goal_states  # (nx, T+1).
+    def get_ref_param(self, info_batch):
+        goal_states_batch = torch.FloatTensor()
+        if self.mpc.env.TASK == Task.TRAJ_TRACKING:
+            for info in info_batch:
+                traj_step = info['traj_step']
+                # Slice trajectory for horizon steps, if not long enough, repeat last state.
+                start = min(traj_step, self.mpc.traj.shape[-1])
+                end = min(traj_step + self.mpc.T + 1, self.mpc.traj.shape[-1])
+                remain = max(0, self.mpc.T + 1 - (end - start))
+                goal_states = torch.cat((
+                    self.traj_param[:, start:end],
+                    torch.tile(self.traj_param[:, -1:], (1, remain))
+                ), -1).T.reshape(-1, 1).T
+                goal_states_batch = torch.cat((goal_states_batch, goal_states), 0)
+        else:
+            raise Exception('Reference update for this mode is not implemented.')
+        return goal_states_batch  # (nx, T+1).
 
 
 class MPCPolicyFunction:
@@ -644,7 +646,7 @@ class MPCPolicyFunction:
         R_kkt = cs.vertcat(
             cs.transpose(dlag_dw),
             H_eq,
-            mu * H_ieq,
+            mu * H_ieq + etau,
         )
         # z contains all variables of the lagrangian
         z = cs.vertcat(opt_vars, lamb, mu)
@@ -913,7 +915,7 @@ class MPCPolicyFunction:
         action_batch = torch.FloatTensor(action_batch)
         nabla_pi_ref_batch = torch.FloatTensor(np.array(nabla_pi_ref_batch))
         nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
-        optimal_batch = torch.FloatTensor(np.array(optimal_batch))
+        optimal_batch = torch.FloatTensor(np.array(optimal_batch)).T
         return action_batch, nabla_pi_ref_batch, nabla_pi_theta_batch, optimal_batch
 
 
