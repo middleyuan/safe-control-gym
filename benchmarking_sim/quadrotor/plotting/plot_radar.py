@@ -9,7 +9,7 @@ script_dir = os.path.dirname(__file__)
 def load_metric(transfer_metric, method):
     ctrl = tag_ctrl_list[method]
     res = np.load(
-        f'{script_dir}/../data/{ctrl}_{SYS}_gen_results.npy', allow_pickle=True).item()
+        f'{script_dir}/../data/{ctrl}_gen_results.npy', allow_pickle=True).item()
     transfer_metric[method] = {'rmse': [], 'rmse_std': [], 'inference_time': []}
     for T in episode_len_list:
         T = '_'+str(T)
@@ -22,18 +22,7 @@ def load_metric(transfer_metric, method):
 
 # get the pyplot default color wheel
 prop_cycle = plt.rcParams['axes.prop_cycle']
-# colors = prop_cycle.by_key()['color']
-# plot_colors = {
-#     'GP-MPC': colors[0],
-#     'PPO': colors[1],
-#     'SAC': colors[3],
-#     # 'iLQR': 'darkgray',
-#     'DPPO': colors[6],
-#     'Linear-MPC': colors[2],
-#     'MPC': colors[-1],
-#     'MAX': 'none',
-#     'MIN': 'none',
-# }
+
 SYS = 'quadrotor_2D_attitude'
 tag_ctrl_list = {
     'iLQR': 'ilqr',
@@ -96,6 +85,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     tiks += tiks[:1]
     print('tiks:', tiks)
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist() + [0]
+
     fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(polar=True), )
     for i, model_name in enumerate(ids):
         values = [normalized_data[key][i] for key in data.keys()]
@@ -135,6 +125,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
             if t == '80': t = 'Nonlinear\n   model'
 
             t = t.center(10, ' ')
+            # cusotmize the text position for axes
             if _x == angles[3]:
                 ax.text(_x + 0.2, _y + 0.15, t, size=small_text_size)
             elif _x == angles[0]:
@@ -143,7 +134,9 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
                 else:
                     ax.text(_x - 0.2, _y + 0.0, t, size=small_text_size)
                 flip_flag = False
-            elif model_name == 'GP-MPC':
+            
+            # customize the text position for controllers
+            if model_name == 'GP-MPC':
                 if _x == angles[0]:
                     if flip_flag:
                         ax.text(_x + 0.05, _y - 0.1, t, size=small_text_size)
@@ -156,12 +149,6 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
                     ax.text(_x, _y - 0.01, t, size=small_text_size)
 
             elif model_name == 'DPPO':
-                # if _x == angles[5]:
-                #     ax.text(_x, _y-0.1, t, size=small_text_size)
-                # if _x == angles[0]: # generalization performance
-                #     ax.text(_x-0.1, _y-0.05, t, size=small_text_size)
-                # elif _x == angles[2]: # inference time
-                #     ax.text(_x+0.1, _y-0.05, t, size=small_text_size)
                 if _x == angles[4]:  # sampling complexity
                     ax.text(_x, _y + 0.15, t, size=small_text_size)
                 else:
@@ -177,19 +164,13 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     # ax.legend(loc='upper right', bbox_to_anchor=(0.1, 0.2), fontsize=text_fontsize)
     if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
     if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
-    # plt.show()
     fig_save_path = os.path.join(script_dir, f'radar_{plt_name}.pdf')
     fig.savefig(fig_save_path, dpi=300, bbox_inches='tight')
     fig.savefig(fig_save_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     print(f'figure saved as {fig_save_path}')
 
-
 radar = spider
-
 num_axis = 6
-
-
-
 gen_performance = [transfer_metric['GP-MPC']['rmse'][0], 
                    transfer_metric['GP-MPC']['rmse'][-1],  # GP-MPC
                    transfer_metric['Linear MPC']['rmse'][0], 
@@ -198,9 +179,9 @@ gen_performance = [transfer_metric['GP-MPC']['rmse'][0],
                    transfer_metric['Nonlinear MPC']['rmse'][-1],  # MPC
                    transfer_metric['F-MPC']['rmse'][0], 
                    transfer_metric['F-MPC']['rmse'][-1], # F-MPC
-                   0.14263671, 0.10946506,  # PPO
-                   0.11052249, 0.07096967,  # SAC
-                   0.14777681, 0.11818952,  # DPPO
+                   0.1233724, 0.15347746,  # PPO
+                   0.12137596, 0.11081217,  # SAC
+                   0.13649782, 0.16864583,  # DPPO
                    transfer_metric['PID']['rmse'][0], 
                    transfer_metric['PID']['rmse'][-1], # PID
                    transfer_metric['iLQR']['rmse'][0], 
@@ -216,9 +197,9 @@ performance = [transfer_metric['GP-MPC']['rmse'][2],
                transfer_metric['Nonlinear MPC']['rmse'][2],  # MPC
                transfer_metric['F-MPC']['rmse'][2], 
                transfer_metric['F-MPC']['rmse'][2],  # F-MPC
-               0.04944359, 0.04944359,  # PPO
-               0.06911531, 0.06911531,  # SAC
-               0.05183557, 0.05183557,  # DPPO
+               0.021604097983791027, 0.021604097983791027,  # PPO
+               0.04410137020535634, 0.04410137020535634,  # SAC
+               0.03087288620530012, 0.03087288620530012,  # DPPO
                transfer_metric['PID']['rmse'][2], 
                transfer_metric['PID']['rmse'][2], # PID
                transfer_metric['iLQR']['rmse'][2], 
@@ -234,9 +215,9 @@ inference_time = [transfer_metric['GP-MPC']['inference_time'],
                   transfer_metric['Nonlinear MPC']['inference_time'], # MPC
                   transfer_metric['F-MPC']['inference_time'], 
                   transfer_metric['F-MPC']['inference_time'], # F-MPC
-                  0.00020738168999000832, 0.00020738168999000832, # PPO
-                  0.00024354409288477016, 0.00024354409288477016, # SAC
-                  0.0001976909460844817, 0.0001976909460844817, # DPPO
+                  7.31e-5, 7.31e-5, # PPO
+                  8.72e-5, 8.72e-5, # SAC
+                  7.28e-5, 7.28e-5, # DPPO
                   transfer_metric['PID']['inference_time'], 
                   transfer_metric['PID']['inference_time'], # PID
                   transfer_metric['iLQR']['inference_time'], 
@@ -255,31 +236,55 @@ model_complexity = [80, 80, # GP-MPC
                     80, 80, # iLQR
                     40, 40, # LQR 
                     ]
-sampling_complexity = [int(1320), int(1320),
+sampling_complexity = [int(660), int(660),
                        int(1), int(1),
                        int(1), int(1),
                        int(1), int(1),
-                       int(0.5 * 1e5), int(0.5 * 1e5), # PPO
-                       int(2 * 1e5), int(2 * 1e5), # SAC
-                       int(1 * 1e5), int(1 * 1e5), # DPPO
+                       int(2.5 * 1e5), int(2.5 * 1e5), # PPO
+                       int(1.32 * 1e5), int(1.32 * 1e5), # SAC
+                       int(4.09 * 1e5), int(4.09 * 1e5), # DPPO
                        int(1), int(1),
                        int(1), int(1),
                        int(1), int(1),
                        ]
-robustness = [100, 100,
-              90, 90,
-              100, 100,
-              100, 100,
-              10, 10,
-              50, 50,
-              10, 10,
-              100, 100,
-              70, 70,
-              100, 100,
+robustness_proc = [5 ,5 , # GP-MPC
+              10, 10, # Linear-MPC
+              4, 4, # MPC
+              4, 4, # F-MPC
+              10, 10, # PPO
+              15, 15, # SAC
+              10, 10, # DPPO
+              10, 10, # PID
+              4, 4, # iLQR
+              15, 15, # LQR
               ]
-data = [gen_performance, performance, inference_time, model_complexity, sampling_complexity, robustness]
-max_values = [0.01, 0.01, 1e-5, 1, 1, 120]
-min_values = [0.2, 0.2, 1e-2, 80, 3.e5, 1]
+# robustness_obs = 
+
+data = [gen_performance, 
+        performance, 
+        inference_time, 
+        model_complexity, 
+        sampling_complexity, 
+        robustness_proc,
+        ]
+
+max_values = [
+              min(gen_performance), 
+              min(performance), 
+              min(inference_time), 
+              min(model_complexity), 
+              min(sampling_complexity), 
+              min(robustness_proc),
+              ]
+min_values = [
+            #   min(gen_performance),
+              0.350, 
+              max(performance), 
+              max(inference_time), 
+              max(model_complexity), 
+              max(sampling_complexity), 
+              max(robustness_proc),
+              ]
 
 for i, d in enumerate(data):
     data[i].append(max_values[i])
@@ -327,7 +332,6 @@ if len(sys.argv) > 1:
 
 else:
     # masks_algo = [18, 19, -2, -1] # LQR
-    masks_algo = [8, 9, -2, -1]
     # masks_algo = [16, 17, -2, -1] # iLQR
     # masks_algo = [14, 15, -2, -1] # PID
     # masks_algo = [12, 13, -2, -1] # DPPO
@@ -351,14 +355,13 @@ spider(
             data[0],
         '$\qquad\qquad\qquad\quad$ Performance\n':
             data[1],
-        # '$\quad\quad\quad\quad\quad\qquad$(Figure-8 tracking)': [3.94646538e-02, 0.03],
         'Inference\ntime\n\n':
             data[2],
         'Model                \nknowledge                ':
             [int(data[3][i]) for i in range(len(data[3]))],
         '\n\n\nSampling\ncomplexity':
             data[4],
-        '\n\nRobustness':
+        '\n\nRobustness\n(process)':
             [int(data[5][i]) for i in range(len(data[5]))],
     }),
 
