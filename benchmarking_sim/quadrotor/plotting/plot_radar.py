@@ -58,7 +58,7 @@ plot_colors = {
     'MIN': 'none',
 }
 
-axis_label_fontsize = 30
+axis_label_fontsize = 20
 text_fontsize = 30
 supertitle_fontsize = 30
 subtitle_fontsize = 30
@@ -84,7 +84,18 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     tiks = list(data.keys())
     tiks += tiks[:1]
     print('tiks:', tiks)
-    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist() + [0]
+    # angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist() + [0]
+    angles = np.linspace(0, 2 * np.pi, 6, endpoint=False).tolist() + [0]
+    print('angles:', angles)
+    # insert the other robustness axes
+    robustness_angles = angles.copy()[-2]
+    robustness_angles_offset = np.deg2rad(15)
+    print('robustness_angles:', robustness_angles)
+    print('robustness_angles_offset:', robustness_angles_offset)
+    angles.insert(-2, robustness_angles - robustness_angles_offset)
+    # angles.insert(-2, angles[-1] - np.deg2rad(10))
+    angles.insert(-1, robustness_angles + robustness_angles_offset)
+    print('angles:', angles)
 
     fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(polar=True), )
     for i, model_name in enumerate(ids):
@@ -105,38 +116,39 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
             ax.plot(angles, values, label=model_name, color=plot_colors[model_name], )
             ax.scatter(angles, values, facecolor=plot_colors[model_name], )
             ax.fill(angles, values, alpha=0.15, color=plot_colors[model_name], )
+
         for _x, _y, t in zip(angles, values, actual_values):
             if _x == angles[2]: # inference time
                 t = f'{t:.1E}' if isinstance(t, float) else str(t)
                 # t = f'{np.format_float_scientific(t, precision=1)}' if isinstance(t, float) else str(t)
             elif _x == angles[4]:  # sampling complexity
                 if t == int(1):
-                    # _y = 0.01
                     t = '0'
                 else:
                     # write number in 1e5 format
                     t = f'{t:.1E}'  # if isinstance(t, float) else str(t)
-            # elif _x == angles[0]:
-            #     t = f'{t:.2f}' if isinstance(t, float) else str(t)
+            elif _x == angles[7]: # parameter noise
+                t = f'{t:.1f}' if isinstance(t, float) else str(t)
             else:
                 t = f'{t:.3f}' if isinstance(t, float) else str(t)
-            if t == '1': t = 'Model-free'
-            if t == '40': t = '   Linear\n   model'
-            if t == '80': t = 'Nonlinear\n   model'
 
             t = t.center(10, ' ')
             # cusotmize the text position for axes
-            if _x == angles[3]:
+            if _x == angles[3]: # model complexity
+                if t == '1': t = 'Model-free'
+                if t == '40': t = '   Linear\n   model'
+                if t == '80': t = 'Nonlinear\n   model'
                 ax.text(_x + 0.2, _y + 0.15, t, size=small_text_size)
-            elif _x == angles[0]:
+            elif _x == angles[0]: # generalization performance
                 if flip_flag:
                     ax.text(_x + 0.2, _y - 0.1, t, size=small_text_size)
                 else:
                     ax.text(_x - 0.2, _y + 0.0, t, size=small_text_size)
                 flip_flag = False
-            
+            elif _x in [angles[5], angles[6], angles[7]]:
+                ax.text(_x - 0.22, _y, t, size=small_text_size)
             # customize the text position for controllers
-            if model_name == 'GP-MPC':
+            elif model_name == 'GP-MPC':
                 if _x == angles[0]:
                     if flip_flag:
                         ax.text(_x + 0.05, _y - 0.1, t, size=small_text_size)
@@ -153,8 +165,11 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
                     ax.text(_x, _y + 0.15, t, size=small_text_size)
                 else:
                     ax.text(_x, _y - 0.01, t, size=small_text_size)
-            else:
+            else: # shift all the other axes 
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
+    
+    # add additional text for robustness axes
+    ax.text(angles[-3], 1.25, 'Robustness', size=small_text_size)
 
     ax.fill(angles, np.ones(num_vars + 1), alpha=0.05, color='lightgray')
     # ax.fill(angles[0:3], np.ones(3), alpha=0.05)
@@ -170,7 +185,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     print(f'figure saved as {fig_save_path}')
 
 radar = spider
-num_axis = 6
+num_axis = 8
 gen_performance = [transfer_metric['GP-MPC']['rmse'][0], 
                    transfer_metric['GP-MPC']['rmse'][-1],  # GP-MPC
                    transfer_metric['Linear MPC']['rmse'][0], 
@@ -258,7 +273,32 @@ robustness_proc = [5 ,5 , # GP-MPC
               4, 4, # iLQR
               15, 15, # LQR
               ]
-# robustness_obs = 
+
+robustness_obs = [
+    70, 70, # GP-MPC
+    150, 150, # Linear-MPC
+    100, 100, # MPC
+    100, 100, # F-MPC
+    15, 15, # PPO
+    150, 150, # SAC
+    15, 15, # DPPO
+    150, 150, # PID
+    50, 50, # iLQR
+    150, 150, # LQR   
+]
+
+robustness_param = [
+    1.1, 1.1, # GP-MPC
+    3, 3, # Linear-MPC
+    1.6, 1.6, # MPC
+    1.2, 1.2, # F-MPC
+    0.1, 0.1, # PPO
+    0.25, 0.25, # SAC
+    0.2, 0.2, # DPPO
+    3, 3, # PID
+    0.4, 0.4, # iLQR
+    2.5, 2.5, # LQR
+]
 
 data = [gen_performance, 
         performance, 
@@ -266,25 +306,14 @@ data = [gen_performance,
         model_complexity, 
         sampling_complexity, 
         robustness_proc,
+        robustness_obs,
+        robustness_param,
         ]
 
-max_values = [
-              min(gen_performance), 
-              min(performance), 
-              min(inference_time), 
-              min(model_complexity), 
-              min(sampling_complexity), 
-              min(robustness_proc),
-              ]
-min_values = [
-            #   min(gen_performance),
-              0.350, 
-              max(performance), 
-              max(inference_time), 
-              max(model_complexity), 
-              max(sampling_complexity), 
-              max(robustness_proc),
-              ]
+# get the max and min values (NOTE: the axis is inverted)
+max_values = [min(i) for i in data]
+min_values = [max(i) for i in data]
+min_values[0] = 0.350
 
 for i, d in enumerate(data):
     data[i].append(max_values[i])
@@ -333,10 +362,10 @@ if len(sys.argv) > 1:
 else:
     # masks_algo = [18, 19, -2, -1] # LQR
     # masks_algo = [16, 17, -2, -1] # iLQR
-    # masks_algo = [14, 15, -2, -1] # PID
+    masks_algo = [14, 15, -2, -1] # PID
     # masks_algo = [12, 13, -2, -1] # DPPO
     # masks_algo = [10, 11, -2, -1] # SAC
-    masks_algo = [8, 9, -2, -1] # PPO
+    # masks_algo = [8, 9, -2, -1] # PPO
     # masks_algo = [6, 7, -2, -1] # F-MPC
     # masks_algo = [4, 5, -2, -1] # Nonlinear MPC
     # masks_algo = [2, 3, -2, -1] # Linear MPC
@@ -361,8 +390,22 @@ spider(
             [int(data[3][i]) for i in range(len(data[3]))],
         '\n\n\nSampling\ncomplexity':
             data[4],
-        '\n\nRobustness\n(process)':
+        # '\n\nProcess noise':
+        'P':
             [int(data[5][i]) for i in range(len(data[5]))],
+        # '\n\nObservation noise':
+        'O':
+            [int(data[6][i]) for i in range(len(data[6]))],
+        r'$\theta$':
+            data[7],
+        # '\n\nParameter noise':
+            # [data[7][i] for i in range(len(data[7]))],
+        # '\n\nRobustness\n(process)':
+        #     [int(data[5][i]) for i in range(len(data[5]))],
+        # '\n\nRobustness\n(observation)':
+        #     [int(data[6][i]) for i in range(len(data[6]))],
+        # '\n\nRobustness\n(parameter)':
+        #     [int(data[7][i]) for i in range(len(data[7]))],
     }),
 
     id_column='x',
