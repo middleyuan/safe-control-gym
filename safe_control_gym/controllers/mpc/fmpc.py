@@ -53,6 +53,7 @@ class FlatMPC(BaseController):
             output_dir='results/temp',
             additional_constraints=None,
             use_acados=False,
+            apply_thrust_constraint_box = False,
             **kwargs):
         '''Creates task and controller.
 
@@ -161,21 +162,26 @@ class FlatMPC(BaseController):
         self.mpc.input_constraints_sym = {} 
         
         # apply box constraint to acceleration, to simulate a thrust constraint
-        Tc_max = self.env.physical_action_bounds[1][0]
-        Tc_min = self.env.physical_action_bounds[0][0]
-        h1 = np.atleast_2d(np.array([0, 0, 1, 0, 0, 0, 0, 0])).T # selects x_ddot
-        h2 = np.atleast_2d(np.array([0, 0, 0, 0, 0, 0, 1, 0])).T # selects z_ddot
-        b1 = (Tc_max*self.inertial_prop['beta_1'] + self.inertial_prop['beta_2'])
-        b2 = (Tc_min*self.inertial_prop['beta_1'] + self.inertial_prop['beta_2'])
-        sym_func1 = lambda x: h1.T @ x -b1
-        sym_func2 = lambda x: -h1.T @ x -b2
-        sym_func3 = lambda x: h2.T @ x -b1 + 9.8
-        sym_func4 = lambda x: -h2.T @ x +b2 - 9.8
-        # diagonal box on top
-        # h3 = np.atleast_2d(np.array([0, 0, 1, 0, 0, 0, 1, 0])).T # selects x_ddot + z_ddot
-        # sym_func4 = lambda x: h3.T @ x + 9.8 - b1*np.sqrt(2)
-        # sym_func5 = lambda x: -h3.T @ x - 9.8 - b1*np.sqrt(2)
-        self.mpc.state_constraints_sym = [sym_func1, sym_func2, sym_func3, sym_func4] #, sym_func5]
+        if apply_thrust_constraint_box:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+                print("ERROR: Box constraint to simulate thrust constraint only implemented for 2D Quadrotor")
+                raise NotImplementedError
+            g = self.env.GRAVITY_ACC
+            Tc_max = self.env.physical_action_bounds[1][0]
+            Tc_min = self.env.physical_action_bounds[0][0]
+            h1 = np.atleast_2d(np.array([0, 0, 1, 0, 0, 0, 0, 0])).T # selects x_ddot
+            h2 = np.atleast_2d(np.array([0, 0, 0, 0, 0, 0, 1, 0])).T # selects z_ddot
+            b1 = (Tc_max*self.inertial_prop['beta_1'] + self.inertial_prop['beta_2'])
+            b2 = (Tc_min*self.inertial_prop['beta_1'] + self.inertial_prop['beta_2'])
+            sym_func1 = lambda x: h1.T @ x -b1
+            sym_func2 = lambda x: -h1.T @ x -b2
+            sym_func3 = lambda x: h2.T @ x -b1 + g
+            sym_func4 = lambda x: -h2.T @ x +b2 - g
+            # diagonal box on top
+            # h3 = np.atleast_2d(np.array([0, 0, 1, 0, 0, 0, 1, 0])).T # selects x_ddot + z_ddot
+            # sym_func4 = lambda x: h3.T @ x + 9.8 - b1*np.sqrt(2)
+            # sym_func5 = lambda x: -h3.T @ x - 9.8 - b1*np.sqrt(2)
+            self.mpc.state_constraints_sym = [sym_func1, sym_func2, sym_func3, sym_func4] #, sym_func5]
 
         # setup flat state observer
         self.fs_obs = FlatStateObserver(self.QUAD_TYPE, self.inertial_prop, self.mpc.env.GRAVITY_ACC, self.mpc.dt, self.mpc.T)
