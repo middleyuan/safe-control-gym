@@ -825,12 +825,12 @@ class Quadrotor(BaseAviary):
             # identified parameters for the 2D attitude interface
             # NOTE: these parameters are not set in the prior_prop dict
             # since they are specific to the 2D attitude model
-            self.beta_1 = prior_prop.get('beta_1', 17.7906)
-            self.beta_2 = prior_prop.get('beta_2', 4.2207)
+            self.beta_1 = prior_prop.get('beta_1', 17.7903)
+            self.beta_2 = prior_prop.get('beta_2', 4.2209)
             self.beta_3 = prior_prop.get('beta_3', 0.0)
-            self.alpha_1 = prior_prop.get('alpha_1', -135.052264)
-            self.alpha_2 = prior_prop.get('alpha_2', -15.771638)
-            self.alpha_3 = prior_prop.get('alpha_3', 116.338942)
+            self.alpha_1 = prior_prop.get('alpha_1', -149.740766)
+            self.alpha_2 = prior_prop.get('alpha_2', -16.755920)
+            self.alpha_3 = prior_prop.get('alpha_3', 129.041538)
             self.pitch_bias = prior_prop.get('pitch_bias', 0.0)
 
             nx, nu = 6, 2
