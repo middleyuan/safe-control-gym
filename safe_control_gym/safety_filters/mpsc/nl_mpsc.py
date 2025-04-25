@@ -200,19 +200,18 @@ class NL_MPSC(MPSC):
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
-        Q_mat = np.zeros((nx, nx))
-        ocp.cost.W_e = np.zeros((nx, nx))
-        R_mat = np.eye(nu)
-        ocp.cost.W = block_diag(Q_mat, R_mat)
-
+        if self.mpc_mode:
+            ocp.cost.W = block_diag(self.Q, self.R)
+        else:
+            Q = np.zeros((nx, nx))
+            R = np.eye(nu)
+            ocp.cost.W = block_diag(Q, R)
+        ocp.cost.W_e = self.Q if self.mpc_mode else np.zeros((nx, nx))
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
         ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
         ocp.cost.Vx_e = np.eye(nx)
-
-        ocp.model.cost_y_expr = cs.vertcat(model.x, model.u)
-        ocp.model.cost_y_expr_e = model.x
 
         # Updated on each iteration
         ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
@@ -220,7 +219,6 @@ class NL_MPSC(MPSC):
 
         # Setup constraints
         ocp.constraints.constr_type = 'BGH'
-        ocp.constraints.constr_type_e = 'BGH'
 
         ocp.constraints.x0 = self.model.X_EQ
         ocp.constraints.C = self.L_x
@@ -249,11 +247,12 @@ class NL_MPSC(MPSC):
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
-        for stage in range(self.mpsc_cost_horizon):
-            ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
+        if not self.mpc_mode:
+            for stage in range(self.mpsc_cost_horizon):
+                ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
 
-        for stage in range(self.mpsc_cost_horizon, self.horizon):
-            ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
+            for stage in range(self.mpsc_cost_horizon, self.horizon):
+                ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
 
         g = np.zeros((self.horizon, self.p))
 

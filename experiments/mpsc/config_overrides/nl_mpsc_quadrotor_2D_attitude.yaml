@@ -11,6 +11,8 @@ sf_config:
   integration_algo: rk4
   use_terminal_set: False
 
+  mpc_mode: False
+
   # Prior info
   prior_info:
     prior_prop: null
