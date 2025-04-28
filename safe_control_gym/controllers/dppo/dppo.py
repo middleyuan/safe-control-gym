@@ -42,7 +42,6 @@ class DPPO(BaseController):
                  seed=0,
                  **kwargs):
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
-        torch.manual_seed(seed=seed)
 
         # Task.
         if self.training:

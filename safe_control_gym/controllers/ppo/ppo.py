@@ -44,7 +44,6 @@ class PPO(BaseController):
         self.penalize_sf_diff = False
         self.sf_penalty = 1
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
-        torch.manual_seed(seed=seed)
 
         # Task.
         if self.training:
