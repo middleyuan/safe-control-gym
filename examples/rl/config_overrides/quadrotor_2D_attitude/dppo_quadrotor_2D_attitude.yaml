@@ -1,6 +1,6 @@
 algo_config:
   # model args
-  hidden_dim: 64
+  hidden_dim: 128
   activation: "relu"
 
   # loss args
@@ -12,12 +12,15 @@ algo_config:
   entropy_coef: 0.002
   quantile_count: 256
   value_loss: 'quantile_l1'
+  risk_measure: 'wang'
+  risk_measure_config:
+    beta: 0.0
 
   # optim args
   opt_epochs: 20
   mini_batch_size: 256
-  actor_lr: 0.001
-  critic_lr: 0.001
+  actor_lr: 0.003
+  critic_lr: 0.003
 
   # runner args
   max_env_steps: 660000

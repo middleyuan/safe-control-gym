@@ -44,6 +44,7 @@ class DPPOAgent:
                  clip_param=0.2,
                  target_kl=0.01,
                  entropy_coef=0.01,
+                 exploration_init=-0.5,
                  actor_lr=0.0003,
                  critic_lr=0.001,
                  opt_epochs=10,
@@ -53,15 +54,17 @@ class DPPOAgent:
                  gae_lambda: float = 0.95,
                  value_loss: str = value_loss_l1,
                  value_loss_kwargs=None,
-                 value_measure: str = None,
-                 value_measure_adaptation: Union[Tuple, None] = None,
-                 value_measure_kwargs: Dict = {},
+                 risk_measure: str = 'wang',
+                 risk_measure_config=None,
                  device=None,
                  **kwargs
                  ):
-        # Parameters.
         if value_loss_kwargs is None:
             value_loss_kwargs = {}
+        if risk_measure_config is None:
+            risk_measure_config = {}
+
+        # Parameters.
         self.obs_space = obs_space
         self.act_space = act_space
         self.clip_param = clip_param
@@ -75,6 +78,8 @@ class DPPOAgent:
         self.gae_lambda = gae_lambda
         self.value_loss_name = value_loss
         self.value_loss_kwargs = value_loss_kwargs
+        self.risk_measure = risk_measure
+        self.risk_measure_config = risk_measure_config
         self.device = device
 
         # Model.
@@ -83,6 +88,9 @@ class DPPOAgent:
                                  hidden_dims=[hidden_dim] * 2,
                                  activation=self.activation,
                                  quantile_count=self.quantile_count,
+                                 exploration_init=exploration_init,
+                                 risk_measure=self.risk_measure,
+                                 risk_measure_config=risk_measure_config,
                                  device=self.device)
 
         # Value loss
@@ -200,8 +208,13 @@ class MLPActorCritic(nn.Module):
                  hidden_dims=(64, 64),
                  activation='tanh',
                  quantile_count=200,
+                 exploration_init=-0.5,
+                 risk_measure='wang',
+                 risk_measure_config=None,
                  device=None
                  ):
+        if risk_measure_config is None:
+            risk_measure_config = {}
         super().__init__()
         obs_dim = obs_space.shape[0]
         if isinstance(act_space, Box):
@@ -211,9 +224,11 @@ class MLPActorCritic(nn.Module):
             act_dim = act_space.n
             discrete = True
         # Policy.
-        self.actor = MLPActor(obs_dim, act_dim, hidden_dims, activation, discrete)
+        self.actor = MLPActor(obs_dim, act_dim, hidden_dims, activation, discrete, exploration_init)
         # Value function.
-        self.critic = QuantileCritic(obs_dim, hidden_dims, activation, quantile_count, device)
+        self.critic = QuantileCritic(
+            obs_dim, hidden_dims, activation, quantile_count, risk_measure, risk_measure_config, device
+        )
 
     def step(self,
              obs
@@ -241,7 +256,8 @@ class MLPActor(nn.Module):
                  act_dim,
                  hidden_dims,
                  activation,
-                 discrete=False
+                 discrete=False,
+                 exploration_init=-0.5
                  ):
         super().__init__()
         self.pi_net = MLP(obs_dim, act_dim, hidden_dims, activation)
@@ -250,7 +266,7 @@ class MLPActor(nn.Module):
         if discrete:
             self.dist_fn = lambda x: Categorical(logits=x)
         else:
-            self.logstd = nn.Parameter(-0.5 * torch.ones(act_dim))
+            self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
     def forward(self,
@@ -272,6 +288,8 @@ class QuantileCritic(nn.Module):
                  hidden_dims,
                  activation,
                  quantile_count,
+                 risk_measure,
+                 risk_measure_config,
                  device
                  ):
         super().__init__()
@@ -280,6 +298,8 @@ class QuantileCritic(nn.Module):
                                      hidden_dims,
                                      activation,
                                      quantile_count=quantile_count,
+                                     measure=risk_measure,
+                                     measure_kwargs=risk_measure_config,
                                      device=device)
 
     def forward(self, obs, distribution: bool = False):
