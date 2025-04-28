@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation
 
 from safe_control_gym.controllers.base_controller import BaseController
 from safe_control_gym.envs.benchmark_env import Environment, Task
-from line_profiler import profile
+# from line_profiler import profile
 
 def cross_3d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     '''Computes the cross product of two 3D vectors.
@@ -44,7 +44,7 @@ def wrap2pi_vec(angle_vec: np.ndarray) -> np.ndarray:
         angle_vec[k] = angle
     return angle_vec
 
-@profile
+# @profile
 def rot2eul(R: np.ndarray) -> np.ndarray:
     '''Convert rotation matrix to euler angles.
     Args:
@@ -140,7 +140,7 @@ class PID(BaseController):
 
         self.reset()
 
-    @profile
+    # @profile
     def select_action(self, obs, info=None):
         '''Determine the action to take at the current timestep.
 
@@ -237,7 +237,7 @@ class PID(BaseController):
         self.last_action = action
         return action
 
-    @profile
+    # @profile
     def _dslPIDPositionControl(self,
                                cur_pos,
                                cur_quat,
@@ -279,39 +279,36 @@ class PID(BaseController):
         target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
         # deno = np.linalg.norm(np.cross(target_z_ax, target_x_c)) 
         # target_y_ax = np.cross(target_z_ax, target_x_c) / deno
-        target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
-        target_x_ax = np.cross(target_y_ax, target_z_ax)
-        target_y_ax_cross = cross_3d(target_z_ax, target_x_ax) / np.linalg.norm(cross_3d(target_z_ax, target_x_ax))
-        target_x_ax_cross = cross_3d(target_y_ax, target_z_ax)
-        print('target_z_ax:', target_z_ax)
-        print('target_y_ax:', target_y_ax)
-        print('target_y_ax_cross:', target_y_ax_cross)
-        print('target_x_ax:', target_x_ax)
-        print('target_x_ax_cross:', target_x_ax_cross)
-        print('')
-        assert np.isclose(target_y_ax_cross, target_y_ax).all(), \
-            'target_y_ax_cross and target_y_ax are not the same'
-        assert np.isclose(target_x_ax_cross, target_x_ax).all(), \
-            'target_x_ax_cross and target_x_ax are not the same'
+        # target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
+        # target_x_ax = np.cross(target_y_ax, target_z_ax)
+        target_y_ax = cross_3d(target_z_ax, target_x_c) / np.linalg.norm(cross_3d(target_z_ax, target_x_c))
+        target_x_ax = cross_3d(target_y_ax, target_z_ax)
+        # print('target_z_ax:', target_z_ax)
+        # print('target_y_ax:', target_y_ax)
+        # print('target_y_ax_cross:', target_y_ax_cross)
+        # print('target_x_ax:', target_x_ax)
+        # print('target_x_ax_cross:', target_x_ax_cross)
+        # print('')
+        # assert np.isclose(target_y_ax_cross, target_y_ax).all(), \
+        #     'target_y_ax_cross and target_y_ax are not the same'
+        # assert np.isclose(target_x_ax_cross, target_x_ax).all(), \
+        #     'target_x_ax_cross and target_x_ax are not the same'
 
         # NOTE: a proper rotation matrix by definition
         target_rotation = (np.vstack([target_x_ax, target_y_ax, target_z_ax])).transpose()
 
         # Target rotation.
         # NOTE: intrinsic rotation (around the body frame)
-        target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
-        eul = rot2eul(target_rotation)
+        # target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
+        target_euler = wrap2pi_vec(rot2eul(target_rotation))
 
         # wrap angles to (-pi, pi]
-        eul = wrap2pi_vec(eul)
-        target_euler = wrap2pi_vec(target_euler)
-        print('target euler angles:', target_euler)
-        print('euler angles:', eul)
-        print('')
+        # eul = wrap2pi_vec(eul)
+        # target_euler = wrap2pi_vec(target_euler)
 
-        assert np.isclose(eul, target_euler).all(), \
-            'target rotation and target euler angles are not the same'
-        target_euler = eul
+        # assert np.isclose(eul, target_euler).all(), \
+        #     'target rotation and target euler angles are not the same'
+        # target_euler = eul
 
         if np.any(np.abs(target_euler) > math.pi):
             raise ValueError('\n[ERROR] ctrl it', self.control_counter, 'in Control._dslPIDPositionControl(), values outside range [-pi,pi]')
