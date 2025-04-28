@@ -53,14 +53,10 @@ def rot2eul(R: np.ndarray) -> np.ndarray:
         ndarray: The euler angles.
     
     The rotation matrix is assumed to be follow the intrinsic rotation in the order of X -> Y -> Z
-    Gimbal lock is handled by the setting the third angle to zero, i.e., same way as scipy's Rotation.as_euler() function:
-    https://github.com/scipy/scipy/blob/cca0bdc534fcd5ac0c1bb2cf292ce23e0d69a351/scipy/spatial/transform/_rotation.pyx#L285C9-L297C76
-
+    Gimbal lock is handled by the setting the third angle to zero.
     '''
     EPSILON = 1e-7
     # assert np.linalg.norm(np.dot(R, R.transpose()) - np.eye(3)) < 1e-5, "Input must be a valid rotation matrix"
-
-    # beta = np.arcsin(R[0, 2])
     beta = np.arctan2(R[0, 2], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
     safe1 = np.abs(beta) >= EPSILON
     safe2 = np.abs(beta - np.pi) >= EPSILON
@@ -70,8 +66,7 @@ def rot2eul(R: np.ndarray) -> np.ndarray:
         alpha = np.arctan2(-R[1, 2]/np.cos(beta), R[2, 2]/np.cos(beta))
     else:
         gamma = 0
-        alpha = np.arctan2(R[1, 0] - R[0, 1], R[0, 0] + R[1, 1]) if not safe1 \
-           else np.arctan2(R[1, 0] + R[0, 1], R[0, 0] - R[1, 1]) #  not safe2
+        alpha = np.arctan2(R[2, 1], R[1, 1])
         print('Warning: Gimbal lock detected. Setting gamma to 0.')
 
     return np.array((alpha, beta, gamma))
