@@ -13,6 +13,69 @@ from scipy.spatial.transform import Rotation
 
 from safe_control_gym.controllers.base_controller import BaseController
 from safe_control_gym.envs.benchmark_env import Environment, Task
+from line_profiler import profile
+
+def cross_3d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    '''Computes the cross product of two 3D vectors.
+    Args:
+        a (ndarray): The first 3D vector.
+        b (ndarray): The second 3D vector.
+    Returns:
+        ndarray: The cross product of the two vectors.
+    '''
+    assert a.shape == b.shape, "Input arrays must have the same shape"
+    assert a.shape == (3,), "Input arrays must be 1D arrays of length 3"
+    skew_symmetric = np.array([[0, -a[2], a[1]],
+                                [a[2], 0, -a[0]],
+                                [-a[1], a[0], 0]])
+    return np.dot(skew_symmetric, b)
+
+def wrap2pi_vec(angle_vec: np.ndarray) -> np.ndarray:
+    '''Wraps a vector of angles between (-pi, pi].
+
+    Args:
+        angle_vec (ndarray): A vector of angles.
+    '''
+    for k, angle in enumerate(angle_vec):
+        while angle > np.pi:
+            angle -= 2*np.pi
+        while angle <= -np.pi:
+            angle += 2*np.pi
+        angle_vec[k] = angle
+    return angle_vec
+
+@profile
+def rot2eul(R: np.ndarray) -> np.ndarray:
+    '''Convert rotation matrix to euler angles.
+    Args:
+        R (ndarray): The rotation matrix.
+    Returns:
+        ndarray: The euler angles.
+    
+    The rotation matrix is assumed to be follow the intrinsic rotation in the order of X -> Y -> Z
+    Gimbal lock is handled by the setting the third angle to zero, i.e., same way as scipy's Rotation.as_euler() function:
+    https://github.com/scipy/scipy/blob/cca0bdc534fcd5ac0c1bb2cf292ce23e0d69a351/scipy/spatial/transform/_rotation.pyx#L285C9-L297C76
+
+    '''
+    EPSILON = 1e-7
+    # assert np.linalg.norm(np.dot(R, R.transpose()) - np.eye(3)) < 1e-5, "Input must be a valid rotation matrix"
+
+    # beta = np.arcsin(R[0, 2])
+    beta = np.arctan2(R[0, 2], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
+    safe1 = np.abs(beta) >= EPSILON
+    safe2 = np.abs(beta - np.pi) >= EPSILON
+    safe = safe1 and safe2
+    if safe:
+        gamma = np.arctan2(-R[0, 1]/np.cos(beta), R[0, 0]/np.cos(beta))
+        alpha = np.arctan2(-R[1, 2]/np.cos(beta), R[2, 2]/np.cos(beta))
+    else:
+        gamma = 0
+        alpha = np.arctan2(R[1, 0] - R[0, 1], R[0, 0] + R[1, 1]) if not safe1 \
+           else np.arctan2(R[1, 0] + R[0, 1], R[0, 0] - R[1, 1]) #  not safe2
+        print('Warning: Gimbal lock detected. Setting gamma to 0.')
+
+    return np.array((alpha, beta, gamma))
+
 
 
 class PID(BaseController):
@@ -82,6 +145,7 @@ class PID(BaseController):
 
         self.reset()
 
+    @profile
     def select_action(self, obs, info=None):
         '''Determine the action to take at the current timestep.
 
@@ -178,6 +242,7 @@ class PID(BaseController):
         self.last_action = action
         return action
 
+    @profile
     def _dslPIDPositionControl(self,
                                cur_pos,
                                cur_quat,
@@ -217,12 +282,41 @@ class PID(BaseController):
         thrust = (math.sqrt(scalar_thrust / (4 * self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
         target_z_ax = target_thrust / np.linalg.norm(target_thrust)
         target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
+        # deno = np.linalg.norm(np.cross(target_z_ax, target_x_c)) 
+        # target_y_ax = np.cross(target_z_ax, target_x_c) / deno
         target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
         target_x_ax = np.cross(target_y_ax, target_z_ax)
+        target_y_ax_cross = cross_3d(target_z_ax, target_x_ax) / np.linalg.norm(cross_3d(target_z_ax, target_x_ax))
+        target_x_ax_cross = cross_3d(target_y_ax, target_z_ax)
+        print('target_z_ax:', target_z_ax)
+        print('target_y_ax:', target_y_ax)
+        print('target_y_ax_cross:', target_y_ax_cross)
+        print('target_x_ax:', target_x_ax)
+        print('target_x_ax_cross:', target_x_ax_cross)
+        print('')
+        assert np.isclose(target_y_ax_cross, target_y_ax).all(), \
+            'target_y_ax_cross and target_y_ax are not the same'
+        assert np.isclose(target_x_ax_cross, target_x_ax).all(), \
+            'target_x_ax_cross and target_x_ax are not the same'
+
+        # NOTE: a proper rotation matrix by definition
         target_rotation = (np.vstack([target_x_ax, target_y_ax, target_z_ax])).transpose()
 
         # Target rotation.
+        # NOTE: intrinsic rotation (around the body frame)
         target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
+        eul = rot2eul(target_rotation)
+
+        # wrap angles to (-pi, pi]
+        eul = wrap2pi_vec(eul)
+        target_euler = wrap2pi_vec(target_euler)
+        print('target euler angles:', target_euler)
+        print('euler angles:', eul)
+        print('')
+
+        assert np.isclose(eul, target_euler).all(), \
+            'target rotation and target euler angles are not the same'
+        target_euler = eul
 
         if np.any(np.abs(target_euler) > math.pi):
             raise ValueError('\n[ERROR] ctrl it', self.control_counter, 'in Control._dslPIDPositionControl(), values outside range [-pi,pi]')
