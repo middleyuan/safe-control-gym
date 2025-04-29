@@ -17,28 +17,23 @@ task_config:
   randomized_init: False
   randomized_inertial_prop: True
   # randomized_inertial_prop: False
-
+  
   inertial_prop_randomization_info:
-    beta_1: # Nominal: 18.11
-      distrib: 'uniform'
-      low: -4
-      high: 4
-    beta_2: # Nominal: 3.68
-      distrib: 'uniform'
-      low: -0.7
-      high: 0.7
-    alpha_1:  # Nominal: -140.8
-      distrib: 'uniform'
-      low: -5
-      high: 10
-    alpha_2: # Nominal: -13.4
-      distrib: 'uniform'
-      low: -3
-      high: 3
-    alpha_3:  # Nominal: 124.8
-      distrib: 'uniform'
-      low: -5
-      high: 5
+    beta_1: # Nominal: 17.7906
+      distrib: 'normal'
+      scale: 0.23
+    beta_2: # Nominal: 4.2207
+      distrib: 'normal'
+      scale: 0.07
+    alpha_1:  # Nominal: -147.278425
+      distrib: 'normal'
+      scale: 4.291350
+    alpha_2: # Nominal: -16.394987
+      distrib: 'normal'
+      scale: 0.426656
+    alpha_3:  # Nominal: 126.953135
+      distrib: 'normal'
+      scale: 5.728551
 
   init_state_randomization_info:
     init_x:
