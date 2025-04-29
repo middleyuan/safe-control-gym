@@ -246,6 +246,18 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.pitch_noise_std = np.array(np.abs(self.env.alpha_1) * self.obs_noise_std[self.state_labels.index('theta_dot')] \
                         + np.abs(self.env.alpha_2) * self.obs_noise_std[self.state_labels.index('theta_dot')] \
                         + np.abs(self.env.alpha_3) * self.act_noise_std[1])
+        
+        # if domain randomization is used, add the propogated paramatric noise
+        # similarly, max is taken
+        if self.env.RANDOMIZED_INERTIAL_PROP:
+            self.thrust_noise_std += np.max(\
+                self.env.INERTIAL_PROP_RAND_INFO['beta_1'].scale * T_cmd + self.env.INERTIAL_PROP_RAND_INFO['beta_2'].scale
+            )
+            self.pitch_noise_std += np.max(\
+                self.env.INERTIAL_PROP_RAND_INFO['alpha_1'].scale * x_seq[:, self.state_labels.index('theta')] + \
+                self.env.INERTIAL_PROP_RAND_INFO['alpha_2'].scale * x_seq[:, self.state_labels.index('theta_dot')] + \
+                self.env.INERTIAL_PROP_RAND_INFO['alpha_3'].scale * u_seq[:, self.action_labels.index('P_c')]
+            ) 
                         
         return train_input, train_output
 
