@@ -17,21 +17,21 @@ task_config:
   randomized_inertial_prop: False
 
   inertial_prop_randomization_info:
-    beta_1: # Nominal: 17.7906
+    beta_1: # Nominal: 17.7903
       distrib: 'normal'
-      scale: 0.8086
-    beta_2: # Nominal: 4.2207
+      scale: 0.212
+    beta_2: # Nominal: 4.2209
       distrib: 'normal'
-      scale: 0.2598
-    alpha_1:  # Nominal: -135.052264
+      scale: 0.071
+    alpha_1: # Nominal: -149.740766
       distrib: 'normal'
-      scale: 55.866402
-    alpha_2: # Nominal: -15.771638
+      scale: 4.609533
+    alpha_2: # Nominal: -16.755920
       distrib: 'normal'
-      scale: 6.343344
-    alpha_3:  # Nominal: 116.338942
+      scale: 0.440198
+    alpha_3: # Nominal: 129.041538
       distrib: 'normal'
-      scale: 52.622572
+      scale: 5.823345
 
   init_state_randomization_info:
     init_x:
@@ -65,12 +65,12 @@ task_config:
   inertial_prop:
     M: 0.033
     Iyy: 1.4e-05
-    beta_1: 17.7906
-    beta_2: 4.2207
+    beta_1: 17.7903
+    beta_2: 4.2209
     beta_3: 0.0
-    alpha_1: -135.052264
-    alpha_2: -15.771638
-    alpha_3: 116.338942
+    alpha_1: -149.740766
+    alpha_2: -16.755920
+    alpha_3: 129.041538
     pitch_bias: 0.0 # in radian
 
   episode_len_sec: 11
