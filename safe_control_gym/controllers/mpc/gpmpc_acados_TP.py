@@ -62,7 +62,8 @@ class GPMPC_ACADOS_TP(GPMPC):
             inducing_point_selection_method='kmeans',
             recalc_inducing_points_at_every_step=False,
             prob: float = 0.955,
-            initial_rollout_std: float = 0.005,
+            obs_noise_std: float = 0.005,
+            act_noise_std: float = 0.005,
             input_mask: list = None,
             target_mask: list = None,
             gp_approx: str = 'mean_eq',
@@ -97,7 +98,8 @@ class GPMPC_ACADOS_TP(GPMPC):
             use_gpu=use_gpu,
             gp_model_path=gp_model_path,
             prob=prob,
-            initial_rollout_std=initial_rollout_std,
+            obs_noise_std=obs_noise_std,
+            act_noise_std=act_noise_std,
             input_mask=input_mask,
             target_mask=target_mask,
             gp_approx=gp_approx,
@@ -231,8 +233,20 @@ class GPMPC_ACADOS_TP(GPMPC):
         
         train_input = np.concatenate([input_T, input_theta], axis=1)
         train_output = np.concatenate([targets_T, targets_theta_dot], axis=1)
-
-
+        
+        # estimate the noise propogated into the thrust and pitch
+        # thrust part noise is prior dynamics noise + true thrust data noise (linearized)
+        # since the linearization is state independent, take the max of the noise
+        thrust_noise_std = self.act_noise_std[0]*np.abs(self.env.beta_1) \
+                         + np.sqrt((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
+                         + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2)) * \
+                         (self.obs_noise_std[self.state_labels.index('z_dot')] + self.obs_noise_std[self.state_labels.index('x_dot')])
+        self.thrust_noise_std = np.array(np.max(thrust_noise_std))
+        
+        self.pitch_noise_std = np.array(np.abs(self.env.alpha_1) * self.obs_noise_std[self.state_labels.index('theta_dot')] \
+                        + np.abs(self.env.alpha_2) * self.obs_noise_std[self.state_labels.index('theta_dot')] \
+                        + np.abs(self.env.alpha_3) * self.act_noise_std[1])
+                        
         return train_input, train_output
 
     def learn(self, env=None):
@@ -471,12 +485,13 @@ class GPMPC_ACADOS_TP(GPMPC):
         likelihood_P = gpytorch.likelihoods.GaussianLikelihood(
             noise_constraint=gpytorch.constraints.GreaterThan(1e-6),
         ).double()
-
+        
         GP_T = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_T,
             # kernel='RBF_single', 
             kernel='Linear',
+            init_noise_std=self.thrust_noise_std,
         )
 
         GP_P = GaussianProcess(
@@ -485,6 +500,7 @@ class GPMPC_ACADOS_TP(GPMPC):
             kernel='RBF_single',
             # kernel='Linear',
             # kernel='RBF',
+            init_noise_std=self.pitch_noise_std,
         )
 
         if gp_model:
@@ -1440,8 +1456,11 @@ class GPMPC_ACADOS_TP(GPMPC):
         for input_constraint in self.constraints.input_constraints:
             input_constraint_set.append(np.zeros((input_constraint.num_constraints, T)))
         if self.x_prev is not None and self.u_prev is not None:
-            # cov_x = np.zeros((nx, nx))
-            cov_x = np.diag([self.initial_rollout_std**2] * nx)
+            # cov_x = np.zeros((nx, nx)) 
+            if isinstance(self.obs_noise_std, (int, float)):
+                cov_x = np.diag([self.obs_noise_std**2] * nx)
+            else:   
+                cov_x = np.diag(np.array(self.obs_noise_std)**2)
             if nu == 1:
                 z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.reshape(1, -1).T))  # (T, input_dim)
             else:
@@ -1485,7 +1504,7 @@ class GPMPC_ACADOS_TP(GPMPC):
                 if self.gp_approx == 'taylor':
                     raise NotImplementedError('Taylor GP approximation is currently not working.')
                 elif self.gp_approx == 'mean_eq':
-                    # TODO: Addition of noise here! And do we still need initial_rollout_std
+                    # TODO: Addition of noise here! And do we still need obs_noise_std
                     # _, cov_d_tensor = self.gaussian_process.predict(z[None, :], return_pred=False)
                     # cov_d = cov_d_tensor.detach().numpy()
                     cov_d = cov_d_batch[i, :, :]

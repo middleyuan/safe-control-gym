@@ -64,7 +64,9 @@ class GPMPC(MPC, ABC):
             gp_model_path: str = None,
             kernel: str = 'Matern',
             prob: float = 0.955,
-            initial_rollout_std: float = 0.005,
+            # initial_rollout_std: float = 0.005,
+            obs_noise_std: float = 0.005,
+            act_noise_std: float = 0.005,
             input_mask: list = None,
             target_mask: list = None,
             gp_approx: str = 'mean_eq',
@@ -190,7 +192,9 @@ class GPMPC(MPC, ABC):
         self.inducing_point_selection_method = inducing_point_selection_method
         self.recalc_inducing_points_at_every_step = recalc_inducing_points_at_every_step
         self.online_learning = online_learning
-        self.initial_rollout_std = initial_rollout_std
+        # self.initial_rollout_std = initial_rollout_std
+        self.obs_noise_std = obs_noise_std
+        self.act_noise_std = act_noise_std
         self.plot_trained_gp = plot_trained_gp 
 
         # MPC params
@@ -335,7 +339,11 @@ class GPMPC(MPC, ABC):
             input_constraint_set.append(np.zeros((input_constraint.num_constraints, T)))
         if self.x_prev is not None and self.u_prev is not None:
             # cov_x = np.zeros((nx, nx))
-            cov_x = np.diag([self.initial_rollout_std**2] * nx)
+            # cov_x = np.diag([self.initial_rollout_std**2] * nx)
+            if isinstance(self.obs_noise_std, (int, float)):
+                cov_x = np.diag([self.obs_noise_std**2] * nx)
+            else:
+                cov_x = np.diag(self.obs_noise_std**2)
             if nu == 1:
                 z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.reshape(1, -1).T))  # (T, input_dim)
             else:
@@ -350,10 +358,6 @@ class GPMPC(MPC, ABC):
                 cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T
                 input_covariances[i] = cov_u
                 cov_xu = cov_x @ self.lqr_gain.T
-                # if nu == 1:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[i]))
-                # else:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[:, i]))
                 if self.gp_approx == 'taylor':
                     raise NotImplementedError('Taylor GP approximation is currently not working.')
                 elif self.gp_approx == 'mean_eq':
