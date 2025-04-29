@@ -503,7 +503,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             likelihood=likelihood_T,
             # kernel='RBF_single', 
             kernel='Linear',
-            init_noise_std=self.thrust_noise_std,
         )
 
         GP_P = GaussianProcess(
@@ -512,7 +511,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             kernel='RBF_single',
             # kernel='Linear',
             # kernel='RBF',
-            init_noise_std=self.pitch_noise_std,
         )
 
         if gp_model:
@@ -520,7 +518,9 @@ class GPMPC_ACADOS_TP(GPMPC):
             GP_T.init_with_hyperparam(train_input_T, train_target_T, gp_model[0])
             GP_P.init_with_hyperparam(train_input_P, train_target_P, gp_model[1])
         else:
-
+            GP_T.init_train_param(init_noise_std=self.thrust_noise_std) if hasattr(self, 'thrust_noise_std') else None
+            GP_P.init_train_param(init_noise_std=self.pitch_noise_std) if hasattr(self, 'pitch_noise_std') else None
+            
             GP_T.train(train_input_T, train_target_T, test_inputs_T, test_targets_T,
                     n_train=self.optimization_iterations[0], learning_rate=self.learning_rate[0], 
                     gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'))

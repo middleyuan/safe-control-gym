@@ -1197,7 +1197,6 @@ class GaussianProcess:
         self.input_mask = input_mask
         self.target_mask = target_mask
         self.kernel = kernel
-        self.init_noise_std  = init_noise_std 
 
     def _init_model(self,
                     train_inputs,
@@ -1217,6 +1216,21 @@ class GaussianProcess:
         self.output_dimension = target_dimension
         self.n_training_samples = train_inputs.shape[0]
 
+    def init_train_param(self,
+                           init_noise_std,
+                            ):
+        # self.init_noise_std  = init_noise_std
+        # init_noise_std = torch.from_numpy(self.init_noise_std)
+        # if gpu:
+        # #     init_output_scale = init_output_scale.cuda()
+        # #     init_length_scale = init_length_scale.cuda()
+            # init_noise_std = init_noise_std.cuda()
+
+        # self.model.covar_module.initialize(outputscale=init_output_scale)
+        # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
+        self.model.likelihood.initialize(noise=init_noise_std)
+         
+    
     def _compute_GP_covariances(self,
                                 train_x
                                 ):
@@ -1313,15 +1327,15 @@ class GaussianProcess:
             mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
             # init_output_scale = torch.rand(1).requires_grad_(False) * 3
             # init_length_scale = torch.rand(self.input_dimension, 1, 1).requires_grad_(False) * 3
-            init_noise_std = torch.from_numpy(self.init_noise_std)
-            if gpu:
-            #     init_output_scale = init_output_scale.cuda()
-            #     init_length_scale = init_length_scale.cuda()
-                init_noise_std = init_noise_std .cuda()
+            # # init_noise_std = torch.from_numpy(self.init_noise_std)
+            # # if gpu:
+            # # #     init_output_scale = init_output_scale.cuda()
+            # # #     init_length_scale = init_length_scale.cuda()
+            # #     init_noise_std = init_noise_std.cuda()
 
-            # self.model.covar_module.initialize(outputscale=init_output_scale)
-            # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
-            self.model.likelihood.initialize(noise=init_noise_std )
+            # # self.model.covar_module.initialize(outputscale=init_output_scale)
+            # # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
+            # self.model.likelihood.initialize(noise=init_noise_std )
             # print('init outputscale: ', self.model.covar_module.outputscale)
             # print("\nInit model parameters:")
             # for name, param in self.model.named_parameters():
