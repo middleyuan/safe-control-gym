@@ -64,6 +64,7 @@ class GPMPC_ACADOS_TP(GPMPC):
             prob: float = 0.955,
             obs_noise_std: float = 0.005,
             act_noise_std: float = 0.005,
+            param_noise_std: list = None,
             input_mask: list = None,
             target_mask: list = None,
             gp_approx: str = 'mean_eq',
@@ -122,6 +123,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.target_mask = None
         self.rand_hist = {'task_rand': [], 'domain_rand': []}
         self.new_GP_model = False
+        self.param_noise_std = param_noise_std
 
         # MPC params
         self.use_linear_prior = False
@@ -249,14 +251,14 @@ class GPMPC_ACADOS_TP(GPMPC):
         
         # if domain randomization is used, add the propogated paramatric noise
         # similarly, max is taken
-        if self.env.RANDOMIZED_INERTIAL_PROP:
+        if self.param_noise_std is not None:
             self.thrust_noise_std += np.max(\
-                self.env.INERTIAL_PROP_RAND_INFO['beta_1'].scale * T_cmd + self.env.INERTIAL_PROP_RAND_INFO['beta_2'].scale
+                self.param_noise_std['beta_1'].scale * T_cmd + self.param_noise_std['beta_2'].scale
             )
             self.pitch_noise_std += np.max(\
-                self.env.INERTIAL_PROP_RAND_INFO['alpha_1'].scale * x_seq[:, self.state_labels.index('theta')] + \
-                self.env.INERTIAL_PROP_RAND_INFO['alpha_2'].scale * x_seq[:, self.state_labels.index('theta_dot')] + \
-                self.env.INERTIAL_PROP_RAND_INFO['alpha_3'].scale * u_seq[:, self.action_labels.index('P_c')]
+                self.param_noise_std['alpha_1'].scale * x_seq[:, self.state_labels.index('theta')] + \
+                self.param_noise_std['alpha_2'].scale * x_seq[:, self.state_labels.index('theta_dot')] + \
+                self.param_noise_std['alpha_3'].scale * u_seq[:, self.action_labels.index('P_c')]
             ) 
                         
         return train_input, train_output
@@ -518,15 +520,14 @@ class GPMPC_ACADOS_TP(GPMPC):
             GP_T.init_with_hyperparam(train_input_T, train_target_T, gp_model[0])
             GP_P.init_with_hyperparam(train_input_P, train_target_P, gp_model[1])
         else:
-            GP_T.init_train_param(init_noise_std=self.thrust_noise_std) if hasattr(self, 'thrust_noise_std') else None
-            GP_P.init_train_param(init_noise_std=self.pitch_noise_std) if hasattr(self, 'pitch_noise_std') else None
-            
             GP_T.train(train_input_T, train_target_T, test_inputs_T, test_targets_T,
                     n_train=self.optimization_iterations[0], learning_rate=self.learning_rate[0], 
-                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'))
+                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'),
+                    init_noise_std=self.thrust_noise_std)
             GP_P.train(train_input_P, train_target_P, test_inputs_P, test_targets_P,
                     n_train=self.optimization_iterations[1], learning_rate=self.learning_rate[1],
-                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'))
+                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'),
+                    init_noise_std=self.pitch_noise_std)
             
             # # use thread to train the two GPs
             # thread_T = threading.Thread(target=GP_T.train, args=(train_input_T, train_target_T, test_inputs_T, test_targets_T,

@@ -1215,21 +1215,6 @@ class GaussianProcess:
         self.input_dimension = input_dimension
         self.output_dimension = target_dimension
         self.n_training_samples = train_inputs.shape[0]
-
-    def init_train_param(self,
-                           init_noise_std,
-                            ):
-        # self.init_noise_std  = init_noise_std
-        # init_noise_std = torch.from_numpy(self.init_noise_std)
-        # if gpu:
-        # #     init_output_scale = init_output_scale.cuda()
-        # #     init_length_scale = init_length_scale.cuda()
-            # init_noise_std = init_noise_std.cuda()
-
-        # self.model.covar_module.initialize(outputscale=init_output_scale)
-        # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
-        self.model.likelihood.initialize(noise=init_noise_std)
-         
     
     def _compute_GP_covariances(self,
                                 train_x
@@ -1280,6 +1265,7 @@ class GaussianProcess:
               learning_rate=0.01,
               gpu=False,
               fname='best_model.pth',
+              init_noise_std=None,
               ):
         '''Train the GP using Train_x and Train_y.
 
@@ -1298,6 +1284,8 @@ class GaussianProcess:
             train_y_raw = train_y_raw[:, self.target_mask]
             test_y_raw = test_y_raw[:, self.target_mask]
         self._init_model(train_x_raw, train_y_raw)
+        if init_noise_std is not None:
+            self.model.likelihood.initialize(noise=init_noise_std)
         train_x = train_x_raw
         train_y = train_y_raw
         test_x = test_x_raw
