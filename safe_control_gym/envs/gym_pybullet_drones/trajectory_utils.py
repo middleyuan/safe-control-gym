@@ -27,7 +27,7 @@ import numpy as np
 import casadi as cs
 import scipy.linalg as la
 from scipy import optimize
-
+import matplotlib.pyplot as plt
 
 class Waypoint(dict):
     def __init__(
@@ -508,6 +508,38 @@ def _distance_to_line(start, end, point):
     cross = cs.cross(start - end, start - point)
     string = start - end
     return cs.sqrt((cross.T @ cross) / (string.T @ string))
+
+def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
+    
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(5, 4))
+    ax.plot(pos_ref[:, 0], pos_ref[:, 1], pos_ref[:, 2], 'b', label="Position Trajectory")
+    if waypoints is not None:
+        for i, waypoint in enumerate(waypoints):
+            position = waypoint.position
+            ax.plot(
+                position[0],
+                position[1],
+                position[2],
+                "go",
+                label="Position Waypoints" if i == 0 else ""
+            )
+    if strings is not None:
+        for i, string in enumerate(strings):
+            start = string['start']
+            end = string['end']
+            ax.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], 'r', label="Strings"  if i == 0 else "")
+
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_zlabel("Z (m)")
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    try:
+        fig.savefig(save_path)
+        print(f"Trajectory plot saved to {save_path}")
+    except:
+        pass
+    plt.close(fig)
 
 
 class TrajectoryPlanner:
