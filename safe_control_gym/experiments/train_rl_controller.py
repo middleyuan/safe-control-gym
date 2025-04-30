@@ -3,6 +3,7 @@
 import os
 import shutil
 from functools import partial
+import time
 
 import munch
 import yaml
@@ -23,10 +24,9 @@ def train():
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = True
-    # print(config)
 
     set_dir_from_config(config)
-    shutil.rmtree(config.output_dir, ignore_errors=True)
+    # shutil.rmtree(config.output_dir, ignore_errors=True)
     set_seed_from_config(config)
     set_device_from_config(config)
 
