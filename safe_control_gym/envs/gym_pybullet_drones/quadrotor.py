@@ -22,6 +22,7 @@ from safe_control_gym.math_and_models.symbolic_systems import SymbolicModel
 from safe_control_gym.math_and_models.transformations import (csRotXYZ, get_quaternion_from_euler,
                                                               transform_trajectory)
 from safe_control_gym.envs.disturbances import Downwash
+from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import _plot_trajectory
 
 script_dir = os.path.dirname(__file__)
 
@@ -423,19 +424,37 @@ class Quadrotor(BaseAviary):
                     [traj_data['obs'][:, 1], 0 * traj_data['obs'][:, 1], traj_data['obs'][:, 3]]).T
                 PITCH_REF = np.array([traj_data['obs'][:, 4], traj_data['obs'][:, 5]]).T
             else:
-                strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
-                waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
-                POS_REF, VEL_REF, _ = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
-                                                                traj_length=self.episode_len,
-                                                                num_cycles=self.TASK_INFO['num_cycles'],
-                                                                traj_plane=self.TASK_INFO['trajectory_plane'],
-                                                                position_offset=self.TASK_INFO[
-                                                                    'trajectory_position_offset'],
-                                                                scaling=self.TASK_INFO['trajectory_scale'],
-                                                                sample_time=self.CTRL_TIMESTEP,
-                                                                string_list=strings,
-                                                                waypoint_list=waypoints
-                                                                )
+                if hasattr(self.TASK_INFO, 'custom_snap_ref_traj'):
+                    traj_data = np.load(self.TASK_INFO['custom_snap_ref_traj'], allow_pickle=True).item()
+                    POS_REF = traj_data['POS_REF']
+                    VEL_REF = traj_data['VEL_REF']
+                else:
+                    strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
+                    waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
+                    POS_REF, VEL_REF, _ = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                                                                    traj_length=self.episode_len,
+                                                                    num_cycles=self.TASK_INFO['num_cycles'],
+                                                                    traj_plane=self.TASK_INFO['trajectory_plane'],
+                                                                    position_offset=self.TASK_INFO[
+                                                                        'trajectory_position_offset'],
+                                                                    scaling=self.TASK_INFO['trajectory_scale'],
+                                                                    sample_time=self.CTRL_TIMESTEP,
+                                                                    string_list=strings,
+                                                                    waypoint_list=waypoints
+                                                                    )
+                    CUSTOM_REF_TRAJ = {}
+                    CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
+                    CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
+                    np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 
+                                         'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    # add attribute to self.TASK_INFO
+                    self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 
+                                         'custom_snap_ref_traj.npy') 
+                    _plot_trajectory(POS_REF, 
+                                     waypoints=waypoints, 
+                                     strings=strings, 
+                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                            
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
