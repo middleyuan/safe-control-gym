@@ -311,6 +311,8 @@ class Downwash(Disturbance):
     '''
     def __init__(self,
                  init_pos=np.array([0, 0, -1]),  # default height lower than the ground
+                 low=np.array([0, 0, -1]),
+                 high=np.array([0, 0, -1]),
                  rho=2267.18,
                  prop_radius=23.1348e-3,
                  rho1=-0.16,
@@ -320,14 +322,9 @@ class Downwash(Disturbance):
         # self.seed(env)
 
         # position of the quadrotor
-        if np.array(init_pos).ndim == 1:
-            self.pos = self.high = self.low = init_pos
-        elif np.array(init_pos).ndim == 2:
-            self.low = np.array(init_pos)[0, :]
-            self.high = np.array(init_pos)[1, :]
-            # self.pos = self.np_random.uniform(self.low, self.high)
-        else:
-            RuntimeError("Wrong description of position for downwash")
+        self.pos = init_pos
+        self.low = low
+        self.high = high
         # alpha model   
         self.rho, self.prop_radius = rho, prop_radius
         # beta model
@@ -363,6 +360,7 @@ class Downwash(Disturbance):
         '''
         update the position of the quadrotor.
         '''
+        print(pos)
         self.pos = pos
     
     def get_dw_force_mag(self, target_pos, mode='relative'):

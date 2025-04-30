@@ -339,7 +339,11 @@ class Quadrotor(BaseAviary):
         # initialize disturbance model
         if 'downwash' in self.disturbances:
             if self.DISTURBANCES['downwash'][0]['mode'] == 'fix':
-                self.dw_model = Downwash(init_pos=self.DISTURBANCES['downwash'][0]['pos'])
+                self.dw_model = Downwash(
+                    init_pos=self.DISTURBANCES['downwash'][0]['pos'],
+                    low=self.DISTURBANCES['downwash'][0]['low'],
+                    high=self.DISTURBANCES['downwash'][0]['high']
+                )
                 pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
                 self.dw_model.update_pos(pos)
             elif self.DISTURBANCES['downwash'][0]['mode'] == 'track':

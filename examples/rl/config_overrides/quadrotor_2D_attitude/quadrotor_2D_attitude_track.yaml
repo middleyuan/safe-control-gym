@@ -105,11 +105,11 @@ task_config:
         # # std: [0.00158 , 0.009252, 0.000206, 0.021252, 0.007848, 0.048744, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # 20 times
     downwash:
       - disturbance_func: uniform # dummy
-        low:  1. # dummy
-        high: 1. # dummy
+        low:  [0, 0, -2] # dummy
+        high: [0, 0, -1] # dummy
         mode: fix
         # mode: track
-        pos: [[0, 0, -2], [0, 0, -1]] # z = 0, will cause no downwash
+        pos: [0, 0, -1] # z = 0, will cause no downwash
         # pos in track mode is the relative position to the quadrotor
         # pos in fix mode is the absolute position in the world frame
 
