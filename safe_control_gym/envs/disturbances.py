@@ -310,14 +310,24 @@ class Downwash(Disturbance):
     Downwash model fitted with Gaussian distribution.
     '''
     def __init__(self,
-                 init_pos = np.array([0, 0, -1]), # default heigh lower than the ground
+                 init_pos=np.array([0, 0, -1]),  # default height lower than the ground
                  rho=2267.18,
                  prop_radius=23.1348e-3,
                  rho1=-0.16,
                  rho2=-0.11                  
                  ):
+        # super().__init__(dim, mask)
+        # self.seed(env)
+
         # position of the quadrotor
-        self.pos = init_pos
+        if np.array(init_pos).ndim == 1:
+            self.pos = self.high = self.low = init_pos
+        elif np.array(init_pos).ndim == 2:
+            self.low = np.array(init_pos)[0, :]
+            self.high = np.array(init_pos)[1, :]
+            # self.pos = self.np_random.uniform(self.low, self.high)
+        else:
+            RuntimeError("Wrong description of position for downwash")
         # alpha model   
         self.rho, self.prop_radius = rho, prop_radius
         # beta model
@@ -344,7 +354,7 @@ class Downwash(Disturbance):
         '''
         return the Gaussian distribution of the downwash force.
         '''
-        mu = 0 # zero mean
+        mu = 0  # zero mean
         ratio = (radius - mu) / beta
         gaussian = alpha * np.exp(-0.5 * ratio**2)
         return gaussian

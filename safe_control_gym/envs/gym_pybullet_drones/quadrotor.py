@@ -339,8 +339,10 @@ class Quadrotor(BaseAviary):
         if 'downwash' in self.disturbances:
             if self.DISTURBANCES['downwash'][0]['mode'] == 'fix':
                 self.dw_model = Downwash(init_pos=self.DISTURBANCES['downwash'][0]['pos'])
+                pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                self.dw_model.update_pos(pos)
             elif self.DISTURBANCES['downwash'][0]['mode'] == 'track':
-                self.dw_model = Downwash() # update the position later
+                self.dw_model = Downwash()  # update the position later
 
         # store the last prop values (only for logging)
         self.last_prop_values = None
@@ -638,6 +640,7 @@ class Quadrotor(BaseAviary):
                         elif isinstance(self.disturbances[keys].disturbances[0].std, float):
                             self.disturbances[keys].disturbances[0].std =\
                                 self.disturbances[keys].disturbances[0].std * np.random.choice(values[0]['scale'])
+
         # Update BaseAviary internal variables before calling self._get_observation().
         self._update_and_store_kinematic_information()
         obs, info = self._get_observation(), self._get_reset_info()
@@ -646,6 +649,15 @@ class Quadrotor(BaseAviary):
         # Update task goals
         # NOTE: Task info will be randomized when set_goals() is called.
         self.set_goals()
+
+        # reset disturbance model
+        if 'downwash' in self.disturbances:
+            if self.DISTURBANCES['downwash'][0]['mode'] == 'fix':
+                pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                self.dw_model.update_pos(pos)
+                self.dw_model.reset()
+            else:
+                pass  # randomization only implemented for fixed downwash
 
         # Return either an observation and dictionary or just the observation.
         if self.INFO_IN_RESET:
