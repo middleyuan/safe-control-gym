@@ -49,6 +49,10 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         config.task_config.disturbances.action[0].std = [
             config.task_config.external_param*i for i in config.task_config.disturbances.action[0].std
         ]
+    elif config.experiment_type == 'robustness_pm':
+        config.task_config.randomized_inertial_prop = True
+        for p in config.task_config.inertial_prop_randomization_info.keys():
+            config.task_config.inertial_prop_randomization_info[p]['scale'] *= config.task_config.external_param
     elif config.experiment_type == 'robustness_dw':
         config.task_config.disturbances.downwash[0].pos[2] = config.task_config.external_param
     elif config.experiment_type == 'generalization':
@@ -99,13 +103,17 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         metrics['noise_scale'] = config.task_config.external_param
         temp = config.pretrain_path+"/robust_metric_ps_"+str(config.task_config.external_param)+".npy"
         np.save(temp, metrics, allow_pickle=True)
+    elif config.experiment_type == "robustness_pm":
+        metrics['noise_scale'] = config.task_config.external_param
+        temp = config.pretrain_path+"/robust_metric_pm_"+str(config.task_config.external_param)+".npy"
+        np.save(temp, metrics, allow_pickle=True)
     elif config.experiment_type == "robustness_dw":
         metrics['downwash_height'] = config.task_config.external_param
         temp = config.pretrain_path+"/robust_metric_dw_"+str(config.task_config.external_param)+".npy"
         np.save(temp, metrics, allow_pickle=True)
     elif config.experiment_type == "traj_data":
         temp = f"./traj_results_{config.algo}_{config.task_config.episode_len_sec}.npy"
-        if config.seed == 0:  # os.path.isfile(temp):
+        if config.seed-110 == 0:  # os.path.isfile(temp):
             data = {'n_rollouts': n_episodes,
                     'obs': np.array(results['obs']),
                     'timestamp': np.array(results['timestamp'])}

@@ -9,9 +9,9 @@ SYS='quadrotor_2D_attitude'
 # TASK='stab'
 TASK='track'
 
-ALGO='ppo'
+# ALGO='ppo'
 # ALGO='sac'
-# ALGO='dppo'
+ALGO='dppo'
 # ALGO='safe_explorer_ppo'
 
 EXP_NAME='test'
@@ -46,13 +46,13 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-SEED=2
+SEED=0
 python3 ../../safe_control_gym/experiments/train_rl_controller.py \
     --algo ${ALGO} \
     --task ${SYS_NAME} \
     --overrides \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-        ./config_overrides/${SYS}/${SYS}_${TASK}_pm.yaml \
+        ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
     --output_dir ./Results/${EXP_NAME} \
     --tag ${SYS}_${ALGO}_data \
     --seed ${SEED} \

@@ -21,6 +21,8 @@ algo_config:
   lamb_factor: 10
   lamb_max: 1000
   epsilon: 0.01
-  warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_9_ref_traj.npy
+  warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_11_ref_traj.npy
+  # the actual warm start trajectory file name will be modified in the controller
+  # to match the current episode length
 
   output_dir: ./ilqr/results

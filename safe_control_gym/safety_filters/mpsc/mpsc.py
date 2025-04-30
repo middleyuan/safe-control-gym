@@ -232,34 +232,40 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
 
-        ocp_solver = self.ocp_solver
-        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.array(uncertified_action).reshape((self.model.nu,)))))
+        if self.mpc_mode:
+            clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon)
+            for stage in range(self.horizon):
+                self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], self.model.U_EQ)))
+            y_ref_e = clipped_X_GOAL[-1, :]
+            self.ocp_solver.set(self.horizon, 'yref', y_ref_e)
+        else:
+            ocp_solver = self.ocp_solver
+            ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.array(uncertified_action).reshape((self.model.nu,)))))
 
-        if isinstance(self.cost_function, PRECOMPUTED_COST):
-            uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
+            if isinstance(self.cost_function, PRECOMPUTED_COST):
+                uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
 
-            for stage in range(1, self.mpsc_cost_horizon):
-                ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
-
+                for stage in range(1, self.mpsc_cost_horizon):
+                    ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
         # Solve the optimization problem.
         try:
-            action = ocp_solver.solve_for_x0(x0_bar=obs)
-            self.cost_prev = ocp_solver.get_cost()
+            action = self.ocp_solver.solve_for_x0(x0_bar=obs)
+            self.cost_prev = self.ocp_solver.get_cost()
             self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
             u_val = np.zeros((self.horizon, self.model.nu))
             for i in range(self.horizon):
-                self.slack_prev[i, :] = ocp_solver.get(i, 'su')
-                x_val[i, :] = ocp_solver.get(i, 'x')
-                u_val[i, :] = ocp_solver.get(i, 'u')
-            x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
+                self.slack_prev[i, :] = self.ocp_solver.get(i, 'su')
+                x_val[i, :] = self.ocp_solver.get(i, 'x')
+                u_val[i, :] = self.ocp_solver.get(i, 'u')
+            x_val[self.horizon, :] = self.ocp_solver.get(self.horizon, 'x')
             self.z_prev = x_val.T
             self.v_prev = u_val.T
             # Take the first one from solved action sequence.
             self.prev_action = action
             feasible = True
         except Exception as e:
-            print('Error Return Status:', ocp_solver.status)
+            print('Error Return Status:', self.ocp_solver.status)
             print(e)
             feasible = False
             action = None

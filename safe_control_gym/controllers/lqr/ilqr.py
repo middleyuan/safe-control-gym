@@ -84,6 +84,8 @@ class iLQR(BaseController):
         self.warm_start_traj = warm_start_traj
         if self.warm_start_traj is not None:
             self.load_warm_start_traj()
+        self.load_warm_start_to_rollout = False # otherwise load them to the iLQR optimization
+        # self.load_warm_start_to_rollout = True # load them to the rollout
 
         self.reset()
 
@@ -95,7 +97,7 @@ class iLQR(BaseController):
             self.warm_start_action = traj_data['trajs_data']['action'][0]
             self.warm_start_state = traj_data['trajs_data']['state'][0]
         elif self.warm_start_traj.endswith('.npy'):
-            # self.warm_start_traj = self.warm_start_traj.replace('_9_', f'_{int(self.env.EPISODE_LEN_SEC/1.5)}_')
+            self.warm_start_traj = self.warm_start_traj.replace('_9_', f'_{int(self.env.EPISODE_LEN_SEC)}_')
             traj_data = np.load(self.warm_start_traj, allow_pickle=True).item()
             self.warm_start_action = traj_data['action']
             self.warm_start_state = traj_data['obs']
@@ -138,13 +140,24 @@ class iLQR(BaseController):
 
         # Loop through iLQR iterations
         while self.ite_counter < self.max_iterations:
+            # load warm-start trajectory to do forward rollout
+            if self.warm_start_traj is not None \
+                and self.load_warm_start_to_rollout \
+                and self.ite_counter == 0:
+                print(colored('Warm start trajectory is used for the first rollout.', 'green'))
+                self.input_stack = self.warm_start_action
+                self.state_stack = self.warm_start_state
+
             self.traj_step = 0
             self.run(env=env, max_steps=self.max_steps, training=True)
 
             # Save data and update policy if iteration is finished.
             self.state_stack = np.vstack((self.state_stack, self.final_obs))
-            if self.warm_start_traj is not None and self.ite_counter == 0:
-                print(colored('Warm start trajectory is used.', 'green'))
+            if self.warm_start_traj is not None \
+                and not self.load_warm_start_to_rollout \
+                and self.ite_counter == 0:
+                # load the warm-start trajectory directly to the iterative optimization
+                print(colored('Warm-start trajectory is used for first iteration of iterative optimization.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
 
@@ -366,9 +379,17 @@ class iLQR(BaseController):
         if self.env.TASK == Task.STABILIZATION:
             gains_fb = -self.gain
             input_ff = self.gain @ self.env.X_GOAL + self.model.U_EQ
+            if hasattr(self, 'warm_start_action') \
+                and self.load_warm_start_to_rollout \
+                and self.ite_counter == 0:
+                input_ff = self.gain @ self.env.X_GOAL + self.warm_start_action[step]
         elif self.env.TASK == Task.TRAJ_TRACKING:
             gains_fb = -self.gain
             input_ff = self.gain @ self.env.X_GOAL[step] + self.model.U_EQ
+            if hasattr(self, 'warm_start_action') \
+                and self.load_warm_start_to_rollout \
+                and self.ite_counter == 0:
+                input_ff = self.gain @ self.env.X_GOAL[step]+ self.warm_start_action[step]
 
         # Compute action
         action = gains_fb.dot(obs) + input_ff

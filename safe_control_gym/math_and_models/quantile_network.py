@@ -191,16 +191,18 @@ class QuantileNetwork(MLP):
             self,
             input_size,
             output_size,
-            hidden_dims=[256, 256, 256],
+            hidden_dims=None,
             act='relu',
-            init_fade=False,
-            init_gain=0.5,
             measure=None,
-            measure_kwargs={},
+            measure_kwargs=None,
             quantile_count=200,
             device=None,
             **kwargs,
     ):
+        if measure_kwargs is None:
+            measure_kwargs = {}
+        if hidden_dims is None:
+            hidden_dims = [256, 256]
         assert quantile_count > 0
 
         super().__init__(
@@ -212,15 +214,16 @@ class QuantileNetwork(MLP):
         )
         self.device = device
 
+        # parameters
         self._quantile_count = quantile_count
         self._tau = torch.arange(self._quantile_count + 1) / self._quantile_count
         self._tau_hat = torch.tensor([(self._tau[i] + self._tau[i + 1]) / 2 for i in range(self._quantile_count)])
         self._tau_hat_mat = torch.empty((0,))
 
+        # quantile layer
         self._quantile_layers = nn.ModuleList([nn.Linear(hidden_dims[-1], quantile_count) for _ in range(output_size)])
 
-        # self._init(self._quantile_layers, fade=init_fade, gain=init_gain)
-
+        # risk measures
         measure_func = risk_measure_wang if measure is None else self.measures[measure]
         self._measure_func = measure_func
         self._measure = measure_func(self, **measure_kwargs)

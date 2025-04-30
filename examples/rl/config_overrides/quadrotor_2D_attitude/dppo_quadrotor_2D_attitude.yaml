@@ -1,6 +1,6 @@
 algo_config:
   # model args
-  hidden_dim: 64
+  hidden_dim: 128
   activation: "relu"
 
   # loss args
@@ -11,7 +11,10 @@ algo_config:
   target_kl: 0.01
   entropy_coef: 0.002
   quantile_count: 256
-  value_loss: 'quantile_l1'
+  value_loss: 'sample_energy'
+  risk_measure: 'wang'
+  risk_measure_config:
+    beta: 0.0
 
   # optim args
   opt_epochs: 20

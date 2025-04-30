@@ -33,6 +33,8 @@ for EVAL in "${EVAL_LIST[@]}"; do
         EXTERNAL_PARAM=(0 1 2 3 4 5 10 15 20 25 30 40 50 60 70 80 90 100)
     elif [ "${EVAL}" == 'robustness_ps' ]; then
         EXTERNAL_PARAM=(0 1 2 3 4 5 10 15 20 25 30 40 50 60 70 80 90 100)
+    elif [ "${EVAL}" == 'robustness_pm' ]; then
+        EXTERNAL_PARAM=(0 0.01 0.02 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0)
     elif [ "${EVAL}" == 'robustness_dw' ]; then
         EXTERNAL_PARAM=(1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.5 4.0 4.5 5.0)
     elif [ "${EVAL}" == 'generalization' ]; then

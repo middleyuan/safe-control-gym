@@ -423,6 +423,7 @@ class MetricExtractor:
             'length': self.get_episode_lengths() if len(self.get_episode_lengths()) > 1 else self.get_episode_lengths()[0],
             'rms_action_change': np.asarray(self.get_episode_rms_action_change()).mean(),
             'average_return': np.asarray(self.get_episode_returns()).mean(),
+            'average_return_std': np.asarray(self.get_episode_returns()).std(),
             'average_rmse': np.asarray(self.get_episode_rmse()).mean(),
             'rmse': np.asarray(self.get_episode_rmse()) if len(self.get_episode_rmse()) > 1 else self.get_episode_rmse()[0],
             'rmse_std': np.asarray(self.get_episode_rmse()).std(),

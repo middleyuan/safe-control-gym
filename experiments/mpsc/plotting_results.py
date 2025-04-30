@@ -378,29 +378,33 @@ def benchmark_plot(system, task, algo):
     uncert = all_results['none']['uncert_results']
     mpsf = all_results['mpsf']['cert_results']
     none = all_results['none']['cert_results']
-    mpc = all_results['mpc_acados']['trajs_data']
+    mpc = all_results['mpc']['cert_results']
 
     for i in [0]:
-        print('Uncert')
+        print('Uncertified PPO')
         met.data = uncert
-        print('num_violations', calculate_state_violations(uncert, i))
-        print('exp_return', np.asarray(met.get_episode_returns())[i])
+        print('num_violations:', calculate_state_violations(uncert, i))
+        print('exp_return:', np.asarray(met.get_episode_returns())[i])
+        print('exp_rmse:', np.asarray(met.get_episode_rmse())[i])
 
-        print('\nNone')
+        print('\nCertified PPO')
         met.data = none
-        print('num_violations', calculate_state_violations(none, i))
-        print('exp_return', np.asarray(met.get_episode_returns())[i])
+        print('num_violations:', calculate_state_violations(none, i))
+        print('exp_return:', np.asarray(met.get_episode_returns())[i])
+        print('exp_rmse:', np.asarray(met.get_episode_rmse())[i])
 
-        print('\nMPSF')
+        print('\nCertified PPO trained with MPSC')
         met.data = mpsf
-        print('num_violations', calculate_state_violations(mpsf, i))
-        print('exp_return', np.asarray(met.get_episode_returns())[i])
+        print('num_violations:', calculate_state_violations(mpsf, i))
+        print('exp_return:', np.asarray(met.get_episode_returns())[i])
+        print('exp_rmse:', np.asarray(met.get_episode_rmse())[i])
         print('---------')
 
-        print('\nMPC')
+        print('\nNL-MPC')
         met.data = mpc
-        print('num_violations', calculate_state_violations(mpc, i))
-        print('exp_return', np.asarray(met.get_episode_returns())[i])
+        print('num_violations:', calculate_state_violations(mpc, i))
+        print('exp_return:', np.asarray(met.get_episode_returns())[i])
+        print('exp_rmse:', np.asarray(met.get_episode_rmse())[i])
         print('---------')
 
         fig = plt.figure()
@@ -433,7 +437,7 @@ def calculate_state_violations(data, i):
 
 
 if __name__ == '__main__':
-    ordered_models = ['none', 'mpsf', 'mpc_acados']
+    ordered_models = ['none', 'mpsf', 'mpc']
 
     colors = {
         'mpsf': 'royalblue',

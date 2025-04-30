@@ -42,7 +42,6 @@ class DPPO(BaseController):
                  seed=0,
                  **kwargs):
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
-        torch.manual_seed(seed=seed)
 
         # Task.
         if self.training:
@@ -69,6 +68,8 @@ class DPPO(BaseController):
                                activation=self.activation,
                                gae_lambda=self.gae_lambda,
                                value_loss=self.value_loss,
+                               risk_measure=self.risk_measure,
+                               risk_measure_config=self.risk_measure_config,
                                device=self.device)
         self.agent.to(self.device)
         # Pre-/post-processing.

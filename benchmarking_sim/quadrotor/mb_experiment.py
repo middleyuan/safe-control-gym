@@ -18,10 +18,12 @@ from safe_control_gym.utils.utils import mkdirs, set_dir_from_config, timing
 from safe_control_gym.envs.gym_pybullet_drones.quadrotor import Quadrotor
 from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import QuadType
 from safe_control_gym.utils.gpmpc_plotting import make_quad_plots
+# from line_profiler import profile
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
-@timing
+# @timing
+# @profile
 def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     '''The main function running experiments for model-based methods.
 
@@ -36,18 +38,18 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     # read the additional arguments
     if len(sys.argv) > 1:
         print('sys.argv', sys.argv)
-        ALGO = sys.argv[1] 
+        ALGO = sys.argv[1]
         ADDITIONAL = sys.argv[2] if len(sys.argv) > 2 else ''
         CTRL_ADD = sys.argv[3] if len(sys.argv) > 3 else ''
         if generate_reference:
             TRAJ_LEN = sys.argv[2] if len(sys.argv) > 2 else None
-            TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else None
+            TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
             ADDITIONAL = ''
     else:
-        # ALGO = 'ilqr'
+        ALGO = 'ilqr'
         # ALGO = 'gp_mpc'
         # ALGO = 'gpmpc_acados'
-        ALGO = 'gpmpc_acados_TP'
+        # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
         # ALGO = 'mpc_acados'
@@ -118,7 +120,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     mkdirs(config.output_dir)
     if generate_reference:
         config.task_config.disturbances = None
-        config.randomized_init = False
+        config.task_config.randomized_init = False
         config.task_config.task_info.ilqr_ref = False
         if locals().get('TRAJ_LEN') is not None:
             config.task_config.episode_len_sec = int(TRAJ_LEN)

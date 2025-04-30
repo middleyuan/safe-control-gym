@@ -48,17 +48,7 @@ task_config:
     # pitch_ref: False
     # # ilqr_traj_data: /home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/ilqr_ref_traj.npy
     # ilqr_traj_data: /home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/mpc_acados_ref_traj.npy
-  
-  inertial_prop:
-    M: 0.033
-    Iyy: 1.4e-05
-    beta_1: 18.11
-    beta_2: 3.68
-    beta_3: 0.0
-    alpha_1: -140.8
-    alpha_2: -13.4
-    alpha_3: 124.8
-    pitch_bias: 0.0 # in radian
+
 
   episode_len_sec: 11
   cost: quadratic

@@ -45,21 +45,8 @@ task_config:
     ilqr_ref: True
     # ilqr_traj_data: '../lqr/ilqr_ref_traj.npy'
 
-  inertial_prop:
-    M: 0.033
-    Iyy: 1.4e-05
-    beta_1: 14.444835
-    beta_2: 8.738323
-    beta_3: 0.0
-    alpha_1: -149.998940
-    alpha_2: -17.516742
-    alpha_3: 129.306903
-    pitch_bias: 0.0 # in radian
-
   episode_len_sec: 11
   cost: quadratic
-  rew_state_weight: [20, 0.1, 20, 0.1, 0.5, 0.01]
-  rew_act_weight: [3, 2]
 
   constraints:
     - constraint_form: default_constraint

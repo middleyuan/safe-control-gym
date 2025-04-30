@@ -137,16 +137,12 @@ def run_multiple_models(plot, all_models):
     config = fac.merge()
 
     for model in all_models:
-        print(model)
-        for i in range(25 if not plot else 1):
-            X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, model=model)
-            if i == 0:
-                all_uncert_results, all_cert_results = uncert_results, cert_results
-            else:
-                for key in all_cert_results.keys():
-                    if key in all_uncert_results:
-                        all_uncert_results[key].append(uncert_results[key][0])
-                    all_cert_results[key].append(cert_results[key][0])
+        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, model=model)
+        all_uncert_results, all_cert_results = uncert_results, cert_results
+        for key in all_cert_results.keys():
+            if key in all_uncert_results:
+                all_uncert_results[key].append(uncert_results[key][0])
+            all_cert_results[key].append(cert_results[key][0])
 
         met = MetricExtractor()
         uncert_metrics = met.compute_metrics(data=all_uncert_results, max_steps=660)
@@ -159,11 +155,12 @@ def run_multiple_models(plot, all_models):
                        'config': config,
                        'X_GOAL': X_GOAL}
 
-        if not plot:
-            with open(f'./results_mpsc/{model}.pkl', 'wb') as f:
-                pickle.dump(all_results, f)
+        if config.sf_config.mpc_mode:
+            model = 'mpc'
+        with open(f'./results_mpsc/{model}.pkl', 'wb') as f:
+            pickle.dump(all_results, f)
 
 
 if __name__ == '__main__':
-    run(plot=True, model='mpsf')
-    # run_multiple_models(plot=True, all_models=['mpsf7'])
+    # run(plot=True, model='mpsf')
+    run_multiple_models(plot=False, all_models=['none'])

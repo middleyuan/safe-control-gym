@@ -273,18 +273,13 @@ class GaussianProcessCollection:
                                     kernel=kernel,
                                     **kwargs)
         else:
-            prior_noise_std = [0.00076, 0.00051, 0.000956, 0.0011049, 0.00190645, 0.0928035]
-            prior_noise_std = [prior_noise_std[i] for i in target_mask]
             # set prior noise std
             for i in range(target_dim):
-                # noise_prior = gpytorch.priors.NormalPrior(loc=0, scale=prior_noise_std[i])
-                noise_prior = np.array(prior_noise_std[i])
                 self.gp_list.append(GaussianProcess(model_type,
                                                     deepcopy(likelihood),
                                                     input_mask=input_mask,
                                                     normalize=normalize,
                                                     kernel=kernel,
-                                                    noise_prior=noise_prior,
                                                     )
                                     )
 
@@ -1186,7 +1181,7 @@ class GaussianProcess:
                  target_mask=None,
                  normalize=False,
                  kernel='RBF',
-                 noise_prior=None
+                 init_noise_std =None
                  ):
         '''Initialize Gaussian Process.
 
@@ -1202,7 +1197,6 @@ class GaussianProcess:
         self.input_mask = input_mask
         self.target_mask = target_mask
         self.kernel = kernel
-        self.noise_prior = noise_prior
 
     def _init_model(self,
                     train_inputs,
@@ -1221,7 +1215,7 @@ class GaussianProcess:
         self.input_dimension = input_dimension
         self.output_dimension = target_dimension
         self.n_training_samples = train_inputs.shape[0]
-
+    
     def _compute_GP_covariances(self,
                                 train_x
                                 ):
@@ -1271,6 +1265,7 @@ class GaussianProcess:
               learning_rate=0.01,
               gpu=False,
               fname='best_model.pth',
+              init_noise_std=None,
               ):
         '''Train the GP using Train_x and Train_y.
 
@@ -1289,6 +1284,8 @@ class GaussianProcess:
             train_y_raw = train_y_raw[:, self.target_mask]
             test_y_raw = test_y_raw[:, self.target_mask]
         self._init_model(train_x_raw, train_y_raw)
+        if init_noise_std is not None:
+            self.model.likelihood.initialize(noise=init_noise_std)
         train_x = train_x_raw
         train_y = train_y_raw
         test_x = test_x_raw
@@ -1318,15 +1315,15 @@ class GaussianProcess:
             mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
             # init_output_scale = torch.rand(1).requires_grad_(False) * 3
             # init_length_scale = torch.rand(self.input_dimension, 1, 1).requires_grad_(False) * 3
-            # init_noise = torch.from_numpy(self.noise_prior)
-            # if gpu:
-            #     init_output_scale = init_output_scale.cuda()
-            #     init_length_scale = init_length_scale.cuda()
-                # init_noise = init_noise.cuda()
+            # # init_noise_std = torch.from_numpy(self.init_noise_std)
+            # # if gpu:
+            # # #     init_output_scale = init_output_scale.cuda()
+            # # #     init_length_scale = init_length_scale.cuda()
+            # #     init_noise_std = init_noise_std.cuda()
 
-            # self.model.covar_module.initialize(outputscale=init_output_scale)
-            # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
-            # self.model.likelihood.initialize(noise=init_noise)
+            # # self.model.covar_module.initialize(outputscale=init_output_scale)
+            # # self.model.covar_module.base_kernel.initialize(lengthscale=init_length_scale)
+            # self.model.likelihood.initialize(noise=init_noise_std )
             # print('init outputscale: ', self.model.covar_module.outputscale)
             # print("\nInit model parameters:")
             # for name, param in self.model.named_parameters():
