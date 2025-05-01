@@ -360,7 +360,6 @@ class Downwash(Disturbance):
         '''
         update the position of the quadrotor.
         '''
-        print(pos)
         self.pos = pos
     
     def get_dw_force_mag(self, target_pos, mode='relative'):
