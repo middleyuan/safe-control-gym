@@ -154,14 +154,14 @@ class PPO_MPC_Agent:
                     traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
                     ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
-                    (theta_loss.mean() + ref_loss.mean()).backward()
+                    (theta_loss.sum() + ref_loss.sum()).backward()
                     self.actor_opt.step()
 
                     p_loss_epoch += policy_loss.item()
                     e_loss_epoch += entropy_loss.item()
                     kl_epoch += approx_kl.item()
-                    theta_loss_epoch += theta_loss.mean().item()
-                    ref_loss_epoch += ref_loss.mean().item()
+                    theta_loss_epoch += theta_loss.sum().item()
+                    ref_loss_epoch += ref_loss.sum().item()
                 # Critic update.
                 value_loss = self.compute_value_loss(batch_th)
                 self.critic_opt.zero_grad()
@@ -259,13 +259,13 @@ class MPCActor(nn.Module):
         # Parameters
         self.q_mpc = actor_config['q_mpc']
         self.r_mpc = actor_config['r_mpc']
-        self.qt_mpc = actor_config['qt_mpc']
+        # self.qt_mpc = actor_config['qt_mpc']
         self.model_param = actor_config['model_param']
         self._init_param_val()
         self.n_learnable_param = 0
         for k in self.param_dict.keys():
             self.n_learnable_param += self.param_dict[k].shape[0]
-        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.model_param))
+        temp = np.concatenate((self.q_mpc, self.r_mpc, self.model_param))
         self.mpc_param = nn.Parameter(torch.FloatTensor(temp))
         self.param_net = MLP(obs_dim, self.n_learnable_param, hidden_dims, activation)
         self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
@@ -275,7 +275,7 @@ class MPCActor(nn.Module):
         self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
     def _init_param_val(self):
-        self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
+        self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc)),
                            'f': np.array(self.model_param)}
 
     def forward(self, obs, act=None):
@@ -310,9 +310,9 @@ class MPCActor(nn.Module):
 
     def get_theta_param(self, obs):
         if obs.ndim > 1:
-            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
+            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs)) + 1e-5
         else:
-            theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
+            theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs)) + 1e-5
         return theta
 
     def get_ref_param(self, info_batch):
@@ -460,7 +460,7 @@ class MPCPolicyFunction:
         """Sets up nonlinear optimization problem."""
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
-        etau = 1e-5  # barrier parameter for interior point method
+        etau = 1e-4  # barrier parameter for interior point method
 
         # Optimization variable: [x0, u0, sigma0, x1, u1, ...]
         opt_vars = []
@@ -504,9 +504,9 @@ class MPCPolicyFunction:
         # Cost
         Q, th_q, nq = _create_semi_definite_matrix(nx)
         R, th_r, nr = _create_semi_definite_matrix(nu)
-        Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
+        # Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
-        cost_param = cs.vertcat(th_q, th_r, th_qt)
+        cost_param = cs.vertcat(th_q, th_r)
         # Model
         model_param = cs.MX.sym('f_param', npl)
 
@@ -526,7 +526,7 @@ class MPCPolicyFunction:
                                             u=np.zeros((nu, 1)),
                                             Xr=x_ref[:, -1],
                                             Ur=np.zeros((nu, 1)),
-                                            Q=Qt,
+                                            Q=Q,
                                             R=np.zeros((nu, nu)))['l']
         # Constraints
         con_list, con_lbg, con_ubg, con_eq = [], [], [], []
@@ -621,9 +621,9 @@ class MPCPolicyFunction:
             # 'jit_options.flags': ['-03'],
             # 'jit_options.compiler': 'ccache gcc',
             'fatrop.mu_init': etau,
-            'fatrop.max_iter': 500,
+            'fatrop.max_iter': 250,
             'fatrop.print_level': 0,
-            'fatrop.acceptable_tol': 1e-5,
+            'fatrop.acceptable_tol': 1e-4,
         }
         vnlp_prob = {
             'f': cost,
@@ -861,7 +861,7 @@ class MPCPolicyFunction:
                 'traj_step': deepcopy(self.traj_step) - 1
             }
 
-            # results batch
+            # result batch
             action_batch.append(action)
             results_dict_batch.append(results_dict)
             info_batch.append(info)
