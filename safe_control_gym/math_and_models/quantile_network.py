@@ -61,17 +61,18 @@ def make_distorted_measure(distorted_tau: torch.Tensor) -> Callable:
     return distorted_measure
 
 
-def risk_measure_cvar(qn: MLP, confidence_level: float = 1.0) -> Callable:
+def risk_measure_cvar(qn: MLP, beta: float = 1.0) -> Callable:
     """Conditional value at risk measure.
 
     TODO: Handle confidence_level being a tensor.
 
     Args:
         qn (QuantileNetwork): Quantile network to compute the risk measure for.
-        confidence_level (float): Confidence level of the risk measure. Must be between 0 and 1.
+        beta (float): Confidence level of the risk measure. Must be between 0 and 1.
     Returns:
         A risk measure function.
     """
+    confidence_level = beta
     tau, confidence_level = reshape_measure_parameters(qn, confidence_level)
     distorted_tau = torch.min(tau / confidence_level, torch.ones(*tau.shape).to(tau.device))
 
@@ -91,19 +92,19 @@ def risk_measure_neutral(_: MLP) -> Callable:
         values = squeeze_preserve_batch(quantiles.mean(-1))
 
         return values
-
     return measure
 
 
-def risk_measure_percentile(_: MLP, confidence_level: float = 1.0) -> Callable:
+def risk_measure_percentile(_: MLP, beta: float = 1.0) -> Callable:
     """Value at risk measure.
 
     Args:
         _ (QuantileNetwork): Quantile network to compute the risk measure for.
-        confidence_level (float): Confidence level of the risk measure. Must be between 0 and 1.
+        beta (float): Confidence level of the risk measure. Must be between 0 and 1.
     Returns:
         A risk measure function.
     """
+    confidence_level = beta
 
     def measure(quantiles):
         sorted_quantiles, _ = quantiles.sort(-1)
@@ -199,7 +200,7 @@ class QuantileNetwork(MLP):
             device=None,
             **kwargs,
     ):
-        if measure_kwargs is None:
+        if measure_kwargs is None or measure == 'neutral':
             measure_kwargs = {}
         if hidden_dims is None:
             hidden_dims = [256, 256]
@@ -279,10 +280,10 @@ class QuantileNetwork(MLP):
             A torch.Tensor of shape (1,) containing the loss.
         """
         assert (
-            predictions.dim() == 2 or predictions.dim() == 3
+                predictions.dim() == 2 or predictions.dim() == 3
         ), f'Predictions must be 2D or 3D. Got {predictions.dim()}.'
         assert (
-            predictions.shape == targets.shape
+                predictions.shape == targets.shape
         ), f'The shapes of predictions and targets must match. Got {predictions.shape} and {targets.shape}.'
 
         pre_dims = [-1] if predictions.dim() == 3 else []

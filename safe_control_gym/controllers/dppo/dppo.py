@@ -55,6 +55,7 @@ class DPPO(BaseController):
             self.env = env_func()
             self.env = RecordEpisodeStatistics(self.env)
         # Agent.
+        self.risk_measure_config = {'beta': self.beta}
         self.agent = DPPOAgent(self.env.observation_space,
                                self.env.action_space,
                                hidden_dim=self.hidden_dim,
