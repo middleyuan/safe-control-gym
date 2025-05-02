@@ -14,6 +14,7 @@ use_clipped_value: False
 clip_param: 0.2
 target_kl: 0.01
 entropy_coef: 0.01
+exploration_init: -0.5
 
 # Optim args
 opt_epochs: 10

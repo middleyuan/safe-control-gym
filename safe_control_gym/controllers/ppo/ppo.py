@@ -50,7 +50,7 @@ class PPO(BaseController):
             # Training and testing.
             self.env = make_vec_envs(env_func, None, self.rollout_batch_size, self.num_workers, seed)
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
-            self.eval_env = env_func(seed=seed * 111)
+            self.eval_env = env_func(seed=seed+110)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
             self.model = self.get_prior(self.eval_env, self.prior_info)
         else:
