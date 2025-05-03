@@ -387,7 +387,8 @@ class BaseHPO(ABC):
                                   **deepcopy(self.algo_config))
 
                 self.agent.reset()
-                eval_env = self.env_func(seed=seed * 111)
+                seed += 110
+                eval_env = self.env_func(seed=seed)
                 # Setup safety filter
                 if self.safety_filter is not None:
                     env_func_filter = partial(make,

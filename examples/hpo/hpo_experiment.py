@@ -23,7 +23,7 @@ def hpo(config):
     if config.algo == 'ppo' or config.algo == 'sac' or config.algo == 'dppo':
         config.task_config.cost = 'rl_reward'
         config.task_config.obs_goal_horizon = 1
-        config.task_config.normalized_rl_action_space = True
+        config.task_config.normalized_rl_action_space = False
         if 'disturbances' in config.task_config:
             if config.task_config.disturbances is not None:
                 # raise ValueError('Double check with this setup.')
@@ -97,7 +97,7 @@ def eval(config):
     if config.algo == 'ppo' or config.algo == 'sac' or config.algo == 'dppo':
         config.task_config.cost = 'rl_reward'
         config.task_config.obs_goal_horizon = 1
-        config.task_config.normalized_rl_action_space = True
+        config.task_config.normalized_rl_action_space = False
         if 'disturbances' in config.task_config:
             if config.task_config.disturbances is not None:
                 # raise ValueError('Double check with this setup.')

@@ -8,6 +8,7 @@ import time
 import munch
 import yaml
 
+from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.plotting import plot_from_logs
 from safe_control_gym.utils.registration import make
@@ -48,7 +49,11 @@ def train():
     ctrl.reset()
 
     # Training.
-    ctrl.learn()
+    # ctrl.learn()
+    seed = config.seed + 110
+    eval_env = env_func(seed=seed)
+    experiment = BaseExperiment(eval_env, ctrl)
+    experiment.launch_training()
     ctrl.close()
     print('Training done.')
 

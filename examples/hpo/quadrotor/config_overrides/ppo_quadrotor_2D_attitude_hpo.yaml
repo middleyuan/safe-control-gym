@@ -25,6 +25,7 @@ hpo_config:
     clip_param: 0.2
     target_kl: 0.01
     entropy_coef: 0.002
+    exploration_init: -0.5
 
     # optim args
     opt_epochs: 20

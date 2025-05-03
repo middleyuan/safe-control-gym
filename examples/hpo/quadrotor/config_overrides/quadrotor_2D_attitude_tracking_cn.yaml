@@ -3,7 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
-  # physics: pyb
   quad_type: 4
 
   init_state:
@@ -60,8 +59,7 @@ task_config:
     trajectory_plane: 'xz'
     trajectory_position_offset: [0, 1.]
     trajectory_scale: 1.0
-    # ilqr_ref: False
-    # ilqr_traj_data: '../lqr/ilqr_ref_traj.npy'
+    ilqr_ref: True
 
   inertial_prop:
     M: 0.033
@@ -94,7 +92,7 @@ task_config:
   disturbances:
     action:
       - disturbance_func: white_noise
-        std: [0.03116, 0.03450]
+        std: [0.06232, 0.069]
     observation:
       - disturbance_func: white_noise
-        std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
+        std: [3.150e-05, 1.314e-03, 3.870e-05, 1.611e-03, 3.390e-03, 1.302e-01]

@@ -14,7 +14,7 @@ task_config:
     init_theta: 0
     init_theta_dot: 0
   randomized_init: True
-  randomized_inertial_prop: True
+  randomized_inertial_prop: False
 
   inertial_prop_randomization_info:
     beta_1: # Nominal: 17.7903
@@ -60,7 +60,7 @@ task_config:
     trajectory_plane: 'xz'
     trajectory_position_offset: [0, 1.]
     trajectory_scale: 1.0
-    # ilqr_ref: False
+    ilqr_ref: True
     # ilqr_traj_data: '../lqr/ilqr_ref_traj.npy'
 
   inertial_prop:
@@ -97,4 +97,4 @@ task_config:
         std: [0.03116, 0.03450]
     observation:
       - disturbance_func: white_noise
-        std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
+        std: [3.150e-05, 1.314e-03, 3.870e-05, 1.611e-03, 3.390e-03, 1.302e-01]

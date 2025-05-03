@@ -140,7 +140,7 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
         PRIOR = '200'
 
     # check if the config file exists
-    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}.yaml'
+    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}_basic.yaml'
     ALGO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'
     HPO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_hpo.yaml'
     assert os.path.exists(TASK_CONFIG_PATH), f'{TASK_CONFIG_PATH} does not exist'
@@ -171,7 +171,7 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
             pytest.skip('SAFETY_FILTER is only supported for ppo')
             raise ValueError('SAFETY_FILTER is only supported for ppo')
         SAFETY_FILTER_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SAFETY_FILTER}_{SYS}.yaml'
-        TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/ppo_mpsc_{SYS}_{TASK}.yaml'
+        TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/ppo_mpsc_{SYS}_{TASK}_basic.yaml'
         ALGO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/ppo_mpsc_{SYS}_{TASK}_{PRIOR}.yaml'
         HPO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/ppo_mpsc_{SYS}_hpo.yaml'
         assert os.path.exists(SAFETY_FILTER_CONFIG_PATH), f'{SAFETY_FILTER_CONFIG_PATH} does not exist'
@@ -221,12 +221,12 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
 
     # hyperparameter configurations (to make tests faster)
     # should belong to the distributions defined in the search space
-    if 'optimization_iterations' in config.hpo_config.hps_config:
+    if 'optimization_iterations' in config.hpo_config.hps_config and 'optimization_iterations' in HYPERPARAMS_DICT[ALGO]:
         d = len(config.hpo_config.hps_config.optimization_iterations)
         config.hpo_config.hps_config.optimization_iterations = [HYPERPARAMS_DICT[ALGO]['optimization_iterations']['values'][0]] * d
-    if 'num_epochs' in config.hpo_config.hps_config:
+    if 'num_epochs' in config.hpo_config.hps_config and 'num_epochs' in HYPERPARAMS_DICT[ALGO]:
         config.hpo_config.hps_config.num_epochs = HYPERPARAMS_DICT[ALGO]['num_epochs']['values'][0]
-    if 'max_env_steps' in config.hpo_config.hps_config:
+    if 'max_env_steps' in config.hpo_config.hps_config and 'max_env_steps' in HYPERPARAMS_DICT[ALGO]:
         config.hpo_config.hps_config.max_env_steps = HYPERPARAMS_DICT[ALGO]['max_env_steps']['values'][0]
 
     hpo(config)

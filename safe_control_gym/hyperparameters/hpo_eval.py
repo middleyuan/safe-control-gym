@@ -51,7 +51,7 @@ class HPOEval(BaseHPO):
             hp_eval = self.hpo_config[hp_name]
             hps = self.config_to_param(hp_eval)
             np.random.seed(self.hpo_config.seed)
-            self.evaluate(hps)
+            self.evaluate(hps, seed_list=[num for num in range(self.hpo_config.repetitions)])
             trajs_data_list = self.trajs_data_list
             metrics_list = self.metrics_list
             self.plot_results(trajs_data_list, metrics_list, self.output_dir, f'({hp_name})')
