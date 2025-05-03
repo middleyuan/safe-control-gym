@@ -16,7 +16,7 @@ hpo_config:
   # hyperparameters
   hps_config:
     # model args
-    hidden_dim: 64
+    hidden_dim: 128
     activation: relu
 
     # loss args

@@ -16,7 +16,9 @@ algo_config:
   target_kl: 0.01
   entropy_coef: 0.01
   quantile_count: 256
-  value_loss: quantile_l1
+  value_loss: 'sample_energy'
+  risk_measure: 'wang'
+  beta: 0.0
 
   # Optim args
   opt_epochs: 20
@@ -28,6 +30,7 @@ algo_config:
   max_env_steps: 336000
   rollout_batch_size: 5
   rollout_steps: 660
+  eval_batch_size: 10
 
   # Misc
   log_interval: 0
