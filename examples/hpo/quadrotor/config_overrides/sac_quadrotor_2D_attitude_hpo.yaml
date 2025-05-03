@@ -27,9 +27,9 @@ hpo_config:
     # optim args
     train_interval: 200
     train_batch_size: 256
-    actor_lr: 0.003
-    critic_lr: 0.003
-    entropy_lr: 0.003
+    actor_lr: 0.001
+    critic_lr: 0.001
+    entropy_lr: 0.001
 
     # runner args
     max_env_steps: 660000
@@ -37,5 +37,5 @@ hpo_config:
     max_buffer_size: 150000
 
     # objective
-    rew_state_weight: [3., .1, 3., .1, .1, 0.001]
+    rew_state_weight: [20., .1, 20., .1, .1, 0.001]
     rew_act_weight: [.1, .1]

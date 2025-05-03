@@ -8,9 +8,6 @@ algo_config:
   # loss args
   gamma: 0.99
   tau: 0.005
-  init_temperature: 0.2
-  use_entropy_tuning: False
-  target_entropy: null
 
   # optim args
   train_interval: 100
@@ -22,7 +19,7 @@ algo_config:
   # runner args
   max_env_steps: 216000
   warm_up_steps: 1000
-  rollout_batch_size: 4
+  rollout_batch_size: 5
   num_workers: 1
   max_buffer_size: 200000
   deque_size: 10
