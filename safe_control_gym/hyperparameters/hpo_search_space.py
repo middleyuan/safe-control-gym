@@ -127,7 +127,7 @@ DPPO_dict = {
     'target_kl': {'values': [0.00000001, 0.8], 'scale': 'uniform', 'type': float, 'cat': 'float'},
     'entropy_coef': {'values': [0.00000001, 0.1], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
     'exploration_init': {'values': [1.0, 0.5, 0.0, -0.5, -1.0, -1.5, -2.0], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
-    'risk_measure_config': {'values': [-1.5, -1.0, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    'beta': {'values': [-1.5, -1.0, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
     'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
     'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
     'rollout_batch_size': {'values': [2, 3, 4, 5, 8, 10, 15], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
