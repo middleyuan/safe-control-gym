@@ -1265,7 +1265,7 @@ class GaussianProcess:
               learning_rate=0.01,
               gpu=False,
               fname='best_model.pth',
-              init_noise_std=None,
+              init_noise_var=None,
               ):
         '''Train the GP using Train_x and Train_y.
 
@@ -1284,8 +1284,8 @@ class GaussianProcess:
             train_y_raw = train_y_raw[:, self.target_mask]
             test_y_raw = test_y_raw[:, self.target_mask]
         self._init_model(train_x_raw, train_y_raw)
-        if init_noise_std is not None:
-            self.model.likelihood.initialize(noise=init_noise_std)
+        if init_noise_var is not None:
+            self.model.likelihood.initialize(noise=init_noise_var)
         train_x = train_x_raw
         train_y = train_y_raw
         test_x = test_x_raw

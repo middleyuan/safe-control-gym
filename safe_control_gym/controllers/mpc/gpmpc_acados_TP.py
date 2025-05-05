@@ -265,8 +265,8 @@ class GPMPC_ACADOS_TP(GPMPC):
                 self.param_noise_std['alpha_3'].scale**2 * u_seq[:, self.action_labels.index('P_c')**2]
             ) 
             
-        self.thrust_noise_std = np.array(np.sqrt(np.max(thrust_noise_var)))
-        self.pitch_noise_std = np.array(np.sqrt(np.max(pitch_noise_var)))
+        self.thrust_noise_var = np.array(np.max(thrust_noise_var))
+        self.pitch_noise_var = np.array(np.max(pitch_noise_var))
                         
         return train_input, train_output
 
@@ -530,11 +530,11 @@ class GPMPC_ACADOS_TP(GPMPC):
             GP_T.train(train_input_T, train_target_T, test_inputs_T, test_targets_T,
                     n_train=self.optimization_iterations[0], learning_rate=self.learning_rate[0], 
                     gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'),
-                    init_noise_std=self.thrust_noise_std)
+                    init_noise_var=self.thrust_noise_var)
             GP_P.train(train_input_P, train_target_P, test_inputs_P, test_targets_P,
                     n_train=self.optimization_iterations[1], learning_rate=self.learning_rate[1],
                     gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'),
-                    init_noise_std=self.pitch_noise_std)
+                    init_noise_var=self.pitch_noise_var)
             
             # # use thread to train the two GPs
             # thread_T = threading.Thread(target=GP_T.train, args=(train_input_T, train_target_T, test_inputs_T, test_targets_T,
