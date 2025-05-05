@@ -193,8 +193,10 @@ class GPMPC(MPC, ABC):
         self.recalc_inducing_points_at_every_step = recalc_inducing_points_at_every_step
         self.online_learning = online_learning
         # self.initial_rollout_std = initial_rollout_std
-        self.obs_noise_std = obs_noise_std
-        self.act_noise_std = act_noise_std
+        self.obs_noise_std =np.repeat(np.array(obs_noise_std), self.model.nx).reshape(-1) \
+            if isinstance(obs_noise_std, (int, float)) else np.array(obs_noise_std).reshape(-1)
+        self.act_noise_std =np.repeat(np.array(act_noise_std), self.model.nu).reshape(-1) \
+            if isinstance(act_noise_std, (int, float)) else np.array(act_noise_std).reshape(-1)
         self.plot_trained_gp = plot_trained_gp 
 
         # MPC params
@@ -340,10 +342,7 @@ class GPMPC(MPC, ABC):
         if self.x_prev is not None and self.u_prev is not None:
             # cov_x = np.zeros((nx, nx))
             # cov_x = np.diag([self.initial_rollout_std**2] * nx)
-            if isinstance(self.obs_noise_std, (int, float)):
-                cov_x = np.diag([self.obs_noise_std**2] * nx)
-            else:
-                cov_x = np.diag(self.obs_noise_std**2)
+            cov_x = np.diag(self.obs_noise_std**2)
             if nu == 1:
                 z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.reshape(1, -1).T))  # (T, input_dim)
             else:
@@ -354,8 +353,8 @@ class GPMPC(MPC, ABC):
             cov_d_batch = cov_d_tensor_batch.detach().numpy()
 
             for i in range(T):
-                state_covariances[i] = cov_x
-                cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T
+                state_covariances[i] = cov_x # + np.diag(self.obs_noise_std**2)
+                cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T # + np.diag(self.act_noise_std**2)
                 input_covariances[i] = cov_u
                 cov_xu = cov_x @ self.lqr_gain.T
                 if self.gp_approx == 'taylor':
@@ -1077,7 +1076,7 @@ class GPMPC(MPC, ABC):
         goal_states = self.get_references()
         opti.set_value(x_ref, goal_states)
         # Set the probabilistic state and input constraint set limits.
-        state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
+        state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits(print_sets=True)
 
         for si in range(len(self.constraints.state_constraints)):
             opti.set_value(state_constraint_set[si], state_constraint_set_prev[si])
