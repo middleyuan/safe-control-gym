@@ -89,9 +89,17 @@ class HPO_Vizier(BaseHPO):
 
             elif cat == 'discrete':
                 if scale == 'uniform':
-                    self.problem.search_space.root.add_discrete_param(hp_name, hp_values)
+                    if is_list:
+                        for i in range(len(self.hps_config[hp_name])):
+                            self.problem.search_space.root.add_discrete_param(f'{hp_name}_{i}', hp_values)
+                    else:
+                        self.problem.search_space.root.add_discrete_param(hp_name, hp_values)
                 elif scale == 'log':
-                    self.problem.search_space.root.add_discrete_param(hp_name, hp_values, scale_type=vz.ScaleType.LOG)
+                    if is_list:
+                        for i in range(len(self.hps_config[hp_name])):
+                            self.problem.search_space.root.add_discrete_param(f'{hp_name}_{i}', hp_values, scale_type=vz.ScaleType.LOG)
+                    else:
+                        self.problem.search_space.root.add_discrete_param(hp_name, hp_values, scale_type=vz.ScaleType.LOG)
                 else:
                     raise ValueError('Invalid scale')
 
