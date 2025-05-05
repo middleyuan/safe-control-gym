@@ -223,20 +223,11 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
     # should belong to the distributions defined in the search space
     if 'optimization_iterations' in config.hpo_config.hps_config:
         d = len(config.hpo_config.hps_config.optimization_iterations)
-        if 'optimization_iterations' in HYPERPARAMS_DICT[ALGO]:
-            config.hpo_config.hps_config.optimization_iterations = [HYPERPARAMS_DICT[ALGO]['optimization_iterations']['values'][0]] * d
-        else:
-            config.hpo_config.hps_config.optimization_iterations = [100] * d
+        config.hpo_config.hps_config.optimization_iterations = [100] * d
     if 'num_epochs' in config.hpo_config.hps_config:
-        if 'num_epochs' in HYPERPARAMS_DICT[ALGO]:
-            config.hpo_config.hps_config.num_epochs = HYPERPARAMS_DICT[ALGO]['num_epochs']['values'][0]
-        else:
-            config.hpo_config.hps_config.num_epochs = 2
+        config.hpo_config.hps_config.num_epochs = 2
     if 'max_env_steps' in config.hpo_config.hps_config:
-        if 'max_env_steps' in HYPERPARAMS_DICT[ALGO]:
-            config.hpo_config.hps_config.max_env_steps = HYPERPARAMS_DICT[ALGO]['max_env_steps']['values'][0]
-        else:
-            config.hpo_config.hps_config.max_env_steps = 1000
+        config.hpo_config.hps_config.max_env_steps = 1000
 
     hpo(config)
 
