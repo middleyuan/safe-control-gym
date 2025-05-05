@@ -129,7 +129,6 @@ class MPC_ACADOS(MPC):
         acados_model.t_label = 'time'
         # get current time stamp in $ymd_HMS format
         # current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-        acados_model.name = self.env.NAME # + '_' + current_time
 
         # continuous-time dynamics
         fc_func = self.model.fc_func

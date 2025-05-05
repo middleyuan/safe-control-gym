@@ -277,23 +277,8 @@ class PID(BaseController):
         thrust = (math.sqrt(scalar_thrust / (4 * self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
         target_z_ax = target_thrust / np.linalg.norm(target_thrust)
         target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
-        # deno = np.linalg.norm(np.cross(target_z_ax, target_x_c)) 
-        # target_y_ax = np.cross(target_z_ax, target_x_c) / deno
-        # target_y_ax = np.cross(target_z_ax, target_x_c) / np.linalg.norm(np.cross(target_z_ax, target_x_c))
-        # target_x_ax = np.cross(target_y_ax, target_z_ax)
         target_y_ax = cross_3d(target_z_ax, target_x_c) / np.linalg.norm(cross_3d(target_z_ax, target_x_c))
         target_x_ax = cross_3d(target_y_ax, target_z_ax)
-        # print('target_z_ax:', target_z_ax)
-        # print('target_y_ax:', target_y_ax)
-        # print('target_y_ax_cross:', target_y_ax_cross)
-        # print('target_x_ax:', target_x_ax)
-        # print('target_x_ax_cross:', target_x_ax_cross)
-        # print('')
-        # assert np.isclose(target_y_ax_cross, target_y_ax).all(), \
-        #     'target_y_ax_cross and target_y_ax are not the same'
-        # assert np.isclose(target_x_ax_cross, target_x_ax).all(), \
-        #     'target_x_ax_cross and target_x_ax are not the same'
-
         # NOTE: a proper rotation matrix by definition
         target_rotation = (np.vstack([target_x_ax, target_y_ax, target_z_ax])).transpose()
 

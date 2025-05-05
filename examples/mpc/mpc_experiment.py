@@ -132,20 +132,5 @@ def post_analysis(state_stack, input_stack, env):
     plt.show()
 
 
-def wrap2pi_vec(angle_vec):
-    '''Wraps a vector of angles between -pi and pi.
-
-    Args:
-        angle_vec (ndarray): A vector of angles.
-    '''
-    for k, angle in enumerate(angle_vec):
-        while angle > np.pi:
-            angle -= np.pi
-        while angle <= -np.pi:
-            angle += np.pi
-        angle_vec[k] = angle
-    return angle_vec
-
-
 if __name__ == '__main__':
     run()
