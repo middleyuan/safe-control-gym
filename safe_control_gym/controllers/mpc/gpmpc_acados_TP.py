@@ -239,25 +239,30 @@ class GPMPC_ACADOS_TP(GPMPC):
         # estimate the noise propogated into the thrust and pitch
         # thrust part noise is prior dynamics noise + true thrust data noise (linearized)
         # since the linearization is state independent, take the max of the noise
-        thrust_noise_var = self.act_noise_std[0] * np.abs(self.prior_ctrl.env.beta_1)**2 \
-                         + np.sqrt((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
-                         + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2))**2 * \
-                         (self.obs_noise_std[self.state_labels.index('z_dot')] + self.obs_noise_std[self.state_labels.index('x_dot')])
+
+        var_x_ddot = 2*self.obs_noise_std[self.state_labels.index('x_dot')]**2/dt**2
+        var_z_ddot = 2*self.obs_noise_std[self.state_labels.index('z_dot')]**2/dt**2
+
+        thrust_noise_var = self.act_noise_std[0]**2 * np.abs(self.prior_ctrl.env.beta_1)**2 \
+                         + 1/((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
+                             +(x_dot_seq[:, self.state_labels.index('x_dot')]** 2)) * x_dot_seq[:, self.state_labels.index('x_dot')]**2 * var_x_ddot\
+                         + 1/((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
+                             +(x_dot_seq[:, self.state_labels.index('x_dot')]** 2)) * (x_dot_seq[:, self.state_labels.index('z_dot')] + g)**2 * var_z_ddot\
         
-        pitch_noise_var = np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')] \
-                        + np.abs(self.prior_ctrl.env.alpha_2)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')] \
-                        + np.abs(self.prior_ctrl.env.alpha_3)**2 * self.act_noise_std[1])
+        pitch_noise_var = np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
+                        + np.abs(self.prior_ctrl.env.alpha_2)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
+                        + np.abs(self.prior_ctrl.env.alpha_3)**2 * self.act_noise_std[1]**2)
         
         # if domain randomization is used, add the propogated paramatric noise
         # similarly, max is taken
         if self.param_noise_std is not None:
-            self.thrust_noise_var += np.max(\
-                self.param_noise_std['beta_1'].scale * T_cmd + self.param_noise_std['beta_2'].scale
+            thrust_noise_var += np.max(\
+                self.param_noise_std['beta_1'].scale**2 * T_cmd**2 + self.param_noise_std['beta_2'].scale**2
             )
-            self.pitch_noise_var += np.max(\
-                self.param_noise_std['alpha_1'].scale * x_seq[:, self.state_labels.index('theta')] + \
-                self.param_noise_std['alpha_2'].scale * x_seq[:, self.state_labels.index('theta_dot')] + \
-                self.param_noise_std['alpha_3'].scale * u_seq[:, self.action_labels.index('P_c')]
+            pitch_noise_var += np.max(\
+                self.param_noise_std['alpha_1'].scale**2 * x_seq[:, self.state_labels.index('theta')]**2 + \
+                self.param_noise_std['alpha_2'].scale**2 * x_seq[:, self.state_labels.index('theta_dot')]**2 + \
+                self.param_noise_std['alpha_3'].scale**2 * u_seq[:, self.action_labels.index('P_c')**2]
             ) 
             
         self.thrust_noise_std = np.array(np.sqrt(np.max(thrust_noise_var)))
@@ -928,7 +933,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         
         # Set the probabilistic state and input constraint set limits.
         # Tightening at the first step is possible if self.compute_initial_guess is used
-        state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits(print_sets=True)
+        state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
         # set acados parameters
         if self.sparse_gp:
             # sparse GP parameters

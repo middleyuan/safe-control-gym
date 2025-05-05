@@ -46,10 +46,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
             TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
             ADDITIONAL = ''
     else:
-        ALGO = 'ilqr'
+        # ALGO = 'ilqr'
         # ALGO = 'gp_mpc'
         # ALGO = 'gpmpc_acados'
-        # ALGO = 'gpmpc_acados_TP'
+        ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
         # ALGO = 'mpc_acados'
@@ -62,6 +62,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         ADDITIONAL = ''
         CTRL_ADD = ''
         # ADDITIONAL = '_param'
+        # CTRL_ADD = '_param'
     # ADDITIONAL = ''
     # CTRL_ADD = '_tr'
     SYS = 'quadrotor_2D_attitude'
@@ -374,9 +375,9 @@ def wrap2pi_vec(angle_vec):
     '''
     for k, angle in enumerate(angle_vec):
         while angle > np.pi:
-            angle -= np.pi
+            angle -= 2*np.pi
         while angle <= -np.pi:
-            angle += np.pi
+            angle += 2*np.pi
         angle_vec[k] = angle
     return angle_vec
 
