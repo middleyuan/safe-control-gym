@@ -167,7 +167,6 @@ class GPMPC_ACADOS_TP(GPMPC):
                 prior_info=prior_info,
             )
         self.prior_ctrl.reset()
-        print('prior_ctrl:', type(self.prior_ctrl))
         if self.use_linear_prior:
             self.prior_dynamics_func = self.prior_ctrl.linear_dynamics_func
         else:
@@ -178,8 +177,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.u_guess = None
         self.x_prev = None
         self.u_prev = None
-        print('prior_info[prior_prop]', prior_info['prior_prop'])
-
 
     def preprocess_training_data(self,
                                  x_seq,
@@ -249,7 +246,8 @@ class GPMPC_ACADOS_TP(GPMPC):
                          + 1/((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
                              +(x_dot_seq[:, self.state_labels.index('x_dot')]** 2)) * (x_dot_seq[:, self.state_labels.index('z_dot')] + g)**2 * var_z_ddot\
         
-        pitch_noise_var = np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
+        pitch_noise_var = 2*self.obs_noise_std[self.state_labels.index('theta_dot')]**2/dt**2 \
+                        + np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
                         + np.abs(self.prior_ctrl.env.alpha_2)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
                         + np.abs(self.prior_ctrl.env.alpha_3)**2 * self.act_noise_std[1]**2)
         
@@ -763,9 +761,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         ocp.solver_options.nlp_solver_type = 'SQP' if not self.use_RTI else 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 25 if not self.use_RTI else 1
-        ocp.solver_options.as_rti_level = 0 if not self.use_RTI else 4
-        ocp.solver_options.as_rti_iter = 1 if not self.use_RTI else 1
-
         # ocp.solver_options.globalization = 'FUNNEL_L1PEN_LINESEARCH' if not self.use_RTI else 'MERIT_BACKTRACKING'
         # ocp.solver_options.globalization = 'MERIT_BACKTRACKING'
         # prediction horizon
@@ -1024,9 +1019,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         
         if hasattr(self, 'K'):
             action += self.K @ (self.x_prev[:, 0] - obs)
-            # self.u_prev = self.u_prev + self.K @ (self.x_prev - obs)
-            # self.u_guess = self.u_prev
-            # action = self.u_prev[0] if nu == 1 else self.u_prev[:, 0]
 
         return action
 
@@ -1194,8 +1186,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
     def create_sparse_GP_machinery(self, n_ind_points):
         '''This setups the gaussian process approximations for FITC formulation.'''
-        # lengthscales, signal_var, noise_var, gp_K_plus_noise = self.gaussian_process.get_hyperparameters(as_numpy=True)
-        
         GP_T = self.gaussian_process[0]
         GP_P = self.gaussian_process[1]
         if GP_T.kernel == 'Linear':
@@ -1375,10 +1365,6 @@ class GPMPC_ACADOS_TP(GPMPC):
                 cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T # + np.diag(self.act_noise_std**2)
                 input_covariances[i] = cov_u
                 cov_xu = cov_x @ self.lqr_gain.T
-                # if nu == 1:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[i]))
-                # else:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[:, i]))
                 if self.gp_approx == 'taylor':
                     raise NotImplementedError('Taylor GP approximation is currently not working.')
                 elif self.gp_approx == 'mean_eq':
@@ -1550,5 +1536,4 @@ class GPMPC_ACADOS_TP(GPMPC):
         fig.tight_layout()
         fig.savefig(os.path.join(output_dir, f'{plt_title}.png'))
         print(f'Plot saved at {os.path.join(output_dir, f"{plt_title}.png")}')
-        # plt.show()
         plt.close()
