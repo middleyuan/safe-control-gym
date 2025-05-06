@@ -1,15 +1,15 @@
 algo: fmpc
 algo_config:
-  horizon: 30
+  horizon: 50
   r_mpc:
     - 1.0e-6
     - 1.0e-6
   q_mpc: 
-    - 50
+    - 70
     - 0.001
     - 0
     - 0
-    - 50
+    - 70
     - 0.001
     - 0
     - 0
