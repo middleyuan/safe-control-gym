@@ -22,8 +22,8 @@ from safe_control_gym.utils.gpmpc_plotting import make_quad_plots
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
-# @timing
 # @profile
+@timing
 def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     '''The main function running experiments for model-based methods.
 
@@ -39,8 +39,9 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     if len(sys.argv) > 1:
         print('sys.argv', sys.argv)
         ALGO = sys.argv[1]
-        ADDITIONAL = sys.argv[2] if len(sys.argv) > 2 else ''
-        CTRL_ADD = sys.argv[3] if len(sys.argv) > 3 else ''
+        gp_tag = sys.argv[2] if len(sys.argv) > 2 else None
+        ADDITIONAL = sys.argv[3] if len(sys.argv) > 3 else ''
+        CTRL_ADD = sys.argv[4] if len(sys.argv) > 4 else ''
         if generate_reference:
             TRAJ_LEN = sys.argv[2] if len(sys.argv) > 2 else None
             TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
@@ -61,6 +62,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'fmpc'
         ADDITIONAL = ''
         CTRL_ADD = ''
+        gp_tag = None
         # ADDITIONAL = '_param'
         # CTRL_ADD = '_param'
     # ADDITIONAL = ''
@@ -114,7 +116,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     config = fac.merge()
     if ALGO in ['gpmpc_acados', 'gp_mpc' , 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
         num_data_max = config.algo_config.num_epochs * config.algo_config.num_samples
-        config.output_dir = os.path.join(config.output_dir, PRIOR + '_' + repr(num_data_max)+ ADDITIONAL)
+        gp_tag = f'{PRIOR}_{num_data_max}' if gp_tag is None else gp_tag
+        config.output_dir = os.path.join(config.output_dir, gp_tag + ADDITIONAL)
     # print('output_dir',  config.algo_config.output_dir)
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir

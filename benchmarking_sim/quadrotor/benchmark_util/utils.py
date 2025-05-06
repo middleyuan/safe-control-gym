@@ -102,6 +102,7 @@ def run_rollouts(task_description):
             dw_height_scale=dw_height_scale,
             eval_task=eval_task,
             gp_model_tag=gp_model_tag,
+            ctrl_tag=ctrl_tag,
             )
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None, 

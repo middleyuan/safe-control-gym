@@ -69,16 +69,18 @@ if len(sys.argv) > 1:
     elif sys.argv[1] == 'mb':
         plot_name = 'Control-oriented'
 if len(sys.argv) > 2:
-    generalization = True if sys.argv[2] == 'gen' else False
-else:
-    generalization = False
+    additional = sys.argv[2]
+    # generalization = True if sys.argv[2] == 'gen' else False
+# else:
+#     generalization = False
 
 # generalization = False
 # generalization = True
+generalization = False if additional != '11' else True
 # plot_name = 'RL'
 # plot_name = 'Control-oriented'
 #############################################
-additional = '11'
+# additional = '11'
 # additional = '9'
 # additional = '15'
 
@@ -157,6 +159,7 @@ gpmpc_traj_data = np.load(gpmpc_data_path, allow_pickle=True)
 print(gpmpc_traj_data.shape)  # (10, 541, 6) seed, time_step, obs
 
 ppo_data_path = os.path.join(script_path, f'../data/traj_results_ppo_{additional}.npy')
+# print(f"File exists: {os.path.exists(ppo_data_path)}")
 ppo_data = np.load(ppo_data_path, allow_pickle=True).item()
 ppo_traj_data = np.array(ppo_data['obs'])
 print(ppo_traj_data.shape)  # (10, 541, 6) seed, time_step, obs
@@ -330,8 +333,15 @@ elif plot_name == 'Control-oriented':
 
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Tracking error [m]')
-ax.set_title(f'Tracking error ({plot_name})')
 ax.set_ylim(-0.05, 0.4)
+# title_fontsize = 20
+if additional == '11':
+    fig.suptitle(f'Tracking error ({plot_name})',)
+else:
+    if additional == '9':
+        fig.suptitle(f'Tracking error (faster) ({plot_name})',)
+    elif additional == '15':
+        fig.suptitle(f'Tracking error (slower) ({plot_name})',)
 
 fig.tight_layout()
 # plt.show()

@@ -13,13 +13,13 @@ gp_model_tag = sys.argv[2] if len(sys.argv) > 2 else ''
 
 # test
 additional = '_downwash'
-num_seed = 3
+num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
 
 time1 = time.perf_counter()
 # for dw_height_scale in np.arange(0.0, 1.0, 0.05):
-for dw_height in np.arange(1.5, 4.0, 0.2):
+for dw_height in np.arange(1.5, 4.0, 0.1):
     if parallel:
         results = []
         with Pool(processes=3) as pool:

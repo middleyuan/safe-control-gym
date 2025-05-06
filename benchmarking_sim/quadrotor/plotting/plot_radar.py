@@ -65,7 +65,8 @@ subtitle_fontsize = 30
 small_text_size = 20
 
 metric_index = {
-    'fast': 0,
+    # 'fast': 0,
+    'worst_generalization_performance': 0,
     'performance': 1,
     'inference_time': 2,
     'model_complexity': 3,
@@ -73,16 +74,17 @@ metric_index = {
     'robustness_proc': 5,
     'robustness_obs': 6,
     'robustness_param': 7,
-    'slow': 8,
+    # 'slow': 8,
 }
 
 inverted_axes_name = [
-    'fast',
+    # 'fast',
+    'worst_generalization_performance',
     'performance',
     'inference_time',
     'model_complexity',
     'sampling_complexity',
-    'slow',    
+    # 'slow',    
 ]
 inverted_axes_index = [metric_index[i] for i in inverted_axes_name]
 
@@ -119,9 +121,11 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     tiks += tiks[:1]
     # print('tiks:', tiks)
     # angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist() + [0]
-    start_angle = np.deg2rad(7.5)
+    # start_angle = np.deg2rad(7.5)
+    start_angle = np.deg2rad(0)
     angles = [
-        start_angle, # faster 
+        # start_angle, # faster 
+        start_angle, # worst generalization
         np.deg2rad(60), # performance
         np.deg2rad(120), # inference time
         np.deg2rad(180), # model complexity
@@ -129,7 +133,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
         np.deg2rad(300 - 15), # robustness proc
         np.deg2rad(300), # observation noise
         np.deg2rad(300 + 15), # robustness param
-        np.deg2rad(360) - start_angle, # slower
+        # np.deg2rad(360) - start_angle, # slower
         start_angle, # close the circle
     ]
 
@@ -172,10 +176,12 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
 
             # t = t.center(10, ' ')
             # cusotmize the text position for axes
-            if _x in [angles[metric_index['slow']]]:
+            # if _x in [angles[metric_index['slow']]]:
+            #     ax.text(_x - 0.15, _y - 0.1, t, size=small_text_size)
+            # elif _x in [angles[metric_index['fast']]]:
+            #     ax.text(_x + 0.1, _y - 0.1, t, size=small_text_size)
+            if _x == angles[metric_index['worst_generalization_performance']]:
                 ax.text(_x - 0.15, _y - 0.1, t, size=small_text_size)
-            elif _x in [angles[metric_index['fast']]]:
-                ax.text(_x + 0.1, _y - 0.1, t, size=small_text_size)
             elif _x == angles[metric_index['model_complexity']]:
                 ax.text(_x + 0.3, _y + 0.2, t, size=small_text_size)
             elif _x == angles[metric_index['sampling_complexity']]:
@@ -189,7 +195,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     
     # add additional text for robustness axes
     ax.text(angles[metric_index['robustness_obs']], 1.25, 'Robustness', size=small_text_size)
-    ax.text(0, 1.35, 'Generalization', size=small_text_size)
+    # ax.text(0, 1.35, 'Generalization', size=small_text_size)
     
     ax.fill(angles, np.ones(num_vars + 1), alpha=0.05, color='lightgray')
     # ax.fill(angles[0:3], np.ones(3), alpha=0.05)
@@ -199,7 +205,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     # ax.legend(loc='upper right', bbox_to_anchor=(0.1, 0.2), fontsize=text_fontsize)
     if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
     if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
-    fig_save_path = os.path.join(script_dir, f'radar_{plt_name}.pdf')
+    fig_save_path = os.path.join(script_dir, f'/radar/radar_{plt_name}.pdf')
     fig.savefig(fig_save_path, dpi=300, bbox_inches='tight')
     fig.savefig(fig_save_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     print(f'figure saved as {fig_save_path}')
@@ -229,6 +235,13 @@ fast_performance = [
     transfer_metric['iLQR']['rmse'][0], 
     transfer_metric['LQR']['rmse'][0], 
 ]
+
+# worst_generalization_performance = [max(transfer_metric[method]['rmse']) \
+#                                     for method in tag_ctrl_list.keys()] 
+worst_generalization_performance = [
+    max(i, j) for i, j in zip(fast_performance, slow_performance)
+]
+print('worst_generalization_performance:', worst_generalization_performance)
 
 performance = [transfer_metric['GP-MPC']['rmse'][2],   # GP-MPC
                transfer_metric['Linear MPC']['rmse'][2],   # Linear-MPC
@@ -275,24 +288,24 @@ sampling_complexity = [ int(660),
                         int(1),
                        ]
 robustness_proc = [ 5, # GP-MPC
-                    10, # Linear-MPC
+                    15, # Linear-MPC
                     4, # MPC
-                    4, # F-MPC
-                    10, # PPO
-                    15, # SAC
-                    10, # DPPO
-                    10, # PID
+                    3, # F-MPC
+                    4, # PPO
+                    10, # SAC
+                    3, # DPPO
+                    15, # PID
                     4, # iLQR
                     15, # LQR
               ]
 
 robustness_obs = [
-    70, # GP-MPC
+    60, # GP-MPC
     120, # Linear-MPC
     100, # MPC
     100, # F-MPC
     15, # PPO
-    120, # SAC
+    100, # SAC
     15, # DPPO
     120, # PID
     50, # iLQR
@@ -301,19 +314,20 @@ robustness_obs = [
 
 robustness_param = [
     5.1, # GP-MPC
-    1.0, # Linear-MPC
-    1.6, # MPC
-    1.2, # F-MPC
+    4.6, # Linear-MPC
+    3.2, # MPC
+    2.8, # F-MPC
     1.0, # PPO
-    2.2, # SAC
-    1.0, # DPPO
-    2.2, # PID
-    0.4, # iLQR
+    2.0, # SAC
+    1.2, # DPPO
+    4.4, # PID
+    3.0, # iLQR
     5.1, # LQR
 ]
 
 data = [
-    fast_performance,
+    # fast_performance,
+    worst_generalization_performance,
     performance, 
     inference_time, 
     model_complexity, 
@@ -321,7 +335,7 @@ data = [
     robustness_proc,
     robustness_obs,
     robustness_param,
-    slow_performance, 
+    # slow_performance, 
 ]
 
 # get the max and min values (NOTE: the axis is inverted)
@@ -337,7 +351,7 @@ for i in metric_index.values():
         max_values.append(max(data[i]))
 # min_values = [max(i) for i in data]
 # manually tune some axes
-min_values[metric_index['fast']] = 0.25 # gen performance fast
+# min_values[metric_index['fast']] = 0.25 # gen performance fast
 min_values[metric_index['performance']] = 0.06
 # max_values[metric_index['performance']] = 0.02
 # max_values[metric_index['robustness_proc']] = 50
@@ -400,8 +414,10 @@ spider(
         # 'x': [*'ab'],
         'x': algos,
         # '$\qquad\qquad\qquad\quad$  Fast\n $\qquad\qquad\qquad\quad$ performance\n':
-        '$\quad$  Fast':
-            data[metric_index['fast']],
+        # '$\quad$  Fast':
+        #     data[metric_index['fast']],
+        '$\qquad\qquad\qquad\quad$  Generalization \n $\qquad\qquad\qquad\quad$ performance\n':
+            data[metric_index['worst_generalization_performance']],
         '$\qquad\qquad\qquad\quad$ Nominal\n $\qquad\qquad\qquad\quad$ performance\n':
             data[metric_index['performance']],
         'Inference\ntime\n\n':
@@ -422,8 +438,8 @@ spider(
         # '$\qquad$ Param':
             data[metric_index['robustness_param']],
         # '$\qquad\qquad\qquad\quad$  Slow\n $\qquad\qquad\qquad\quad$ performance\n\n':
-        '$\quad$ Slow':
-            data[metric_index['slow']],
+        # '$\quad$ Slow':
+        #     data[metric_index['slow']],
         # '\n\nParameter noise':
             # [data[7][i] for i in range(len(data[7]))],
         # '\n\nRobustness\n(process)':

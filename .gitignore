@@ -169,8 +169,13 @@ benchmarking_sim/quadrotor/data/traj*
 benchmarking_sim/quadrotor/data/gen*
 benchmarking_sim/quadrotor/data/*results*
 benchmarking_sim/quadrotor/data/*data*
-fmpc_old
-mpc_acados_old
-linear_mpc_old
-benchmarking_sim/quadrotor/mpc_acados
+benchmarking_sim/quadrotor/plotting/*.png
+benchmarking_sim/quadrotor/plotting/noise
+benchmarking_sim/quadrotor/plotting/radar
+benchmarking_sim/quadrotor/plotting/traj
+benchmarking_sim/quadrotor/plotting/convergence
+# benchmarking_sim/quadrotor/plotting/*.pdf
+*.pdf
+# benchmarking_sim/quadrotor/mpc_acados
 gym_backup.zip
+examples/hpo/*
