@@ -32,7 +32,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     # Create the configuration dictionary.
     fac = ConfigFactory()
     config = fac.merge()
-    config.seed += 110
+    config.seed += 150
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
