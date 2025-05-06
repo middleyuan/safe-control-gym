@@ -154,7 +154,7 @@ class PPO_MPC_Agent:
                     traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
                     ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
-                    (theta_loss.sum() + ref_loss.sum()).backward()
+                    (theta_loss.sum()).backward()
                     self.actor_opt.step()
 
                     p_loss_epoch += policy_loss.item()
@@ -460,7 +460,7 @@ class MPCPolicyFunction:
         """Sets up nonlinear optimization problem."""
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
-        etau = 1e-4  # barrier parameter for interior point method
+        etau = 1e-5  # barrier parameter for interior point method
 
         # Optimization variable: [x0, u0, sigma0, x1, u1, ...]
         opt_vars = []
@@ -621,9 +621,9 @@ class MPCPolicyFunction:
             # 'jit_options.flags': ['-03'],
             # 'jit_options.compiler': 'ccache gcc',
             'fatrop.mu_init': etau,
-            'fatrop.max_iter': 250,
+            'fatrop.max_iter': 500,
             'fatrop.print_level': 0,
-            'fatrop.acceptable_tol': 1e-4,
+            'fatrop.acceptable_tol': 1e-5,
         }
         vnlp_prob = {
             'f': cost,
@@ -1085,10 +1085,7 @@ def _create_semi_definite_matrix(n):
     return WW, P, n_param
 
 
-def random_sample(indices,
-                  batch_size,
-                  drop_last=True
-                  ):
+def random_sample(indices, batch_size, drop_last=True):
     '''Returns index batches to iterate over.'''
     indices = np.asarray(np.random.permutation(indices))
     batches = indices[:len(indices) // batch_size * batch_size].reshape(
