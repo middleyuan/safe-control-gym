@@ -9,33 +9,33 @@ algo_config:
     r_mpc: [0.1, 0.1]
     # qt_mpc: [10., 0.1, 10., 0.1, 0.1, 0.01]
     # model_param: [0.8, 0.8, 0.8, 0.8, 0.8]
-    # model_param: [0.6, 0.5, 0.5, 0.5, 0.3]
+    # model_param: [0.7, 0.5, 0.5, 0.5, 0.3]
     model_param: [0.6825742117895708, 0.4292449477599564, 0.4813652415802387, 0.4521088665975965, 0.30893385663149797]
     # model_param: [1., 1., 1., 1., 1.]
     mpc_config:
       horizon: 20
       warmstart: True
       n_parallel_solver: 5
-      n_train_solver: 32
+      n_train_solver: 16
 
   # loss args
   gamma: 0.98
   use_gae: True
-  gae_lambda: 0.92
+  gae_lambda: 0.95  # 92
   use_clipped_value: False  # or True
   clip_param: 0.2
   target_kl: 0.02
-  entropy_coef: 0.0002
+  entropy_coef: 0.0001
   exploration_init: -2.0
 
   # optim args
-  opt_epochs: 20
+  opt_epochs: 25
   mini_batch_size: 256
-  actor_lr: 0.003
+  actor_lr: 0.01
   critic_lr: 0.003
 
   # runner args
-  max_env_steps: 264000
+  max_env_steps: 297000
   rollout_batch_size: 5
   rollout_steps: 660
   eval_batch_size: 5
@@ -46,4 +46,4 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 3300
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True
