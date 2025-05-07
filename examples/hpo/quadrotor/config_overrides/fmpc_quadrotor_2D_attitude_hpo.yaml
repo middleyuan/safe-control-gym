@@ -11,7 +11,7 @@ hpo_config:
   save_n_best_hps: 1
   # budget
   trials: 60
-  hp_eval_list: [] # list of hyperparameter configurations to evaluate
+  hp_eval_list: ['hps_config'] # list of hyperparameter configurations to evaluate
 
   # hyperparameters
   hps_config:
