@@ -36,28 +36,28 @@ if len(sys.argv) > 1:
     noise_option = sys.argv[1]
 else:
     noise_option = 'obs_noise'
-    noise_option = 'proc_noise'
+    # noise_option = 'proc_noise'
     # noise_option = 'param'
 print('noise_option', noise_option)
 
-linear_mpc_data = np.load(f'{script_dir}/../data/linear_mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
+# linear_mpc_data = np.load(f'{script_dir}/../data/linear_mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
 mpc_data = np.load(f'{script_dir}/../data/mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
 gpmpc_data = np.load(f'{script_dir}/../data/gpmpc_acados_TP_{noise_option}_results.npy', allow_pickle=True).item()
 ilqr_data = np.load(f'{script_dir}/../data/ilqr_{noise_option}_results.npy', allow_pickle=True).item()
-lqr_data = np.load(f'{script_dir}/../data/lqr_{noise_option}_results.npy', allow_pickle=True).item()
-pid_data = np.load(f'{script_dir}/../data/pid_{noise_option}_results.npy', allow_pickle=True).item()
-fmpc_data = np.load(f'{script_dir}/../data/fmpc_{noise_option}_results.npy', allow_pickle=True).item()
+# lqr_data = np.load(f'{script_dir}/../data/lqr_{noise_option}_results.npy', allow_pickle=True).item()
+# pid_data = np.load(f'{script_dir}/../data/pid_{noise_option}_results.npy', allow_pickle=True).item()
+# fmpc_data = np.load(f'{script_dir}/../data/fmpc_{noise_option}_results.npy', allow_pickle=True).item()
 
 
 
 noise_data = {
-              'Linear MPC': linear_mpc_data, 
+            #   'Linear MPC': linear_mpc_data, 
               'Nonlinear MPC': mpc_data, 
               'GP-MPC': gpmpc_data,
               'iLQR': ilqr_data,
-              'LQR': lqr_data,
-              'PID': pid_data,
-              'F-MPC': fmpc_data,
+            #   'LQR': lqr_data,
+            #   'PID': pid_data,
+            #   'F-MPC': fmpc_data,
               } 
 if noise_option in ['obs_noise']:
     # noise_scale = [0,1,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
@@ -106,10 +106,10 @@ if noise_option == 'obs_noise':
              color='grey', linestyle='-.', label='Relative Perf=200%')
     for method in double_results.keys():
         plt.axvline(x=double_results[method], linestyle='--', color=plot_colors[method])
-    plt.text(100, 310, 'Nonlinear MPC 200%')
-    plt.text(70, 240, 'GP-MPC 200%')
-    plt.text(50, 300, 'iLQR 200%')
-    plt.text(100, 370, 'F-MPC 200%')
+    # plt.text(100, 310, 'Nonlinear MPC 200%')
+    # plt.text(70, 240, 'GP-MPC 200%')
+    # plt.text(50, 300, 'iLQR 200%')
+    # plt.text(100, 370, 'F-MPC 200%')
 elif noise_option == 'proc_noise':
     plt.legend(ncol=2, loc='upper right')
     plt.title("Robustness to process noise")
@@ -118,13 +118,13 @@ elif noise_option == 'proc_noise':
     # plot vertical line at 200% performance
     for method in double_results.keys():
         plt.axvline(x=double_results[method], linestyle='--', color=plot_colors[method])
-    plt.text(11, 3700, 'Linear MPC 200%')
-    plt.text(6, 6100, 'Nonlinear MPC 200%')
-    plt.text(6, 5400, 'GP-MPC 200%')
-    plt.text(6, 300, 'iLQR 200%')
-    plt.text(16, 1400, 'LQR 200%')
-    plt.text(11, 3200, 'PID 200%')
-    plt.text(6, 6700, 'F-MPC 200%')
+    # plt.text(11, 3700, 'Linear MPC 200%')
+    # plt.text(6, 6100, 'Nonlinear MPC 200%')
+    # plt.text(6, 5400, 'GP-MPC 200%')
+    # plt.text(6, 300, 'iLQR 200%')
+    # plt.text(16, 1400, 'LQR 200%')
+    # plt.text(11, 3200, 'PID 200%')
+    # plt.text(6, 6700, 'F-MPC 200%')
 elif noise_option == 'param':
     plt.title("Robustness to parametric uncertainty")
     plt.xlabel("Randomization scale")
@@ -133,13 +133,13 @@ elif noise_option == 'param':
     plt.legend(ncol=2, loc='upper right')
     for method in double_results.keys():
         plt.axvline(x=double_results[method], linestyle='--', color=plot_colors[method])
-    plt.text(4.61, 100, 'Linear MPC 200%')
-    plt.text(3.21, 250, 'Nonlinear MPC 200%')
-    # plt.text(1.21, 250, 'GP-MPC 200%')
-    plt.text(3.01, 200, 'iLQR 200%')
-    # plt.text(16, 1400, 'LQR 200%')
-    plt.text(4.41, 200, 'PID 200%')
-    plt.text(2.81, 100, 'F-MPC 200%')
+    # plt.text(4.61, 100, 'Linear MPC 200%')
+    # plt.text(3.21, 250, 'Nonlinear MPC 200%')
+    # # plt.text(1.21, 250, 'GP-MPC 200%')
+    # plt.text(3.01, 200, 'iLQR 200%')
+    # # plt.text(16, 1400, 'LQR 200%')
+    # plt.text(4.41, 200, 'PID 200%')
+    # plt.text(2.81, 100, 'F-MPC 200%')
 
 plt.savefig(f"robustness_model-based_{noise_option}.pdf",bbox_inches="tight", pad_inches=0.1)
 plt.savefig(f"robustness_model-based_{noise_option}.png",bbox_inches="tight", pad_inches=0.1)
