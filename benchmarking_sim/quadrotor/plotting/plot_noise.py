@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 script_dir = os.path.dirname(os.path.abspath(__file__))
 print(script_dir)
 
-max_seed = 3
+max_seed = 10
 metric_name = 'metrics.txt'
 s = 2 # times std
 
@@ -29,22 +29,24 @@ if len(sys.argv) > 1:
     controller = sys.argv[1]
     noise_type = sys.argv[2]
     tag = sys.argv[3] if len(sys.argv) > 3 else ''
-    gp_tag = sys.argv[4] if len(sys.argv) > 4 else 'handtuned'
+    gp_tag = sys.argv[4] if len(sys.argv) > 4 else 'hpo'
+    id_type = ''
 else:
     # controller = 'mpc_acados'
     # controller = 'linear_mpc_acados'
     # controller = 'ilqr'
     # controller = 'lqr'
     # controller = 'pid'
-    controller = 'gpmpc_acados_TP'
+    # controller = 'gpmpc_acados_TP'
+    controller = 'fmpc'
 
     gp_tag = 'hpo'
     # gp_tag = 'handtuned'
 
-    # noise_type = 'obs_noise'
+    noise_type = 'obs_noise'
     # noise_type = 'obs_noise_old'
-    # noise_type = 'proc_noise'
-    noise_type = 'param'
+    noise_type = 'proc_noise'
+    # noise_type = 'param'
 
     id_type = ''
     # id_type = '_ob_ns=5'
@@ -59,6 +61,8 @@ else:
     # id_type = '_param'
     # id_type = '_tr'
 SYS = 'quadrotor_2D_attitude'
+
+print(f'INFO: controller: {controller}, noise_type: {noise_type}, gp_tag: {gp_tag}, id_type: {id_type}')
 
 assert noise_type in ['obs_noise', 'proc_noise', 'param'], f'noise_type {noise_type} not supported'
 assert controller in ['mpc_acados', 'linear_mpc_acados', 'fmpc',\
@@ -75,16 +79,16 @@ else:
 
 # find the folder in the dir
 seed_data_folder = os.listdir(os.path.join(script_dir, data_folder_dir))
-print('seed_data_folder', seed_data_folder)
+# print('seed_data_folder', seed_data_folder)
 seed_data_folder = [f for f in seed_data_folder if os.path.isdir(os.path.join(data_folder_dir, f))]
 seed_data_folder = sorted(seed_data_folder, key=lambda x: int(x.split('_')[1]))
 # print('seed_data_folder', seed_data_folder)
 seed_data_folder = [seed_data_folder[i]+'/temp' for i in range(max_seed)]
 # seed_data_folder = seed_data_folder[:9]
-print('seed_data_folder', seed_data_folder)
+# print('seed_data_folder', seed_data_folder)
 seed_data_folder = [os.path.join(data_folder_dir, f) for f in seed_data_folder]
-print('seed_data_folder', seed_data_folder)
-print('max seed', max_seed)
+# print('seed_data_folder', seed_data_folder)
+# print('max seed', max_seed)
 
 
 results = {}
@@ -102,7 +106,7 @@ for seed in range(0, max_seed):
     runs_data_folder = [os.path.join(load_seed_dir, f) for f in runs_data_folder]
     # sort the runs
     runs_data_folder = sorted(runs_data_folder)
-    print('runs_data_folder', runs_data_folder)
+    # print('runs_data_folder', runs_data_folder)
     for runs in runs_data_folder:
         # load the metric file in the folder
         metric_file = os.path.join(runs, metric_name)
@@ -136,7 +140,7 @@ for seed in range(0, max_seed):
     results[repr(seed)]['traj_steps'] = traj_steps_list
 
 max_noise_factor = max([max(results[repr(seed)]['noise_factor']) for seed in range(max_seed)])
-print('max_noise_factor', max_noise_factor)
+# print('max_noise_factor', max_noise_factor)
 
 fig, ax = plt.subplots(figsize=(10, 6))
 for seed in range(max_seed):
@@ -150,24 +154,24 @@ fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse_individual.png')
 # early stop
 # merge all the early stop
 num_noise_factor = len(results[repr(seed)]['noise_factor'])
-print('num_noise_factor', num_noise_factor)
+# print('num_noise_factor', num_noise_factor)
 early_stop_results = [False for _ in range(num_noise_factor)]
-print('early_stop_results', early_stop_results)
-print('len(early_stop_results)', len(early_stop_results))
+# print('early_stop_results', early_stop_results)
+# print('len(early_stop_results)', len(early_stop_results))
 for seed in range(max_seed):
-    for i in range(len(results[repr(seed)]['noise_factor'])):
+    for i in range(num_noise_factor):
         early_stop_results[i] = early_stop_results[i] or results[repr(seed)]['early_stop'][i]
-print('early_stop_results', early_stop_results)
+# print('early_stop_results', early_stop_results)
 # find the first early stop
 if True in early_stop_results:
     first_early_stop = early_stop_results.index(True)
     early_stop_noise_factor = results[repr(seed)]['noise_factor'][first_early_stop]
 else:
-    print('no early stop')
+    # print('no early stop')
     first_early_stop = None
     early_stop_noise_factor = None
-print('first_early_stop', first_early_stop)
-print('early_stop_noise_factor', early_stop_noise_factor)
+# print('first_early_stop', first_early_stop)
+# print('early_stop_noise_factor', early_stop_noise_factor)
 
 # results
 
@@ -187,8 +191,8 @@ rmse_degradation = rmse / rmse[:, 0][:, None] * 100
 rmse_degradation_mean = np.mean(rmse_degradation, axis=0)
 rmse_degradation_std = np.std(rmse_degradation, axis=0)
 
-print('rmse_mean', rmse_mean)
-print('rmse_degradation_mean', rmse_degradation_mean)
+# print('rmse_mean', rmse_mean)
+# print('rmse_degradation_mean', rmse_degradation_mean)
 
 # max_noise_factor = 100 
 # max_noise_factor = 1.5
@@ -251,7 +255,7 @@ fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse_degradation.png'
 
 # results[repr(1)]['traj_steps']
 # results.keys
-print('rmse.shape', rmse.shape)
+# print('rmse.shape', rmse.shape)
 saved_results = {
     'rmse': rmse,
     'rmse_mean': rmse_mean,
@@ -269,6 +273,5 @@ else:
     results_file_name = f'{script_dir}/../data/{controller}_{noise_type}_results.npy'
 # np.save(results_file_name, results)
 np.save(results_file_name, saved_results)
-print(f'saved {script_dir}/{results_file_name}')
-
-results = np.load(results_file_name, allow_pickle=True).item()
+print(f'saved to {results_file_name}')
+print('')

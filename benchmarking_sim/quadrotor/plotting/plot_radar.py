@@ -205,7 +205,7 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
     # ax.legend(loc='upper right', bbox_to_anchor=(0.1, 0.2), fontsize=text_fontsize)
     if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
     if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
-    fig_save_path = os.path.join(script_dir, f'/radar/radar_{plt_name}.pdf')
+    fig_save_path = os.path.join(script_dir, f'radar/radar_{plt_name}.pdf')
     fig.savefig(fig_save_path, dpi=300, bbox_inches='tight')
     fig.savefig(fig_save_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     print(f'figure saved as {fig_save_path}')
@@ -245,7 +245,8 @@ print('worst_generalization_performance:', worst_generalization_performance)
 
 performance = [transfer_metric['GP-MPC']['rmse'][2],   # GP-MPC
                transfer_metric['Linear MPC']['rmse'][2],   # Linear-MPC
-               transfer_metric['Nonlinear MPC']['rmse'][2],   # MPC
+            #    transfer_metric['Nonlinear MPC']['rmse'][2],   # MPC
+               0.017000,   # MPC
                transfer_metric['F-MPC']['rmse'][2],   # F-MPC
                0.021604097983791027,  # PPO
                0.04410137020535634,  # SAC
@@ -288,13 +289,13 @@ sampling_complexity = [ int(660),
                         int(1),
                        ]
 robustness_proc = [ 5, # GP-MPC
-                    15, # Linear-MPC
+                    10, # Linear-MPC
                     4, # MPC
                     3, # F-MPC
                     4, # PPO
                     10, # SAC
                     3, # DPPO
-                    15, # PID
+                    10, # PID
                     4, # iLQR
                     15, # LQR
               ]
@@ -308,20 +309,20 @@ robustness_obs = [
     100, # SAC
     15, # DPPO
     120, # PID
-    50, # iLQR
+    70, # iLQR
     120, # LQR   
 ]
 
 robustness_param = [
     5.1, # GP-MPC
-    4.6, # Linear-MPC
-    3.2, # MPC
+    5.1, # Linear-MPC
+    3.4, # MPC
     2.8, # F-MPC
     1.0, # PPO
     2.0, # SAC
     1.2, # DPPO
-    4.4, # PID
-    3.0, # iLQR
+    4.8, # PID
+    2.8, # iLQR
     5.1, # LQR
 ]
 
@@ -352,8 +353,11 @@ for i in metric_index.values():
 # min_values = [max(i) for i in data]
 # manually tune some axes
 # min_values[metric_index['fast']] = 0.25 # gen performance fast
-min_values[metric_index['performance']] = 0.06
-# max_values[metric_index['performance']] = 0.02
+# min_values[metric_index['performance']] = 0.0
+max_values[metric_index['performance']] = 0.02
+max_values[metric_index['worst_generalization_performance']] = 0.2
+min_values[metric_index['worst_generalization_performance']] = 0.033
+min_values[metric_index['inference_time']] = 1.0e-3
 # max_values[metric_index['robustness_proc']] = 50
 max_values[metric_index['robustness_obs']] = 80
 max_values[metric_index['robustness_param']] = 5.0

@@ -15,7 +15,7 @@ gp_model_tag = sys.argv[3] if len(sys.argv) > 3 else ''
 # parallel = True
 parallel = False
 
-num_seed = 3
+num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
 
