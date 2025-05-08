@@ -11,7 +11,7 @@ hpo_config:
   save_n_best_hps: 1
   # budget
   trials: 60
-  hp_eval_list: ['hps_config'] # list of hyperparameter configurations to evaluate
+  hp_eval_list: ['hps_config', 'basic', 'ob_ns=5', 'ob_ns=5_proc_ns=3'] # list of hyperparameter configurations to evaluate
 
   # hyperparameters
   hps_config:
@@ -28,3 +28,45 @@ hpo_config:
       - 0.001
       - 0
       - 0
+  basic:
+    horizon: 45
+    q_mpc:
+    - 70.0
+    - 3.803141877006137
+    - 0.0001
+    - 0.0001
+    - 67.7612166034389
+    - 49.67069890164053
+    - 0.0001
+    - 0.0001
+    r_mpc:
+    - 4.783679258429461e-06
+    - 7.767486282523435e-06
+  ob_ns=5:
+    horizon: 50
+    q_mpc:
+    - 70.0
+    - 14.25754117113056
+    - 0.0001
+    - 0.0001
+    - 70.0
+    - 70.0
+    - 0.0001
+    - 0.0001
+    r_mpc:
+    - 7.854486596411583e-05
+    - 4.517780079566262e-05
+  ob_ns=5_proc_ns=3:
+    horizon: 45
+    q_mpc:
+    - 66.69279720796236
+    - 0.0001
+    - 0.0001
+    - 0.0001
+    - 63.262452431259106
+    - 28.722819116075005
+    - 0.0001
+    - 0.0001
+    r_mpc:
+    - 4.158839896074735e-06
+    - 3.072737238313032e-06
