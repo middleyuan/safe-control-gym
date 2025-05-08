@@ -9,9 +9,9 @@ SYS='quadrotor_2D_attitude'
 # TASK='stab'
 TASK='track'
 
-# ALGO='ppo'
+ALGO='ppo'
 # ALGO='sac'
-ALGO='dppo'
+# ALGO='dppo'
 # ALGO='safe_explorer_ppo'
 
 EXP_NAME='test'
