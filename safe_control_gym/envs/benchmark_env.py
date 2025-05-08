@@ -290,6 +290,10 @@ class BenchmarkEnv(gym.Env, ABC):
         # Randomized and replace values for which randomization info are given.
         for key in original_values:
             if key in rand_info_copy:
+                # Get distribution type.
+                if 'distrib' in rand_info_copy[key] and 'scale' in rand_info_copy[key]:
+                    dist_type = rand_info_copy[key]['distrib']
+                    scale = rand_info_copy[key]['scale']
                 # Get distribution removing it from info dict.
                 distrib = getattr(self.np_random,
                                   rand_info_copy[key].pop('distrib'))
@@ -298,7 +302,11 @@ class BenchmarkEnv(gym.Env, ABC):
                 # Keyword args are just anything left.
                 d_kwargs = rand_info_copy[key]
                 # Randomize (adding to the original values).
-                randomized_values[key] += distrib(*d_args, **d_kwargs)
+                # Make sure the noise not outside of 3 sigma if normal distribution
+                noise = distrib(*d_args, **d_kwargs)
+                if dist_type == 'normal':
+                    noise = np.clip(noise, -3 * scale, 3 * scale)
+                randomized_values[key] += noise
         return randomized_values
 
     @abstractmethod
