@@ -128,8 +128,14 @@ class BaseHPO(ABC):
             but does not want them to be optimized).'''
         
         for hp in list(params.keys()):
-            if hp not in HYPERPARAMS_DICT[self.search_space_key]:
-                del params[hp]
+            # Handle multidimensional hyperparameters (e.g., q_mpc_0, q_mpc_1)
+            base_param, index_str = hp.rsplit('_', 1) if '_' in hp else (hp, '')
+            if index_str.isdigit():
+                if base_param not in HYPERPARAMS_DICT[self.search_space_key]:
+                    del params[hp]
+            else:
+                if hp not in HYPERPARAMS_DICT[self.search_space_key]:
+                    del params[hp]
 
         return params
     
