@@ -675,7 +675,8 @@ class Quadrotor(BaseAviary):
 
         # reset disturbance model
         if 'downwash' in self.disturbances:
-            if self.DISTURBANCES['downwash'][0]['mode'] == 'fix':
+            randomize_flag = self.DISTURBANCES['downwash'][0]['randomize'] if 'randomize' in self.DISTURBANCES['downwash'][0] else False
+            if self.DISTURBANCES['downwash'][0]['mode'] == 'fix' and randomize_flag:
                 pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
                 self.dw_model.update_pos(pos)
                 self.dw_model.reset()
@@ -1575,7 +1576,6 @@ class Quadrotor(BaseAviary):
         # ctrl_step_counter + 1 as the action has already been applied), and the next state (+ 2) for the RL to see
         # the next state.
         return self.state
-
 
     def _get_observation(self):
         """Returns the current observation (state) of the environment.
