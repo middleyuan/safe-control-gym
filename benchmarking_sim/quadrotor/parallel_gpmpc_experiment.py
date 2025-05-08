@@ -33,8 +33,8 @@ if __name__ == '__main__':
 
     results = []
     
-    parallel = True
-    # parallel = False  # Set to True to run in parallel
+    # parallel = True
+    parallel = False  # Set to True to run in parallel
     if parallel:
         # Run experiments in parallel
         with Pool(processes=3) as pool:

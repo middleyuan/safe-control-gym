@@ -7,11 +7,8 @@ import matplotlib.pyplot as plt
 
 # script dir
 script_dir = os.path.dirname(os.path.abspath(__file__))
-print(script_dir)
 
-
-
-max_seed = 3
+max_seed = 10
 metric_name = 'metrics.txt'
 s = 2 # times std
 
@@ -60,7 +57,6 @@ noise_data = {
             #   'F-MPC': fmpc_data,
               } 
 if noise_option in ['obs_noise']:
-    # noise_scale = [0,1,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
     noise_scale = [0,1,2,3,4,5,10,15,20,25,\
                      30,40,50,60,70,80,90,100]
 elif noise_option == 'proc_noise':
@@ -68,9 +64,7 @@ elif noise_option == 'proc_noise':
                      30,40,50]
 elif noise_option == 'param':
     noise_scale = np.arange(0, 5.0, 0.2)
-    # noise_scale = mpc_data['0']['noise_factor']
     noise_scale.sort()
-# print(len(noise_scale))
 
 fig = plt.figure(figsize=(8, 3))
 
@@ -79,16 +73,14 @@ double_results = {}
 
 for method in noise_data.keys():
     print(method)
-    # print(len(noise_data[method]['rmse_degradation_mean']))
-
     plt.plot(noise_scale, noise_data[method]['rmse_degradation_mean'], label=method, color=plot_colors[method])
     plt.fill_between(noise_scale, 
-                     noise_data[method]['rmse_degradation_mean']-noise_data[method]['rmse_degradation_std'],  
-                     noise_data[method]['rmse_degradation_mean']+noise_data[method]['rmse_degradation_std'], color=plot_colors[method], alpha=0.1)
+                     noise_data[method]['rmse_degradation_mean']-s*noise_data[method]['rmse_degradation_std'],  
+                     noise_data[method]['rmse_degradation_mean']+s*noise_data[method]['rmse_degradation_std'], color=plot_colors[method], alpha=0.1)
     # print the noise scale that the rmse degradation is larger than 200
     for i, scale in enumerate(noise_scale):
         if noise_data[method]['rmse_degradation_mean'][i] > 200:
-            print(f"Method {method} 200 at noise scale {scale}")
+            print(f"Method {method} reaches 200% performance at noise scale {scale}")
             double_results[method] =  scale
             break
     
@@ -140,6 +132,10 @@ elif noise_option == 'param':
     # # plt.text(16, 1400, 'LQR 200%')
     # plt.text(4.41, 200, 'PID 200%')
     # plt.text(2.81, 100, 'F-MPC 200%')
+# plot an empty line for the legend
+plt.plot(0, np.nan, linestyle='--', color='grey', label='Relative Perf=200%')
 
-plt.savefig(f"robustness_model-based_{noise_option}.pdf",bbox_inches="tight", pad_inches=0.1)
-plt.savefig(f"robustness_model-based_{noise_option}.png",bbox_inches="tight", pad_inches=0.1)
+plot_save_name = f"robustness_model-based_{noise_option}"
+plot_save_name = os.path.join(script_dir, 'noise', f'{plot_save_name}.png')
+plt.savefig(plot_save_name,bbox_inches="tight", pad_inches=0.1)
+print(f"plots saved as {plot_save_name}")

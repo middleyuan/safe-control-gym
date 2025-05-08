@@ -6,10 +6,10 @@ START_TIME=$(date +%s)
 for RAND_TYPE in ''
 do
     GP_TAG=$GP_BASE_TAG$RAND_TYPE
-    python3 parallel_gpmpc_experiment.py 'gpmpc_acados_TP' $RAND_TYPE
+    python3 parallel_gpmpc_experiment.py 'gpmpc_acados_TP' $GP_TAG $RAND_TYPE
     python3 results_noise.py 'gpmpc_acados_TP' 'obs_noise' $GP_TAG
-    python3 results_noise.py 'gpmpc_acados_TP' 'proc_noise' $GP_TAG
-    python3 results_param.py 'gpmpc_acados_TP' 'param' $GP_TAG
+    # python3 results_noise.py 'gpmpc_acados_TP' 'proc_noise' $GP_TAG
+    # python3 results_param.py 'gpmpc_acados_TP' 'param' $GP_TAG
 done
 
 for algo in 'mpc_acados' 'ilqr'
@@ -19,7 +19,9 @@ do
     # python3 results_param.py $algo 'param'
 done
 
-# compile results
+# # compile results
+cd ./plotting
+mkdir -p ./noise
 for algo in 'mpc_acados' 'ilqr' 'gpmpc_acados_TP'
 do
     python3 plot_noise.py $algo 'obs_noise' 
