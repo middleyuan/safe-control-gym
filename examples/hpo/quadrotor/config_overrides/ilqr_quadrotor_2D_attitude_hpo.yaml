@@ -11,12 +11,87 @@ hpo_config:
   save_n_best_hps: 1
   # budget
   trials: 60
-  hp_eval_list: ['hps_config'] # list of optimized hyperparameter configurations to evaluate
+  hp_eval_list: ['hps_config', 'basic', 'dr', 'ob_ns=5', 'ob_ns=5_proc_ns=3', 'proc_ns=3'] # list of optimized hyperparameter configurations to evaluate
 
   # initial hyperparameters
   hps_config:
     q_lqr: [12, 0.1, 12, 0.1, 0.05, 0.0001]
     r_lqr: [3.0, 3.0]
+    max_iterations: 15
+    lamb_factor: 10
+    lamb_max: 1000
+    epsilon: 0.01
+  basic_init:
+    q_lqr:
+    - 20.0
+    - 0.0001
+    - 20.0
+    - 20.0
+    - 0.0001
+    - 0.0001
+    r_lqr:
+    - 3.0525092865208756
+    - 0.9013282077983663
+    max_iterations: 15
+    lamb_factor: 10
+    lamb_max: 1000
+    epsilon: 0.01
+  dr_init:
+    q_lqr:
+    - 20.0
+    - 0.0001
+    - 20.0
+    - 9.004932928140729
+    - 0.0001
+    - 0.0001
+    r_lqr:
+    - 2.71805748043979
+    - 0.6803621080682088
+    max_iterations: 15
+    lamb_factor: 10
+    lamb_max: 1000
+    epsilon: 0.01
+  ob_ns=5_init:
+    q_lqr:
+    - 20.0
+    - 0.0001
+    - 19.877482889415862
+    - 4.497439528356722
+    - 0.0001
+    - 0.0001
+    r_lqr:
+    - 3.358913082162832
+    - 0.48818355342816133
+    max_iterations: 15
+    lamb_factor: 10
+    lamb_max: 1000
+    epsilon: 0.01
+  ob_ns=5_proc_ns=3_init:
+    q_lqr:
+    - 20.0
+    - 0.0001
+    - 20.0
+    - 0.0001
+    - 0.0001
+    - 0.0001
+    r_lqr:
+    - 5.0
+    - 0.09314138912453233
+    max_iterations: 15
+    lamb_factor: 10
+    lamb_max: 1000
+    epsilon: 0.01
+  proc_ns=3_init:
+    q_lqr:
+    - 13.292406412280716
+    - 0.0001
+    - 20.0
+    - 10.305046091004552
+    - 0.0001
+    - 0.0001
+    r_lqr:
+    - 3.6596089573941435
+    - 0.9668690221532095
     max_iterations: 15
     lamb_factor: 10
     lamb_max: 1000
