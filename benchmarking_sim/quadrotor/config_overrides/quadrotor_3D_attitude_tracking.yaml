@@ -2,9 +2,9 @@ task_config:
   info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
-  physics: dyn_si_3d_10
+  physics: dyn_si_3d
   # physics: pyb
-  quad_type: 8
+  quad_type: 6
 
   init_state:
     init_x: 0
@@ -13,40 +13,41 @@ task_config:
     init_z_dot: 0
     init_theta: 0
     init_theta_dot: 0
-  randomized_init: True
+  # randomized_init: True
+  randomized_init: False
   randomized_inertial_prop: False
 
-  init_state_randomization_info:
-    init_x:
-      distrib: 'normal'
-      scale: 0.0011629923113331312
-    init_x_dot:
-      distrib: 'normal'
-      scale: 0.003635597781389117
-    init_y:
-      distrib: 'normal'
-      scale: 0.001670549279531124
-    init_y_dot:
-      distrib: 'normal'
-      scale: 0.004965500657569368
-    init_z:
-      distrib: 'normal'
-      scale: 0.0024990695232428458
-    init_z_dot:
-      distrib: 'normal'
-      scale: 0.010193088084183025
-    init_phi:
-      distrib: 'normal'
-      scale: 0.0026984744060397532
-    init_theta:
-      distrib: 'normal'
-      scale: 0.0024088251667187467
-    init_p:
-      distrib: 'normal'
-      scale: 0.03452115832640752
-    init_q:
-      distrib: 'normal'
-      scale: 0.02387283406599296
+  # init_state_randomization_info:
+  #   init_x:
+  #     distrib: 'normal'
+  #     scale: 0.0011629923113331312
+  #   init_x_dot:
+  #     distrib: 'normal'
+  #     scale: 0.003635597781389117
+  #   init_y:
+  #     distrib: 'normal'
+  #     scale: 0.001670549279531124
+  #   init_y_dot:
+  #     distrib: 'normal'
+  #     scale: 0.004965500657569368
+  #   init_z:
+  #     distrib: 'normal'
+  #     scale: 0.0024990695232428458
+  #   init_z_dot:
+  #     distrib: 'normal'
+  #     scale: 0.010193088084183025
+  #   init_phi:
+  #     distrib: 'normal'
+  #     scale: 0.0026984744060397532
+  #   init_theta:
+  #     distrib: 'normal'
+  #     scale: 0.0024088251667187467
+  #   init_p:
+  #     distrib: 'normal'
+  #     scale: 0.03452115832640752
+  #   init_q:
+  #     distrib: 'normal'
+  #     scale: 0.02387283406599296
 
 # yaw: std: 0.0023822834889102923
 # yaw_rate: std: 0.03123258323211547
@@ -89,13 +90,13 @@ task_config:
     #     low:  1.
     #     high: 1.
     #     mask: [1, 0, 0, 0]
-    observation:
-      - disturbance_func: white_noise
-        std: [5.6e-05, 1.5e-02, 
-              5.6e-05, 1.5e-02,
-              2.9e-05, 8.0e-03,
-              1.3e-03, 1.3e-03, 
-              3.5e-03, 3.5e-03]
+    # observation:
+    #   - disturbance_func: white_noise
+    #     std: [5.6e-05, 1.5e-02, 
+    #           5.6e-05, 1.5e-02,
+    #           2.9e-05, 8.0e-03,
+    #           1.3e-03, 1.3e-03, 
+    #           3.5e-03, 3.5e-03]
     # dynamics:
     #   - disturbance_func: white_noise
     #     std: 0.05

@@ -978,10 +978,17 @@ class BaseAviary(BenchmarkEnv):
         #                    - 61.62863740616216 * theta - 7.205874472066235 * theta_dot + 51.90335491067372 * P,
         #                    (- 12.544174350349687 * psi - 0.012945379372787613 * psi_dot + 43.839961280232046 * Y)*0)
         # TODO: double-check parameters
-        params_acc = [20.907574256269616, 3.653687545690674]
-        params_roll_rate = [-130.3, -16.33, 119.3]
-        params_pitch_rate = [-99.94, -13.3, 84.73]
-        params_yaw_rate = [0, 0, 0]
+        # Haocheng's model
+        # params_acc = [20.907574256269616, 3.653687545690674]
+        # params_roll_rate = [-130.3, -16.33, 119.3]
+        # params_pitch_rate = [-99.94, -13.3, 84.73]
+        # params_yaw_rate = [0., 0., 0.]
+        # Marcel's model
+        params_acc = [32.221212, 0.]
+        params_roll_rate = [-286.2, -23.03, 225.6]
+        params_pitch_rate = [-286.2, -23.03, 225.6]
+        params_yaw_rate = [-192.9, -22.22, 323.5]
+        
         X_dot = cs.vertcat(x_dot,
                            (params_acc[0] * T + params_acc[1]) * (
                                        cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[
