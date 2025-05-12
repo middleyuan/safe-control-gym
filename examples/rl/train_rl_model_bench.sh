@@ -9,8 +9,8 @@ SYS='quadrotor_2D_attitude'
 # TASK='stab'
 TASK='track'
 
-# ALGO='ppo'
-ALGO='dppo'
+ALGO='ppo'
+# ALGO='dppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
@@ -22,7 +22,9 @@ else
     SYS_NAME='quadrotor'
 fi
 
-TRAIN_LIST=('nominal' 'generalization' 'robustness_ob5' 'robustness_ps3' 'robustness_ob5ps3' 'robustness_pm' 'robustness_combo' 'robustness_dr')
+# TRAIN_LIST=('nominal' 'generalization' 'robustness_dr')
+# TRAIN_LIST=('robustness_ob5' 'robustness_ps3' 'robustness_combo')
+TRAIN_LIST=('nominal' 'generalization' 'robustness_dr' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
 # shellcheck disable=SC2054
 Q=(3.0,0.1,3.0,0.1,0.1,0.001)
 
@@ -55,6 +57,8 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
       CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
       CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_pm.yaml"
     fi
+    echo ${CONFIG1}
+    echo ${CONFIG2}
 
     for SEED in {0..4}; do
         python3 ../../safe_control_gym/experiments/train_rl_controller.py \
@@ -70,9 +74,9 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
             --kv_overrides \
                 task_config.randomized_init=True \
                 task_config.normalized_rl_action_space=False\
-                task_config.rew_state_weight=${Q} &
+                task_config.rew_state_weight=${Q}
     done
-    wait
+    # wait
 
     # RL Experiment
     for EVAL in "${EVAL_LIST[@]}"; do
@@ -110,7 +114,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
                         task_config.noise_scale=${NS} \
                         task_config.downwash_height=${H} \
                         task_config.external_param=${EP} \
-                    --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data/seed${SEED}_*/ &
+                    --pretrain_path ./Results/${EXP_NAME}/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/ &
             done
             wait
         done

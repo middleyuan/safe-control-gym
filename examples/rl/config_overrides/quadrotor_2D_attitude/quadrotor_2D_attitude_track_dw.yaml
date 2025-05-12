@@ -105,8 +105,9 @@ task_config:
         # # std: [0.00158 , 0.009252, 0.000206, 0.021252, 0.007848, 0.048744, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # 20 times
     downwash:
       - disturbance_func: uniform # dummy
-        low:  [0, 0, 2] # dummy
-        high: [0, 0, 3] # dummy
+        low:  [0, 0, 2] # lower bound to randomize
+        high: [0, 0, 3] # higher bound to randomize
+        randomize: True
         mode: fix
         # mode: track
         pos: [0, 0, 2.5] # z = 0, will cause no downwash
