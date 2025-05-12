@@ -31,11 +31,15 @@ PPO_dict = {
     'target_kl': {'values': [0.00000001, 0.8], 'scale': 'uniform', 'type': float, 'cat': 'float'},
     'entropy_coef': {'values': [0.00000001, 0.1], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
     'exploration_init': {'values': [1.0, 0.5, 0.0, -0.5, -1.0, -1.5, -2.0], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
-    'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
-    'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    'actor_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
+    'critic_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
     'rollout_batch_size': {'values': [2, 3, 4, 5, 8, 10, 15], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
-    'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
-    'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    'rew_state_weight': {'values': [0.0001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
+    'rew_act_weight': {'values': [0.0001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
 }
 
 PPO_SF_dict = {
@@ -90,11 +94,16 @@ SAC_dict = {
     'activation': {'values': ['tanh', 'relu', 'leaky_relu'], 'scale': 'uniform', 'type': str, 'cat': 'categorical'},
     'tau': {'values': [0.005, 1.0], 'scale': 'uniform', 'type': float, 'cat': 'float'},
     'init_temperature': {'values': [0.01, 1], 'scale': 'uniform', 'type': float, 'cat': 'float'},
-    'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
-    'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
-    'entropy_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
-    'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
-    'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'entropy_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    'actor_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
+    'critic_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
+    'entropy_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
+    # 'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    'rew_state_weight': {'values': [0.001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
+    'rew_act_weight': {'values': [0.001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
 }
 
 # DPPO_dict = {
@@ -128,12 +137,16 @@ DPPO_dict = {
     'entropy_coef': {'values': [0.00000001, 0.1], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
     'exploration_init': {'values': [1.0, 0.5, 0.0, -0.5, -1.0, -1.5, -2.0], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
     'beta': {'values': [-1.5, -1.0, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
-    'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
-    'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'actor_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    # 'critic_lr': {'values': [1e-5, 1e-4, 1e-3, 3e-3, 5e-3, 1e-2, 3e-2, 1e-1], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},  # log-scaled
+    'actor_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
+    'critic_lr': {'values': [1e-5, 1e-2], 'scale': 'log', 'type': float, 'cat': 'float'},  # log-scaled
     'rollout_batch_size': {'values': [2, 3, 4, 5, 8, 10, 15], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     'quantile_count': {'values': [64, 128, 256, 512], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
-    'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
-    'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'rew_state_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    # 'rew_act_weight': {'values': [0.0001, 0.01, 0.1, 1., 3., 5., 10., 15., 20.], 'scale': 'uniform', 'type': list, 'cat': 'discrete'},
+    'rew_state_weight': {'values': [0.0001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
+    'rew_act_weight': {'values': [0.0001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
 }
 
 GPMPC_dict = {
