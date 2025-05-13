@@ -36,7 +36,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     generate_reference = False
     generate_ilqr_warmstart = False
     # generate_reference = True
-    generate_ilqr_warmstart = True
+    # generate_ilqr_warmstart = True
     # read the additional arguments
     if len(sys.argv) > 1:
         print('sys.argv', sys.argv)
