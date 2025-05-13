@@ -85,6 +85,7 @@ class MPC(BaseController):
         self.R = get_cost_weight_matrix(self.r_mpc, self.model.nu)
 
         self.constraint_tol = constraint_tol
+        assert self.constraint_tol > 0, 'Constraint tolerance must be positive.'
         self.soft_constraints = soft_constraints
         self.soft_penalty = soft_penalty
         self.warmstart = warmstart

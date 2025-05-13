@@ -23,4 +23,5 @@ algo_config:
   use_full_flat_reference: False
   use_acados: True
   output_dir: ./fmpc/results
-  apply_thrust_constraint_box: False
+  # apply_thrust_constraint_box: False
+  apply_thrust_constraint_box: True

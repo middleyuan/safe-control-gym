@@ -375,9 +375,9 @@ class MPC_ACADOS(MPC):
         ocp.constraints.idxbu = idxbu # active constraints dimension
         '''
 
-        ub = {'h': set_acados_constraint_bound(h_expr, 'ub', self.constraint_tol),
-              'h0': set_acados_constraint_bound(h0_expr, 'ub', self.constraint_tol),
-              'he': set_acados_constraint_bound(he_expr, 'ub', self.constraint_tol), }
+        ub = {'h': set_acados_constraint_bound(h_expr, 'ub', -self.constraint_tol),
+              'h0': set_acados_constraint_bound(h0_expr, 'ub', -self.constraint_tol),
+              'he': set_acados_constraint_bound(he_expr, 'ub', -self.constraint_tol), }
 
         lb = {'h': set_acados_constraint_bound(h_expr, 'lb'),
               'h0': set_acados_constraint_bound(h0_expr, 'lb'),

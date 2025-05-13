@@ -110,7 +110,7 @@ def set_acados_constraint_bound(constraint,
         if bound_type == 'lb':
             bound_value = -1e8
         elif bound_type == 'ub':
-            bound_value = 1e-6
+            bound_value = -1e-6
 
     return bound_value * np.ones(constraint.shape)
 
