@@ -34,7 +34,9 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         save_data (bool): Whether to save the collected experiment data.
     '''
     generate_reference = False
+    generate_ilqr_warmstart = False
     # generate_reference = True
+    generate_ilqr_warmstart = True
     # read the additional arguments
     if len(sys.argv) > 1:
         print('sys.argv', sys.argv)
@@ -46,14 +48,19 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
             TRAJ_LEN = sys.argv[2] if len(sys.argv) > 2 else None
             TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
             ADDITIONAL = ''
+        if generate_ilqr_warmstart:
+            ALGO = 'mpc_acados'
+            TRAJ_LEN = sys.argv[2] if len(sys.argv) > 2 else None
+            TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
+            ADDITIONAL = ''
     else:
         # ALGO = 'ilqr'
         # ALGO = 'gp_mpc'
         # ALGO = 'gpmpc_acados'
-        ALGO = 'gpmpc_acados_TP'
+        # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        # ALGO = 'mpc_acados'
+        ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
@@ -62,8 +69,9 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'fmpc'
         ADDITIONAL = ''
         CTRL_ADD = ''
-        gp_tag = None
+        # gp_tag = 'safety'
         # ADDITIONAL = '_param'
+        # ADDITIONAL = '_safety'
         # CTRL_ADD = '_param'
     # ADDITIONAL = ''
     # CTRL_ADD = '_tr'
@@ -122,20 +130,24 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)
-    if generate_reference:
-        config.task_config.disturbances = None
+    if generate_reference or generate_ilqr_warmstart:
         config.task_config.randomized_init = False
-        config.task_config.task_info.ilqr_ref = False
+        config.task_config.task_info.ilqr_ref = True
         if locals().get('TRAJ_LEN') is not None:
             config.task_config.episode_len_sec = int(TRAJ_LEN)
-        # reconfigure the trajectory length for generating reference
         target_traj_length = config.task_config.episode_len_sec
-        ref_traj_length = target_traj_length * 1.5
-        config.task_config.task_info.num_cycles *= 1.5
-        config.task_config.episode_len_sec = ref_traj_length
-        if ALGO == 'mpc_acados':
-            config.algo_config.horizon = int(ref_traj_length * config.task_config.ctrl_freq)
-
+        if generate_reference:
+            config.task_config.disturbances = None
+            config.task_config.task_info.ilqr_ref = False
+            # reconfigure the trajectory length for generating reference
+            ref_traj_length = target_traj_length * 1.5
+            config.task_config.task_info.num_cycles *= 1.5
+            config.task_config.episode_len_sec = ref_traj_length
+            if ALGO == 'mpc_acados':
+                if locals().get('ref_traj_length') is not None:
+                    config.algo_config.horizon = int(ref_traj_length * config.task_config.ctrl_freq)
+                else:
+                    config.algo_config.horizon = int(target_traj_length * config.task_config.ctrl_freq)
     # Create an environment
     env_func = partial(make,
                        config.task,
@@ -226,11 +238,15 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     random_env.close()
     metrics = experiment.compute_metrics(all_trajs)
     all_trajs = dict(all_trajs)
+    ref_data={'obs': all_trajs['obs'][0], 
+              'action': all_trajs['action'][0],
+              'rmse': metrics['rmse'],
+              'average_return': metrics['average_return'],}
     if generate_reference:
-        ref_data={'obs': all_trajs['obs'][0], 
-                  'action': all_trajs['action'][0],
-                  'rmse': metrics['rmse']}
         np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_ref_traj.npy', \
+                ref_data, allow_pickle=True)
+    elif generate_ilqr_warmstart:
+        np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_warmstart_traj.npy', \
                 ref_data, allow_pickle=True)
     
     if hasattr(experiment.env, 'dw_model'):
@@ -273,6 +289,9 @@ def plot_quad_eval(res, env, save_path=None):
     '''
     state_stack = res['trajs_data']['obs'][0]
     input_stack = res['trajs_data']['action'][0]
+    constraint_stack = [res['trajs_data']['info'][0][i]['constraint_values'] \
+        for i in range(1, len(res['trajs_data']['info'][0]))]
+    constraint_stack = np.array(constraint_stack)
     model = env.symbolic
     if env.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         x_idx, z_idx = 0, 2
@@ -367,6 +386,39 @@ def plot_quad_eval(res, env, save_path=None):
 
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'state_xy_path.png'))
+            
+    # plot constraint violations
+    fig, axs = plt.subplots(len(constraint_stack[0]), figsize=(8, len(constraint_stack[0])*1))
+    constr_state_idx = 0
+    for k in range(len(constraint_stack[0])):
+        axs[k].plot(times, constraint_stack[:, k], label='actual')
+        # plot a cross if the constraint is violated (>=0)
+        violated = np.where(constraint_stack[:, k] > 0, 1, 0)
+        violated_step = np.where(violated == 1)
+        violated_values = constraint_stack[violated_step, k]
+        axs[k].scatter(times[violated_step], violated_values, 
+                       color='red', label='violated', marker='x')
+        
+        # the lable should be 11 22 33 ish
+        constr_state_idx += 1 if k%2 == 0 else 0
+        if constr_state_idx-1 < len(env.STATE_LABELS):
+            axs[k].set(ylabel=f'constraint {constr_state_idx-1}' + f'\n[{env.STATE_UNITS[constr_state_idx-1]}]')
+        else:
+            axs[k].set(ylabel=f'constraint {constr_state_idx-1}' + f'\n[{env.ACTION_UNITS[constr_state_idx-1-len(env.STATE_LABELS)]}]')
+
+        axs[k].hlines(0, 0, times[-1], color='gray', linestyle='--')
+        # axs[k].set(ylabel=f'constraint {k}' + f'\n[{env.STATE_UNITS[k]}]')
+        axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+    axs[0].set_title('Constraint Trajectories')
+    axs[-1].legend(ncol=3, bbox_transform=fig.transFigure, 
+                   bbox_to_anchor=(1, 0), loc='upper right')
+    axs[-1].set(xlabel='time (sec)')
+    fig.tight_layout()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path, 'constraint_trajectories.png'))
+    
+
 
     # plt.show()
 
