@@ -6,6 +6,7 @@
 
 import time
 import numpy as np
+import matplotlib.pyplot as plt
 from termcolor import colored
 
 from safe_control_gym.controllers.base_controller import BaseController
@@ -81,12 +82,12 @@ class iLQR(BaseController):
         self.gains_fb_best = None
 
         # warm start trajectory
+        self.optimization_log = {}
         self.warm_start_traj = warm_start_traj
         if self.warm_start_traj is not None:
             self.load_warm_start_traj()
         self.load_warm_start_to_rollout = False # otherwise load them to the iLQR optimization
         # self.load_warm_start_to_rollout = True # load them to the rollout
-
         self.reset()
 
     def load_warm_start_traj(self):
@@ -109,8 +110,10 @@ class iLQR(BaseController):
             self.warm_start_action = self.warm_start_action[:max_steps]
             self.warm_start_state = self.warm_start_state[:max_steps]
             print(colored(f'Warm start trajectory is truncated to {max_steps} steps.', 'yellow'))
-        print(colored(f'Loaded warm start trajectory with {self.warm_start_action.shape[0]} steps.', 'green'))
-
+        warm_start_return = np.abs(traj_data['average_return'])
+        self.optimization_log['warmstart_return'] = warm_start_return
+        print(colored(f'Loaded warm start trajectory with {self.warm_start_action.shape[0]} steps and return {warm_start_return}.', 'green'))
+    
     def close(self):
         '''Cleans up resources.'''
         self.env.close()
@@ -147,6 +150,7 @@ class iLQR(BaseController):
                 print(colored('Warm start trajectory is used for the first rollout.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
+                self.input_ff = np.copy(self.input_stack)
 
             self.traj_step = 0
             self.run(env=env, max_steps=self.max_steps, training=True)
@@ -160,9 +164,11 @@ class iLQR(BaseController):
                 print(colored('Warm-start trajectory is used for first iteration of iterative optimization.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
+                # self.total_cost = self.optimization_log['warmstart_return']
 
             print(colored(f'Iteration: {self.ite_counter}, Cost: {self.total_cost}', 'green'))
             print(colored('--------------------------', 'green'))
+            self.optimization_log[f'{self.ite_counter}'] = self.total_cost
 
             if self.ite_counter == 0 and env.done_on_out_of_bound and self.final_info['out_of_bounds']:
                 print(colored('[ERROR] The initial policy might be unstable. Break from iLQR updates.', 'red'))
@@ -229,8 +235,30 @@ class iLQR(BaseController):
                 self.update_policy(env)
 
             self.ite_counter += 1
-        
+            
+        self.plot_optimization_log()
         self.reset()
+
+    def plot_optimization_log(self):
+        '''Plot the optimization log.'''        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        # self.ite_counter 
+        ax.plot(np.arange(self.ite_counter),
+                [self.optimization_log[repr(k)] for k in np.arange(self.ite_counter)],
+                label='Cost', color='b')
+        # check if warm start return is available
+        if 'warmstart_return' in self.optimization_log:
+            ax.hlines(y=self.optimization_log['warmstart_return'], 
+                      xmin=1, xmax=self.ite_counter-1, 
+                      color='g', label='Warm start return (MPC)', linestyle='--')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Cost')
+        ax.set_title('iLQR Optimization Log')
+        ax.legend()
+        fig.tight_layout()
+        # only show integer ticks for x-axis
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+        fig.savefig(f'{self.output_dir}/optimization_log.png')
 
     def update_policy(self, env):
         '''Updates policy.
@@ -396,6 +424,10 @@ class iLQR(BaseController):
 
         return action, gains_fb, input_ff
 
+    def reset_before_run(self, obs=None, info=None, env=None):
+        super().reset_before_run(obs, info, env)
+        self.optimization_log = {}
+        
     def reset(self):
         '''Prepares for evaluation.'''
         self.env.reset()

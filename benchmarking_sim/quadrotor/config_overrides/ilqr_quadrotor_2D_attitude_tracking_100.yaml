@@ -21,7 +21,7 @@ algo_config:
   lamb_factor: 25
   lamb_max: 3000
   max_iterations: 5
-  warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_11_ref_traj.npy
+  warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_11_warmstart_traj.npy
   # the actual warm start trajectory file name will be modified in the controller
   # to match the current episode length
 
