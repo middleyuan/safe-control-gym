@@ -1047,11 +1047,17 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T, R, P, Y)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
-            params_acc = [20.907574256269616, 3.653687545690674]
-            params_roll_rate = [-130.3, -16.33, 119.3]
-            params_pitch_rate = [-99.94, -13.3, 84.73]
-            params_yaw_rate = [0, 0, 0]
-
+            # Haocheng's model
+            # params_acc = [20.907574256269616, 3.653687545690674]
+            # params_roll_rate = [-130.3, -16.33, 119.3]
+            # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # params_yaw_rate = [0., 0., 0.]
+            # Marcel's model
+            params_acc = [32.221212, 0.]
+            params_roll_rate = [-286.2, -23.03, 225.6]
+            params_pitch_rate = [-286.2, -23.03, 225.6]
+            params_yaw_rate = [-192.9, -22.22, 323.5]
+            
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
             X_dot = cs.vertcat(x_dot,
