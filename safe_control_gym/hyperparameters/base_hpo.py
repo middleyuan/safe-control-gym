@@ -567,6 +567,20 @@ class BaseHPO(ABC):
         state_traj = np.vstack([seed_data['obs'] for seed_data in trajs_data_list])
         action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list]) 
 
+        # determin the state index
+        if state_traj.shape[-1] == 6:
+            x_idx = 0
+            z_idx = 2
+            thrust_idx = 0
+            pitch_idx = 1
+        elif state_traj.shape[-1] == 12:
+            x_idx = 0
+            z_idx = 4
+            thrust_idx = 0
+            pitch_idx = 2
+        else:
+            raise ValueError('State dimension not supported')
+
         # Total number of episodes
         num_episodes = state_traj.shape[0]
         episodes_per_seed = state_traj.shape[0] // num_seeds  # Assuming equal episodes per seed
@@ -583,9 +597,9 @@ class BaseHPO(ABC):
         for ep_idx in range(num_episodes):
             seed_idx = ep_idx // episodes_per_seed  # Determine which seed this episode belongs to
             color = interpolate_color(thrust_color, thrust_light_color, seed_idx, num_seeds)
-            ax.plot(action_traj[ep_idx, :, 0], label=f'Seed {seed_idx + 1} Thrust' if ep_idx % episodes_per_seed == 0 else None, color=color, lw=2)
+            ax.plot(action_traj[ep_idx, :, thrust_idx], label=f'Seed {seed_idx + 1} Thrust' if ep_idx % episodes_per_seed == 0 else None, color=color, lw=2)
             color = interpolate_color(pitch_color, pitch_light_color, seed_idx, num_seeds)
-            ax.plot(action_traj[ep_idx, :, 1], label=f'Seed {seed_idx + 1} Pitch' if ep_idx % episodes_per_seed == 0 else None, color=color, lw=2, linestyle='--')
+            ax.plot(action_traj[ep_idx, :, pitch_idx], label=f'Seed {seed_idx + 1} Pitch' if ep_idx % episodes_per_seed == 0 else None, color=color, lw=2, linestyle='--')
         ax.set_xlabel('Time step')
         ax.set_ylabel('Action')
         ax.set_title(f'Action Trajectories w/ RMS: {action_change:.4f} {tag}')
@@ -599,7 +613,7 @@ class BaseHPO(ABC):
         for ep_idx in range(num_episodes):
             seed_idx = ep_idx // episodes_per_seed  # Determine which seed this episode belongs to
             alpha = alpha_values[seed_idx]
-            ax.plot(state_traj[ep_idx, :, 0], state_traj[ep_idx, :, 2],
+            ax.plot(state_traj[ep_idx, :, x_idx], state_traj[ep_idx, :, z_idx],
                     label=f'Seed {seed_idx + 1}' if ep_idx % episodes_per_seed == 0 else None, color='blue', lw=2, alpha=alpha)
         ax.set_xlabel('$x$ [m]')
         ax.set_ylabel('$z$ [m]')
@@ -642,7 +656,21 @@ class BaseHPO(ABC):
 
             # Flatten data: extract episodes from each seed
             state_traj = np.vstack([seed_data['obs'] for seed_data in trajs_data_list])
-            action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list]) 
+            action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list])
+
+            # determin the state index
+            if state_traj.shape[-1] == 6:
+                x_idx = 0
+                z_idx = 2
+                thrust_idx = 0
+                pitch_idx = 1
+            elif state_traj.shape[-1] == 12:
+                x_idx = 0
+                z_idx = 4
+                thrust_idx = 0
+                pitch_idx = 2
+            else:
+                raise ValueError('State dimension not supported')
 
             # Total number of episodes
             num_episodes = state_traj.shape[0]
@@ -665,10 +693,10 @@ class BaseHPO(ABC):
                 seed_idx = ep_idx // episodes_per_seed  # Determine which seed this episode belongs to
                 alpha = alpha_values[seed_idx]
                 color = interpolate_color(thrust_color, thrust_light_color, seed_idx, num_seeds)
-                ax.plot(action_traj[ep_idx, :, 0], label=f'Seed {seed_idx + 1} Thrust' if ep_idx % episodes_per_seed == 0 else None,
+                ax.plot(action_traj[ep_idx, :, thrust_idx], label=f'Seed {seed_idx + 1} Thrust' if ep_idx % episodes_per_seed == 0 else None,
                         color=color, lw=2, alpha=alpha)
                 color = interpolate_color(pitch_color, pitch_light_color, seed_idx, num_seeds)
-                ax.plot(action_traj[ep_idx, :, 1], label=f'Seed {seed_idx + 1} Pitch' if ep_idx % episodes_per_seed == 0 else None,
+                ax.plot(action_traj[ep_idx, :, pitch_idx], label=f'Seed {seed_idx + 1} Pitch' if ep_idx % episodes_per_seed == 0 else None,
                         color=color, lw=2, linestyle='--', alpha=alpha)
             ax.set_xlabel('Time step')
             ax.set_ylabel('Action')
@@ -683,7 +711,7 @@ class BaseHPO(ABC):
             for ep_idx in range(num_episodes):
                 seed_idx = ep_idx // episodes_per_seed  # Determine which seed this episode belongs to
                 alpha = alpha_values[seed_idx]
-                ax.plot(state_traj[ep_idx, :, 0], state_traj[ep_idx, :, 2],
+                ax.plot(state_traj[ep_idx, :, x_idx], state_traj[ep_idx, :, z_idx],
                         label=f'Seed {seed_idx + 1}' if ep_idx % episodes_per_seed == 0 else None,
                         color=base_color, lw=2, alpha=alpha)
             ax.set_xlabel('$x$ [m]')
