@@ -101,7 +101,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
     else:
         raise ValueError('eval_task not recognized')
         
-    print('output_dir',  config.algo_config.output_dir)
+    # print('output_dir',  config.algo_config.output_dir)
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)
