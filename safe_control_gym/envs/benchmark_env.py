@@ -291,6 +291,7 @@ class BenchmarkEnv(gym.Env, ABC):
         for key in original_values:
             if key in rand_info_copy:
                 # Get distribution type.
+                dist_type, scale = None, None
                 if 'distrib' in rand_info_copy[key] and 'scale' in rand_info_copy[key]:
                     dist_type = rand_info_copy[key]['distrib']
                     scale = rand_info_copy[key]['scale']
@@ -304,8 +305,9 @@ class BenchmarkEnv(gym.Env, ABC):
                 # Randomize (adding to the original values).
                 # Make sure the noise not outside of 3 sigma if normal distribution
                 noise = distrib(*d_args, **d_kwargs)
-                if dist_type == 'normal':
-                    noise = np.clip(noise, -3 * scale, 3 * scale)
+                if dist_type is not None and scale is not None:
+                    if dist_type == 'normal':
+                        noise = np.clip(noise, -3 * scale, 3 * scale)
                 randomized_values[key] += noise
         return randomized_values
 
