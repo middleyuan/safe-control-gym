@@ -43,6 +43,5 @@ echo "hpo config path: ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys
                     ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_${task}_${prior}.yaml \
                     ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_hpo.yaml \
         --output_dir "${OUTPUT_DIR}" \
-        --seed "${seed}" \
         --func eval \
         --use_gpu True &

@@ -12,9 +12,10 @@ from safe_control_gym.hyperparameters.hpo_utils import get_smallest_seed_folder,
 
 # Define the base directory
 base_dir = 'examples/hpo/hpo'  # Change this if needed
-algorithms = ['pid', 'lqr', 'linear_mpc_acados', 'mpc_acados', 'fmpc']  # List your algorithms here
-trials = 40  # Number of trials for HPO
-scenarios = ['basic', 'dw_h=1dot5', 'ob_ns=5', 'ob_ns=25', 'proc_ns=5', 'proc_ns=25']  # List your scenarios here
+algorithms = ['fmpc']
+trials = 60  # Number of trials for HPO
+scenarios = ['basic', 'ob_ns=5', 'proc_ns=3', 'ob_ns=5_proc_ns=3', 'dr']  # List your scenarios here
+metric_weights = [0.45, 0.55]  # Weights for combining RMSE and RMS Action Change
 
 # Function to load hand-tuned performance data
 def load_handtune_data(algorithm, folder='vizier'):
@@ -92,7 +93,7 @@ def plot_performance_comparison(algorithms, packages=['optuna', 'vizier']):
                     norm_rms = trials_data['values_1']
                 elif 'exponentiated_rms_action_change' in trials_data.keys():
                     norm_rms = trials_data['exponentiated_rms_action_change']
-                combined_norm_metric = norm_rmse + norm_rms
+                combined_norm_metric = metric_weights[0] * norm_rmse + metric_weights[1] * norm_rms
                 index = combined_norm_metric.idxmax()
                 data.append([algorithm, package, norm_rmse[index], norm_rms[index]])
                 if 'values_0' in trials_data.keys():
@@ -233,7 +234,7 @@ def plot_performance_comparison_in_different_scenarios(algorithm, scenarios):
                 norm_rms = trials_data['values_1']
             elif 'exponentiated_rms_action_change' in trials_data.keys():
                 norm_rms = trials_data['exponentiated_rms_action_change']
-            combined_norm_metric = norm_rmse + norm_rms
+            combined_norm_metric = metric_weights[0] * norm_rmse + metric_weights[1] * norm_rms
             index = combined_norm_metric.idxmax()
             data.append([scenario, 'optimized', norm_rmse[index], norm_rms[index]])
 

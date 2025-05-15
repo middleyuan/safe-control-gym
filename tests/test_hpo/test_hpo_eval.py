@@ -8,7 +8,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
 
 
-@pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude'])
+@pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude', 'quadrotor_3D_attitude'])
 @pytest.mark.parametrize('TASK', ['tracking'])
 @pytest.mark.parametrize('ALGO', ['pid', 'lqr', 'ilqr', 'mpc_acados', 'gpmpc_acados_TP', 'ppo', 'fmpc'])
 @pytest.mark.parametrize('PRIOR', [''])
@@ -23,7 +23,7 @@ def test_hpo_eval(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER):
     if os.path.exists(output_dir):
         os.system(f'rm -rf {output_dir}')
 
-    SYS_NAME = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' else SYS
+    SYS_NAME = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' or SYS == 'quadrotor_3D_attitude' else SYS
 
     if ALGO == 'fmpc' or ALGO == 'pid' or ALGO == 'lqr' or ALGO == 'ilqr' or ALGO == 'gpmpc_acados' or ALGO == 'linear_mpc' or ALGO == 'mpc_acados' or ALGO == 'gpmpc_acados_TP':
         PRIOR = '100'
@@ -31,7 +31,7 @@ def test_hpo_eval(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER):
         PRIOR = '200'
 
     # check if the config file exists
-    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}_basic.yaml'
+    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}.yaml'
     ALGO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'
     HPO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_hpo.yaml'
     assert os.path.exists(TASK_CONFIG_PATH), f'{TASK_CONFIG_PATH} does not exist'

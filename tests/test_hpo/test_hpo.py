@@ -108,7 +108,7 @@ def test_hpo_cartpole(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
         os.system(f'rm {ALGO}_hpo_endpoint.yaml')
 
 
-@pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude'])
+@pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude', 'quadrotor_3D_attitude'])
 @pytest.mark.parametrize('TASK', ['tracking'])
 @pytest.mark.parametrize('ALGO', ['pid', 'lqr', 'ilqr', 'gp_mpc', 'gpmpc_acados', 'gpmpc_acados_TP', 'fmpc', 'linear_mpc', 'linear_mpc_acados', 'mpc_acados', 'ppo', 'sac', 'dppo'])
 @pytest.mark.parametrize('PRIOR', [''])
@@ -132,7 +132,7 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
     if os.path.exists(f'{ALGO}_hpo_endpoint.yaml'):
         os.system(f'rm {ALGO}_hpo_endpoint.yaml')
 
-    SYS_NAME = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' else SYS
+    SYS_NAME = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' or SYS == 'quadrotor_3D_attitude' else SYS
 
     if ALGO == 'fmpc' or ALGO == 'pid' or ALGO == 'lqr' or ALGO == 'ilqr' or ALGO == 'gpmpc_acados' or ALGO == 'linear_mpc' or ALGO == 'linear_mpc_acados' or ALGO == 'mpc_acados' or ALGO == 'gpmpc_acados_TP':
         PRIOR = '100'
@@ -140,7 +140,7 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
         PRIOR = '200'
 
     # check if the config file exists
-    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}_basic.yaml'
+    TASK_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{SYS}_{TASK}.yaml'
     ALGO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'
     HPO_CONFIG_PATH = f'./examples/hpo/{SYS_NAME}/config_overrides/{ALGO}_{SYS}_hpo.yaml'
     assert os.path.exists(TASK_CONFIG_PATH), f'{TASK_CONFIG_PATH} does not exist'

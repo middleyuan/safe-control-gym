@@ -101,10 +101,10 @@ class BaseHPO(ABC):
         self.objective_bounds = hpo_config.objective_bounds
 
         env_func = partial(make, self.task, output_dir=self.output_dir, **self.task_config)
-        env = env_func()
+        self.env = env_func()
 
-        self.state_dim = env.state_dim
-        self.action_dim = env.action_dim
+        self.state_dim = self.env.state_dim
+        self.action_dim = self.env.action_dim
 
         self.resume = resume
 
@@ -568,12 +568,16 @@ class BaseHPO(ABC):
         action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list]) 
 
         # determin the state index
-        if state_traj.shape[-1] == 6:
+        if hasattr(self.env, 'obs_goal_horizon'):
+            state_dim = self.env.state_dim + self.env.state_dim * self.env.obs_goal_horizon if self.env.obs_goal_horizon > 0 else None
+        else:
+            state_dim = None
+        if state_traj.shape[-1] in [6, state_dim]:
             x_idx = 0
             z_idx = 2
             thrust_idx = 0
             pitch_idx = 1
-        elif state_traj.shape[-1] == 12:
+        elif state_traj.shape[-1] in [12, state_dim]:
             x_idx = 0
             z_idx = 4
             thrust_idx = 0
@@ -659,12 +663,16 @@ class BaseHPO(ABC):
             action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list])
 
             # determin the state index
-            if state_traj.shape[-1] == 6:
+            if hasattr(self.env, 'obs_goal_horizon'):
+                state_dim = self.env.state_dim + self.env.state_dim * self.env.obs_goal_horizon if self.env.obs_goal_horizon > 0 else None
+            else:
+                state_dim = None
+            if state_traj.shape[-1] in [6, state_dim]:
                 x_idx = 0
                 z_idx = 2
                 thrust_idx = 0
                 pitch_idx = 1
-            elif state_traj.shape[-1] == 12:
+            elif state_traj.shape[-1] in [12, state_dim]:
                 x_idx = 0
                 z_idx = 4
                 thrust_idx = 0

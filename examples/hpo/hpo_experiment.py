@@ -24,9 +24,8 @@ def hpo(config):
         config.task_config.cost = 'rl_reward'
         config.task_config.obs_goal_horizon = 1
         config.task_config.normalized_rl_action_space = False
-        if 'disturbances' in config.task_config:
-            if config.task_config.disturbances is not None:
-                # raise ValueError('Double check with this setup.')
+        if hasattr(config.task_config, 'disturbances'):
+            if hasattr(config.task_config.disturbances, 'observation'):
                 config.task_config.disturbances.observation[0]['std'] += [0, 0, 0, 0, 0, 0]
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
@@ -98,9 +97,8 @@ def eval(config):
         config.task_config.cost = 'rl_reward'
         config.task_config.obs_goal_horizon = 1
         config.task_config.normalized_rl_action_space = False
-        if 'disturbances' in config.task_config:
-            if config.task_config.disturbances is not None:
-                # raise ValueError('Double check with this setup.')
+        if hasattr(config.task_config, 'disturbances'):
+            if hasattr(config.task_config.disturbances, 'observation'):
                 config.task_config.disturbances.observation[0]['std'] += [0, 0, 0, 0, 0, 0]
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
