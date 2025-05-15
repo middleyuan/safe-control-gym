@@ -10,7 +10,7 @@ hpo_config:
   seed: 24
   save_n_best_hps: 1
   # budget
-  trials: 1
+  trials: 60
   hp_eval_list: ['hps_config']
 
   # hyperparameters
