@@ -488,6 +488,31 @@ class BenchmarkEnv(gym.Env, ABC):
 
         return extended_obs
 
+    def shrink_obs(self, obs, next_step):
+        """shrink an observation to remove the next self.obs_goal_horizon reference points.
+
+        Args:
+            obs (ndarray): The observation to be shrunk.
+            next_step (int): The iteration for which to shrink it.
+
+        Returns:
+            shrunk_obs (ndarray): The shrunk observation.
+        """
+        if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+            wp_idx = [
+                min(next_step + i, self.X_GOAL.shape[0] - 1)
+                for i in range(self.obs_goal_horizon)
+            ]
+            goal_state = self.X_GOAL[wp_idx].flatten()
+            shrunk_obs = obs[:goal_state.shape[0]]
+        elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+            goal_state = self.X_GOAL.flatten()
+            shrunk_obs = obs[:goal_state.shape[0]]
+        else:
+            shrunk_obs = obs
+
+        return shrunk_obs
+
     def after_step(self, obs, rew, done, info):
         """Post-processing after calling `.step()`.
 
