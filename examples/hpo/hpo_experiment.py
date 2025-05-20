@@ -26,7 +26,7 @@ def hpo(config):
         config.task_config.normalized_rl_action_space = False
         if hasattr(config.task_config, 'disturbances'):
             if hasattr(config.task_config.disturbances, 'observation'):
-                config.task_config.disturbances.observation[0]['std'] += [0, 0, 0, 0, 0, 0]
+                config.task_config.disturbances.observation[0]['std'] += [0] * len(config.task_config.disturbances.observation[0]['std']) * config.task_config.obs_goal_horizon
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
         if config.algo == 'ppo' and config.safety_filter == 'nl_mpsc':
@@ -99,7 +99,7 @@ def eval(config):
         config.task_config.normalized_rl_action_space = False
         if hasattr(config.task_config, 'disturbances'):
             if hasattr(config.task_config.disturbances, 'observation'):
-                config.task_config.disturbances.observation[0]['std'] += [0, 0, 0, 0, 0, 0]
+                config.task_config.disturbances.observation[0]['std'] += [0] * len(config.task_config.disturbances.observation[0]['std']) * config.task_config.obs_goal_horizon
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
         if config.algo == 'ppo' and config.safety_filter == 'nl_mpsc':

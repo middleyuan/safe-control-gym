@@ -568,17 +568,15 @@ class BaseHPO(ABC):
         action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list]) 
 
         # determin the state index
-        if hasattr(self.env, 'obs_goal_horizon'):
-            state_dim = self.env.state_dim + self.env.state_dim * self.env.obs_goal_horizon if self.env.obs_goal_horizon > 0 else None
-        else:
-            state_dim = None
-        if state_traj.shape[-1] in [6, state_dim]:
+        if self.env.state_dim == 6:
             x_idx = 0
+            y_idx = None
             z_idx = 2
             thrust_idx = 0
             pitch_idx = 1
-        elif state_traj.shape[-1] in [12, state_dim]:
+        elif self.env.state_dim == 12:
             x_idx = 0
+            y_idx = 2
             z_idx = 4
             thrust_idx = 0
             pitch_idx = 2
@@ -624,8 +622,24 @@ class BaseHPO(ABC):
         ax.set_title(f'State Paths w/ RMSE: {returns_mean:.4f} {tag}')
         ax.legend(loc='best', fontsize='small', ncol=2)
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f'state_paths_{tag}.png'))
+        plt.savefig(os.path.join(output_dir, f'state_paths_xz_{tag}.png'))
         plt.close()
+
+        if y_idx is not None:
+            # Plot all state trajectories in x-y plane in one plot
+            fig, ax = plt.subplots(figsize=(8, 4))
+            for ep_idx in range(num_episodes):
+                seed_idx = ep_idx // episodes_per_seed
+                alpha = alpha_values[seed_idx]
+                ax.plot(state_traj[ep_idx, :, x_idx], state_traj[ep_idx, :, y_idx],
+                        label=f'Seed {seed_idx + 1}' if ep_idx % episodes_per_seed == 0 else None, color='blue', lw=2, alpha=alpha)
+            ax.set_xlabel('$x$ [m]')
+            ax.set_ylabel('$y$ [m]')
+            ax.set_title(f'State Paths w/ RMSE: {returns_mean:.4f} {tag}')
+            ax.legend(loc='best', fontsize='small', ncol=2)
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, f'state_paths_xy_{tag}.png'))
+            plt.close()
 
     def plot_results_grid(self, trajs_dict, metrics_dict, output_dir):
         """
@@ -663,16 +677,12 @@ class BaseHPO(ABC):
             action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list])
 
             # determin the state index
-            if hasattr(self.env, 'obs_goal_horizon'):
-                state_dim = self.env.state_dim + self.env.state_dim * self.env.obs_goal_horizon if self.env.obs_goal_horizon > 0 else None
-            else:
-                state_dim = None
-            if state_traj.shape[-1] in [6, state_dim]:
+            if self.env.state_dim == 6:
                 x_idx = 0
                 z_idx = 2
                 thrust_idx = 0
                 pitch_idx = 1
-            elif state_traj.shape[-1] in [12, state_dim]:
+            elif self.env.state_dim == 12:
                 x_idx = 0
                 z_idx = 4
                 thrust_idx = 0

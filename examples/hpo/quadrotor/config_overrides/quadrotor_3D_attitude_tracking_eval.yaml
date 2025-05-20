@@ -44,35 +44,35 @@ task_config:
       low: -0.05
       high: 0.05
 
-  task: traj_tracking
-  task_info:
-    trajectory_type: snap_custom
-    num_cycles: 2
-    trajectory_plane: 'xz'
-    trajectory_position_offset: [ 0., 1.]
-    trajectory_scale: 1.
-    strings:
-      - start: [1., -1.1, 1.]
-        end: [1., 1.2, 1.]
-      - start: [3., -1.1, 2.]
-        end: [3., 1.2, 2.]
-    waypoints:
-      - time: 0
-        position: [0.0, 0.0, 1.0]
-      - time: 4
-        position: [1.0, 0.0, 1.0]
-      - time: 9
-        position: [2.5, 0.0, 1.0]
-
   # task: traj_tracking
   # task_info:
-  #   trajectory_type: figure8
+  #   trajectory_type: snap_custom
   #   num_cycles: 2
   #   trajectory_plane: 'xz'
-  #   trajectory_position_offset: [0, 1.]
-  #   trajectory_scale: 1.0
+  #   trajectory_position_offset: [ 0., 1.]
+  #   trajectory_scale: 1.
+  #   strings:
+  #     - start: [1., -1.1, 1.]
+  #       end: [1., 1.2, 1.]
+  #     - start: [3., -1.1, 2.]
+  #       end: [3., 1.2, 2.]
+  #   waypoints:
+  #     - time: 0
+  #       position: [0.0, 0.0, 1.0]
+  #     - time: 4
+  #       position: [1.0, 0.0, 1.0]
+  #     - time: 9
+  #       position: [2.5, 0.0, 1.0]
 
-  episode_len_sec: 11
+  task: traj_tracking
+  task_info:
+    trajectory_type: figure8
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0, 0, 1]
+    trajectory_scale: 1.0
+
+  episode_len_sec: 26
   cost: quadratic
 
   rew_state_weight: [10.0, 0.1, 10.0, 0.1, 10.0, 0.1, 0.1, 0.001, 0.1, 0.001, 0.1, 0.001]
@@ -86,16 +86,16 @@ task_config:
 
   done_on_out_of_bound: True
   done_on_violation: False
-  # disturbances:
-  #   dynamics:
-  #     - disturbance_func: white_noise
-  #       std: 0.005
-  #   observation:
-  #     - disturbance_func: white_noise
-  #       std: 0.005
-  #   action:
-  #     - disturbance_func: impulse
-  #       magnitude: 0.01
-  #       step_offset: 2
-  #       duration: 1
-  #       decary_rate: 1
+  disturbances:
+    dynamics:
+      - disturbance_func: white_noise
+        std: 0.005
+    observation:
+      - disturbance_func: white_noise
+        std: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
+    action:
+      - disturbance_func: impulse
+        magnitude: 0.01
+        step_offset: 2
+        duration: 1
+        decary_rate: 1

@@ -38,5 +38,5 @@ hpo_config:
     rollout_batch_size: 5
 
     # objective
-    rew_state_weight: [3., .1, 3., .1, .1, 0.001]
-    rew_act_weight: [.1, .1]
+    rew_state_weight: [3., .1, 3., .1, 3., .1, .1, .1, .1, 0.001, 0.001, 0.001]
+    rew_act_weight: [.1, .1, .1, .1]
