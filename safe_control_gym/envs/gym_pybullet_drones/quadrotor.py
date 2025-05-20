@@ -781,8 +781,8 @@ class Quadrotor(BaseAviary):
         # Advance the simulation.
         super()._advance_simulation(action, disturb_force)
         # Standard Gym return.
-        obs = self._get_observation()
         rew = self._get_reward()
+        obs = self._get_observation()
         done = self._get_done()
         info = self._get_info()
         obs, rew, done, info = super().after_step(obs, rew, done, info)
