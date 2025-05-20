@@ -1577,11 +1577,6 @@ class Quadrotor(BaseAviary):
         #         print(
         #             '[WARNING]: observation was clipped in Quadrotor._get_observation().'
         #         )
-
-        # Concatenate goal info (references state(s)) for RL.
-        # Plus two because ctrl_step_counter has not incremented yet, and we want to return the obs (which would be
-        # ctrl_step_counter + 1 as the action has already been applied), and the next state (+ 2) for the RL to see
-        # the next state.
         return self.state
 
     def _get_observation(self):
@@ -1590,66 +1585,67 @@ class Quadrotor(BaseAviary):
         Returns:
             obs (ndarray): The state of the quadrotor, of size 2 or 6 depending on QUAD_TYPE.
         """
-        full_state = self._get_drone_state_vector(0)
-        pos, _, rpy, vel, ang_v, rpy_rate, _ = np.split(full_state, [3, 7, 10, 13, 16, 19])
-        if self.QUAD_TYPE == QuadType.ONE_D:
-            # {z, z_dot}.
-            self.state = np.hstack([pos[2], vel[2]]).reshape((2,))
-        elif self.QUAD_TYPE == QuadType.TWO_D:
-            # {x, x_dot, z, z_dot, theta, theta_dot}.
-            self.state = np.hstack(
-                [pos[0], vel[0], pos[2], vel[2], rpy[1], ang_v[1]]
-            ).reshape((6,))
-        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
-            # {x, x_dot, z, z_dot, theta, theta_dot}.
-            self.state = np.hstack(
-                [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
-            ).reshape((6,))
-        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
-            # perform transformation to body frame translational velocities
-            pitch = -rpy[1]
-            vx = vel[0] * np.cos(pitch) - vel[2] * np.sin(pitch)
-            vz = vel[0] * np.sin(pitch) + vel[2] * np.cos(pitch)
-            # {x, vx, z, vz, theta, theta_dot}.
-            self.state = np.hstack(
-                [pos[0], vx, pos[2], vz, pitch, rpy_rate[1]]
-            ).reshape((6,))
-            world_state = np.hstack(
-                [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
-            ).reshape((6,))
-            print('world_state: ', world_state)
-
-        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
-            # {x, x_dot, z, z_dot, theta, theta_dot}.
-            self.state = np.hstack(
-                [pos[0], vel[0], pos[2], vel[2], rpy[1]]
-            ).reshape((5,))
-        elif self.QUAD_TYPE == QuadType.THREE_D:
-            Rob = np.array(p.getMatrixFromQuaternion(self.quat[0])).reshape((3, 3))
-            Rbo = Rob.T
-            ang_v_body_frame = Rbo @ ang_v
-            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
-            self.state = np.hstack(
-                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]  # Note: world ang_v != body frame pqr
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v_body_frame]
-            ).reshape((12,))
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
-            self.state = np.hstack(
-                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
-            ).reshape((12,))
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
-            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, p_body, q_body}.
-            self.state = np.hstack(
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy[0], rpy[1], ang_v[0], ang_v[1]]
-            ).reshape((10,))
+        # full_state = self._get_drone_state_vector(0)
+        # pos, _, rpy, vel, ang_v, rpy_rate, _ = np.split(full_state, [3, 7, 10, 13, 16, 19])
+        # if self.QUAD_TYPE == QuadType.ONE_D:
+        #     # {z, z_dot}.
+        #     self.state = np.hstack([pos[2], vel[2]]).reshape((2,))
+        # elif self.QUAD_TYPE == QuadType.TWO_D:
+        #     # {x, x_dot, z, z_dot, theta, theta_dot}.
+        #     self.state = np.hstack(
+        #         [pos[0], vel[0], pos[2], vel[2], rpy[1], ang_v[1]]
+        #     ).reshape((6,))
+        # elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+        #     # {x, x_dot, z, z_dot, theta, theta_dot}.
+        #     self.state = np.hstack(
+        #         [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
+        #     ).reshape((6,))
+        # elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+        #     # perform transformation to body frame translational velocities
+        #     pitch = -rpy[1]
+        #     vx = vel[0] * np.cos(pitch) - vel[2] * np.sin(pitch)
+        #     vz = vel[0] * np.sin(pitch) + vel[2] * np.cos(pitch)
+        #     # {x, vx, z, vz, theta, theta_dot}.
+        #     self.state = np.hstack(
+        #         [pos[0], vx, pos[2], vz, pitch, rpy_rate[1]]
+        #     ).reshape((6,))
+        #     world_state = np.hstack(
+        #         [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
+        #     ).reshape((6,))
+        #     print('world_state: ', world_state)
+        #
+        # elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+        #     # {x, x_dot, z, z_dot, theta, theta_dot}.
+        #     self.state = np.hstack(
+        #         [pos[0], vel[0], pos[2], vel[2], rpy[1]]
+        #     ).reshape((5,))
+        # elif self.QUAD_TYPE == QuadType.THREE_D:
+        #     Rob = np.array(p.getMatrixFromQuaternion(self.quat[0])).reshape((3, 3))
+        #     Rbo = Rob.T
+        #     ang_v_body_frame = Rbo @ ang_v
+        #     # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+        #     self.state = np.hstack(
+        #         # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]  # Note: world ang_v != body frame pqr
+        #         [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v_body_frame]
+        #     ).reshape((12,))
+        # elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+        #     # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+        #     self.state = np.hstack(
+        #         # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
+        #         [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
+        #     ).reshape((12,))
+        # elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+        #     # {x, x_dot, y, y_dot, z, z_dot, phi, theta, p_body, q_body}.
+        #     self.state = np.hstack(
+        #         [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy[0], rpy[1], ang_v[0], ang_v[1]]
+        #     ).reshape((10,))
         # if not np.array_equal(self.state,
         #                       np.clip(self.state, self.observation_space.low, self.observation_space.high)):
         #     if self.GUI and self.VERBOSE:
         #         print(
         #             '[WARNING]: observation was clipped in Quadrotor._get_observation().'
         #         )
+        _ = self._get_state()
 
         # Concatenate goal info (references state(s)) for RL.
         # Plus two because ctrl_step_counter has not incremented yet, and we want to return the obs (which would be
@@ -1657,14 +1653,13 @@ class Quadrotor(BaseAviary):
         # the next state.
         obs = deepcopy(self.state)
         if self.at_reset:
-            obs = self.extend_obs(obs, 1)
+            self.obs = self.extend_obs(obs, 1)
         else:
-            obs = self.extend_obs(obs, self.ctrl_step_counter + 2)
-
+            self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2)
         # Apply observation disturbance.
         if 'observation' in self.disturbances:
-            obs = self.disturbances['observation'].apply(obs, self)
-        return obs
+            self.obs = self.disturbances['observation'].apply(self.obs, self)
+        return self.obs
 
     def _get_reward(self):
         """Computes the current step's reward value.
@@ -1672,21 +1667,21 @@ class Quadrotor(BaseAviary):
         Returns:
             reward (float): The evaluated reward/cost.
         """
+        obs = self.shrink_obs(self.obs, self.ctrl_step_counter + 2)
         # RL cost.
         if self.COST == Cost.RL_REWARD:
-            state = self.state
-            act = np.asarray(self.current_clipped_action)
+            act = np.asarray(self.current_physical_action)
             act_error = act - self.U_GOAL
             # Quadratic costs w.r.t state and action
             # TODO: consider using multiple future goal states for cost in tracking
             if self.TASK == Task.STABILIZATION:
-                state_error = state - self.X_GOAL
+                state_error = obs - self.X_GOAL
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             if self.TASK == Task.TRAJ_TRACKING:
                 wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
                     0] - 1)  # +1 because state has already advanced but counter not incremented.
-                state_error = state - self.X_GOAL[wp_idx]
+                state_error = obs - self.X_GOAL[wp_idx]
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             rew = -dist
@@ -1700,19 +1695,21 @@ class Quadrotor(BaseAviary):
         # self.R = np.diag(self.rew_act_weight)
         if self.COST == Cost.QUADRATIC:
             if self.TASK == Task.STABILIZATION:
-                return float(-1 * self.symbolic.loss(x=self.state,
-                                                Xr=self.X_GOAL,
-                                                u=self.current_clipped_action,
-                                                Ur=self.U_GOAL,
-                                                Q=self.Q,
-                                                R=self.R)['l'])
+                return float(-1 * self.symbolic.loss(x=obs,
+                                                     Xr=self.X_GOAL,
+                                                     u=self.current_physical_action,
+                                                     Ur=self.U_GOAL,
+                                                     Q=self.Q,
+                                                     R=self.R)['l'])
             if self.TASK == Task.TRAJ_TRACKING:
-                return float(-1 * self.symbolic.loss(x=self.state,
-                                                Xr=self.X_GOAL[self.ctrl_step_counter + 1, :],  # +1 because state has already advanced but counter not incremented.
-                                                u=self.current_clipped_action,
-                                                Ur=self.U_GOAL,
-                                                Q=self.Q,
-                                                R=self.R)['l'])
+                return float(-1 * self.symbolic.loss(x=obs,
+                                                     Xr=self.X_GOAL[self.ctrl_step_counter + 1, :],
+                                                     # +1 because state has already advanced but counter not incremented.
+                                                     u=self.current_physical_action,
+                                                     Ur=self.U_GOAL,
+                                                     Q=self.Q,
+                                                     R=self.R)['l'])
+        return None
 
     def _get_done(self):
         """Computes the conditions for termination of an episode.
