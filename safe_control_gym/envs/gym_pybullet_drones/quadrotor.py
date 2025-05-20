@@ -363,6 +363,8 @@ class Quadrotor(BaseAviary):
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0])
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0])
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
         else:
             self.U_GOAL = np.ones(self.action_dim) * self.MASS * self.GRAVITY_ACC / self.action_dim
         if self.TASK == Task.STABILIZATION:
@@ -1431,7 +1433,8 @@ class Quadrotor(BaseAviary):
                                               self.action_space.high)
 
         # TODO: double check why a mixture of PHYSICS and QUAD_TYPE is used here
-        if self.PHYSICS in [Physics.DYN_SI, Physics.DYN_SI_3D, Physics.DYN_SI_3D_10, Physics.DYN_SI_3D_DELAY]:
+        # if self.PHYSICS == Physics.DYN_SI or self.PHYSICS == Physics.DYN_SI_3D:
+        if self.PHYSICS in [Physics.DYN_SI, Physics.DYN_SI_3D, Physics.DYN_SI_3D_10]:
             return self.current_clipped_action
 
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
