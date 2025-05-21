@@ -142,7 +142,7 @@ class PPO(BaseController):
              path,
              ):
         """Restores model and experiment given checkpoint path."""
-        state = torch.load(path)
+        state = torch.load(path, weights_only=False)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])

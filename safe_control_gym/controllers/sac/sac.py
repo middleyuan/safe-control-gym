@@ -142,7 +142,7 @@ class SAC(BaseController):
 
     def load(self, path):
         """Restores model and experiment given checkpoint path."""
-        state = torch.load(path)
+        state = torch.load(path, weights_only=False)
 
         # restore params
         self.agent.load_state_dict(state['agent'])

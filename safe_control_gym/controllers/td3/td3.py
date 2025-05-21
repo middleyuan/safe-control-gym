@@ -35,7 +35,6 @@ class TD3(BaseController):
                  seed=0,
                  **kwargs):
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
-        torch.manual_seed(seed=seed)
 
         # task
         if self.training:
@@ -132,7 +131,7 @@ class TD3(BaseController):
 
     def load(self, path):
         """Restores model and experiment given checkpoint path."""
-        state = torch.load(path)
+        state = torch.load(path, weights_only=False)
 
         # restore params
         self.agent.load_state_dict(state['agent'])
