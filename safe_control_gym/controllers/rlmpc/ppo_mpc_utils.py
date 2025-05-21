@@ -151,9 +151,9 @@ class PPO_MPC_Agent:
 
                     # Passing the gradients through the mpc
                     theta = self.ac.actor.get_theta_param(batch_th['obs'])
-                    traj_ref = self.ac.actor.get_ref_param(batch['info'])
+                    # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
-                    ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
+                    # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     (theta_loss.sum()).backward()
                     self.actor_opt.step()
 
@@ -161,7 +161,7 @@ class PPO_MPC_Agent:
                     e_loss_epoch += entropy_loss.item()
                     kl_epoch += approx_kl.item()
                     theta_loss_epoch += theta_loss.sum().item()
-                    ref_loss_epoch += ref_loss.sum().item()
+                    # ref_loss_epoch += ref_loss.sum().item()
                 # Critic update.
                 value_loss = self.compute_value_loss(batch_th)
                 self.critic_opt.zero_grad()
@@ -914,8 +914,9 @@ class MPCPolicyFunction:
         nabla_pi_ref_batch = []
         nabla_pi_theta_batch = []
         for i in range(obs_batch.shape[0]):
-            nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], 2 * i: 2 * (i + 1)].T)
-            nabla_pi_theta_batch.append(dpi_cs[ref_p.shape[0]:, 2 * i: 2 * (i + 1)].T)
+            # nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], 2 * i: 2 * (i + 1)].T)
+            # nabla_pi_theta_batch.append(dpi_cs[ref_p.shape[0]:, 2 * i: 2 * (i + 1)].T)
+            nabla_pi_theta_batch.append(dpi_cs[:, self.model.nu * i: self.model.nu * (i + 1)].T)
         action_batch = torch.FloatTensor(action_batch)
         nabla_pi_ref_batch = torch.FloatTensor(np.array(nabla_pi_ref_batch))
         nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
