@@ -344,8 +344,17 @@ class Quadrotor(BaseAviary):
                     low=self.DISTURBANCES['downwash'][0]['low'],
                     high=self.DISTURBANCES['downwash'][0]['high']
                 )
-                pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
-                self.dw_model.update_pos(pos)
+                # pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                # self.dw_model.update_pos(pos)
+                randomize_flag = self.DISTURBANCES['downwash'][0]['randomize'] if 'randomize' in \
+                                                                                  self.DISTURBANCES['downwash'][
+                                                                                      0] else False
+                if self.DISTURBANCES['downwash'][0]['mode'] == 'fix' and randomize_flag:
+                    pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                    self.dw_model.update_pos(pos)
+                    self.dw_model.reset()
+                else:
+                    pass  # randomization only implemented for fixed downwash
             elif self.DISTURBANCES['downwash'][0]['mode'] == 'track':
                 self.dw_model = Downwash()  # update the position later
 
