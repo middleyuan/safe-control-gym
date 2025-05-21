@@ -121,8 +121,8 @@ class PPO_MPC(BaseController):
     def close(self):
         """Shuts down and cleans up lingering resources."""
         self.env.close()
-        self.venv.close()
         if self.training:
+            self.venv.close()
             self.eval_venv.close()
         self.logger.close()
 
@@ -147,9 +147,9 @@ class PPO_MPC(BaseController):
 
     def load(self, path):
         """Restores model and experiment given checkpoint path."""
-        state = torch.load(path)
+        state = torch.load(path, weights_only=False)
         # Restore policy.
-        self.agent.load_state_dict(state['agent'])
+        self.agent.load_state_dict(state['agent'], strict=False)
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])
         self.reward_normalizer.load_state_dict(state['reward_normalizer'])
         # Restore experiment state.

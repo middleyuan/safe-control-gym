@@ -99,9 +99,9 @@ class PPO_MPC_Agent:
             'critic_opt': self.critic_opt.state_dict()
         }
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict, strict=True):
         '''Restores agent state.'''
-        self.ac.load_state_dict(state_dict['ac'])
+        self.ac.load_state_dict(state_dict['ac'], strict=strict)
         self.actor_opt.load_state_dict(state_dict['actor_opt'])
         self.critic_opt.load_state_dict(state_dict['critic_opt'])
 
@@ -268,7 +268,8 @@ class MPCActor(nn.Module):
         temp = np.concatenate((self.q_mpc, self.r_mpc, self.model_param))
         self.mpc_param = nn.Parameter(torch.FloatTensor(temp))
         self.param_net = MLP(obs_dim, self.n_learnable_param, hidden_dims, activation)
-        self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
+        # self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
+        self.traj_param = torch.FloatTensor(self.mpc.traj)
 
         # Construct output action distribution.
         self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
@@ -310,9 +311,11 @@ class MPCActor(nn.Module):
 
     def get_theta_param(self, obs):
         if obs.ndim > 1:
-            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs)) + 1e-5
+            theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
+            theta += torch.rand_like(theta) * 1e-5
         else:
-            theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs)) + 1e-5
+            theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
+            theta += torch.rand_like(theta) * 1e-5
         return theta
 
     def get_ref_param(self, info_batch):
@@ -658,7 +661,8 @@ class MPCPolicyFunction:
         rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, "thread")
         dR_sensfunc = rkkt_fn.factory('dR', ['i0', 'i1', 'i2', 'i3'], ['jac:o0:i0', 'jac:o0:i2', 'jac:o0:i3'])
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
-        dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
+        # dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
+        dRdP = cs.horzcat(dRdP_theta)
 
         # Generate sensitivity of the optimal solution
         dzdP = -cs.inv(dRdz) @ dRdP
