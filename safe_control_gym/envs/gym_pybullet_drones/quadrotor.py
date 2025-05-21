@@ -1573,7 +1573,7 @@ class Quadrotor(BaseAviary):
             # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
             self.state = np.hstack(
                 # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate]
             ).reshape((12,))
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             # {x, x_dot, y, y_dot, z, z_dot, phi, theta, p_body, q_body}.
