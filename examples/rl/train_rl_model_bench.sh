@@ -22,12 +22,12 @@ else
     SYS_NAME='quadrotor'
 fi
 
-# TRAIN_LIST=('nominal' 'generalization' 'robustness_dr')
+# TRAIN_LIST=('nominal' 'generalization' 'robustness_pm')
 # TRAIN_LIST=('robustness_ob5' 'robustness_ps3' 'robustness_combo')
-TRAIN_LIST=('nominal' 'generalization' 'robustness_dr' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo' 'robustness_dw')
 # shellcheck disable=SC2054
-Q=(3.0,0.1,3.0,0.1,0.1,0.001)
-
+# Q=(3.0,0.1,3.0,0.1,0.1,0.001)
+Q=(10.0,0.1,10.0,0.1,0.1,0.001)
 NS=1
 T=11
 H=0
@@ -60,7 +60,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
     echo ${CONFIG1}
     echo ${CONFIG2}
 
-    for SEED in {0..4}; do
+    for SEED in {0..9}; do
         python3 ../../safe_control_gym/experiments/train_rl_controller.py \
             --algo ${ALGO} \
             --task ${SYS_NAME} \
@@ -81,11 +81,11 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
     # RL Experiment
     for EVAL in "${EVAL_LIST[@]}"; do
         if [ "${EVAL}" == 'robustness_ob' ]; then
-            EXTERNAL_PARAM=(0 1 2 3 4 5 10 15 20 25 30 40 50 60 70 80 90 100)
+            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100)
         elif [ "${EVAL}" == 'robustness_ps' ]; then
-            EXTERNAL_PARAM=(0 1 2 3 4 5 10 15 20 25 30 40 50 60 70 80 90 100)
+            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100)
         elif [ "${EVAL}" == 'robustness_pm' ]; then
-            EXTERNAL_PARAM=(0 0.01 0.02 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0)
+            EXTERNAL_PARAM=(0 0.01 0.02 0.05 0.1 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 3.5 4.0 4.5 5.0)
         elif [ "${EVAL}" == 'robustness_dw' ]; then
             EXTERNAL_PARAM=(1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.5 4.0 4.5 5.0)
         elif [ "${EVAL}" == 'generalization' ]; then
@@ -95,7 +95,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
         fi
 
         for EP in "${EXTERNAL_PARAM[@]}"; do
-            for SEED in {0..4}; do
+            for SEED in {0..9}; do
                 python3 ./rl_experiment.py \
                     --task ${SYS_NAME} \
                     --algo ${ALGO} \

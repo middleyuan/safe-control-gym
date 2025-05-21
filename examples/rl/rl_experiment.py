@@ -113,7 +113,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         np.save(temp, metrics, allow_pickle=True)
     elif config.experiment_type == "traj_data":
         temp = f"./traj_results_{config.algo}_{config.task_config.episode_len_sec}.npy"
-        if config.seed-110 == 0:  # os.path.isfile(temp):
+        if config.seed-150 == 0:  # os.path.isfile(temp):
             data = {'n_rollouts': n_episodes,
                     'obs': np.array(results['obs']),
                     'timestamp': np.array(results['timestamp'])}
