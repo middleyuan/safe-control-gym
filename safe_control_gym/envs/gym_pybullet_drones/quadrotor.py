@@ -790,8 +790,8 @@ class Quadrotor(BaseAviary):
         # Advance the simulation.
         super()._advance_simulation(action, disturb_force)
         # Standard Gym return.
-        rew = self._get_reward()
         obs = self._get_observation()
+        rew = self._get_reward()
         done = self._get_done()
         info = self._get_info()
         obs, rew, done, info = super().after_step(obs, rew, done, info)
@@ -1677,9 +1677,10 @@ class Quadrotor(BaseAviary):
             reward (float): The evaluated reward/cost.
         """
         obs = self.shrink_obs(self.obs, self.ctrl_step_counter + 2)
+        # obs = self.state
         # RL cost.
         if self.COST == Cost.RL_REWARD:
-            act = np.asarray(self.current_physical_action)
+            act = np.asarray(self.current_clipped_action)
             act_error = act - self.U_GOAL
             # Quadratic costs w.r.t state and action
             # TODO: consider using multiple future goal states for cost in tracking
@@ -1706,7 +1707,7 @@ class Quadrotor(BaseAviary):
             if self.TASK == Task.STABILIZATION:
                 return float(-1 * self.symbolic.loss(x=obs,
                                                      Xr=self.X_GOAL,
-                                                     u=self.current_physical_action,
+                                                     u=self.current_clipped_action,
                                                      Ur=self.U_GOAL,
                                                      Q=self.Q,
                                                      R=self.R)['l'])
@@ -1714,7 +1715,7 @@ class Quadrotor(BaseAviary):
                 return float(-1 * self.symbolic.loss(x=obs,
                                                      Xr=self.X_GOAL[self.ctrl_step_counter + 1, :],
                                                      # +1 because state has already advanced but counter not incremented.
-                                                     u=self.current_physical_action,
+                                                     u=self.current_clipped_action,
                                                      Ur=self.U_GOAL,
                                                      Q=self.Q,
                                                      R=self.R)['l'])
