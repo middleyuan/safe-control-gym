@@ -911,7 +911,7 @@ class BaseAviary(BenchmarkEnv):
         # Compute forces and torques.
         # Update state with discrete time dynamics.
         state = np.hstack([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2],
-                           rpy[0], rpy[1], rpy[2], ang_v[0], ang_v[1], ang_v[2]])
+                           rpy[0], rpy[1], rpy[2], rpy_rates[0], rpy_rates[1], rpy_rates[2]])
 
         # update state
         if disturbance_force is not None:
@@ -931,14 +931,14 @@ class BaseAviary(BenchmarkEnv):
         pos = np.array([next_state[0], next_state[2], next_state[4]])
         vel = np.array([next_state[1], next_state[3], next_state[5]])
         rpy = np.array([next_state[6], next_state[7], next_state[8]])
-        ang_v = np.array([next_state[9], next_state[10], next_state[11]])
+        rpy_rates = np.array([next_state[9], next_state[10], next_state[11]])
 
         self.pos[nth_drone, :] = pos.copy()
         self.rpy[nth_drone, :] = rpy.copy()
         self.vel[nth_drone, :] = vel.copy()
-        self.ang_v[nth_drone, :] = ang_v.copy()
-        # self.rpy_rates[nth_drone, :] = rpy_rates.copy()
-        # self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
+        # self.ang_v[nth_drone, :] = ang_v.copy()
+        self.rpy_rates[nth_drone, :] = rpy_rates.copy()
+        self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
 
     def setup_dynamics_si_3d_expression(self, prop_values=None):
         # Casadi states
