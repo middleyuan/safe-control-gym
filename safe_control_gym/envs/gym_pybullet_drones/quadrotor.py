@@ -659,19 +659,20 @@ class Quadrotor(BaseAviary):
             self._setup_symbolic(prop_values)
             self.setup_dynamics_si_expression(prop_values)
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-            self.beta_1 = prop_values['beta_1']
-            self.beta_2 = prop_values['beta_2']
-            self.alpha_1 = prop_values['alpha_1']
-            self.alpha_2 = prop_values['alpha_2']
-            self.alpha_3 = prop_values['alpha_3']
-            self.alpha_4 = prop_values['alpha_4']
-            self.alpha_5 = prop_values['alpha_5']
-            self.alpha_6 = prop_values['alpha_6']
-            self.alpha_7 = prop_values['alpha_7']
-            self.alpha_8 = prop_values['alpha_8']
-            self.alpha_9 = prop_values['alpha_9']
-            self._setup_symbolic(prop_values)
-            self.setup_dynamics_si_3d_expression(prop_values)
+            if self.PHYSICS == Physics.DYN_SI_3D:
+                self.beta_1 = prop_values['beta_1']
+                self.beta_2 = prop_values['beta_2']
+                self.alpha_1 = prop_values['alpha_1']
+                self.alpha_2 = prop_values['alpha_2']
+                self.alpha_3 = prop_values['alpha_3']
+                self.alpha_4 = prop_values['alpha_4']
+                self.alpha_5 = prop_values['alpha_5']
+                self.alpha_6 = prop_values['alpha_6']
+                self.alpha_7 = prop_values['alpha_7']
+                self.alpha_8 = prop_values['alpha_8']
+                self.alpha_9 = prop_values['alpha_9']
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
