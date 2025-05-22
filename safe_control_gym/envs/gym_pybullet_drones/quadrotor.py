@@ -96,6 +96,36 @@ class Quadrotor(BaseAviary):
             'distrib': 'uniform',
             'low': -5,
             'high': 5
+        },
+        'alpha_4': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_5': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_6': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_7': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_8': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_9': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
         }
     }
 
@@ -600,11 +630,23 @@ class Quadrotor(BaseAviary):
             prop_values['alpha_1'] = self.alpha_1
             prop_values['alpha_2'] = self.alpha_2
             prop_values['alpha_3'] = self.alpha_3
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            prop_values['beta_1'] = self.beta_1
+            prop_values['beta_2'] = self.beta_2
+            prop_values['alpha_1'] = self.alpha_1
+            prop_values['alpha_2'] = self.alpha_2
+            prop_values['alpha_3'] = self.alpha_3
+            prop_values['alpha_4'] = self.alpha_4
+            prop_values['alpha_5'] = self.alpha_5
+            prop_values['alpha_6'] = self.alpha_6
+            prop_values['alpha_7'] = self.alpha_7
+            prop_values['alpha_8'] = self.alpha_8
+            prop_values['alpha_9'] = self.alpha_9
         if self.RANDOMIZED_INERTIAL_PROP:
             prop_values = self._randomize_values_by_info(
                 prop_values, self.INERTIAL_PROP_RAND_INFO)
             if any(phy_quantity < 0 for phy_quantity in prop_values.values()):
-                if self.QUAD_TYPE != QuadType.TWO_D_ATTITUDE:
+                if self.QUAD_TYPE != QuadType.TWO_D_ATTITUDE and self.QUAD_TYPE != QuadType.THREE_D_ATTITUDE:
                     raise ValueError('[ERROR] in Quadrotor.reset(), negative randomized inertial properties.')
         self.OVERRIDDEN_QUAD_MASS = prop_values['M']
         self.OVERRIDDEN_QUAD_INERTIA = [prop_values['Ixx'], prop_values['Iyy'], prop_values['Izz']]
@@ -616,6 +658,20 @@ class Quadrotor(BaseAviary):
             self.alpha_3 = prop_values['alpha_3']
             self._setup_symbolic(prop_values)
             self.setup_dynamics_si_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            self.beta_1 = prop_values['beta_1']
+            self.beta_2 = prop_values['beta_2']
+            self.alpha_1 = prop_values['alpha_1']
+            self.alpha_2 = prop_values['alpha_2']
+            self.alpha_3 = prop_values['alpha_3']
+            self.alpha_4 = prop_values['alpha_4']
+            self.alpha_5 = prop_values['alpha_5']
+            self.alpha_6 = prop_values['alpha_6']
+            self.alpha_7 = prop_values['alpha_7']
+            self.alpha_8 = prop_values['alpha_8']
+            self.alpha_9 = prop_values['alpha_9']
+            self._setup_symbolic(prop_values)
+            self.setup_dynamics_si_3d_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -1064,27 +1120,39 @@ class Quadrotor(BaseAviary):
             # params_pitch_rate = [-99.94, -13.3, 84.73]
             # params_yaw_rate = [0., 0., 0.]
             # Marcel's model
-            params_acc = [32.221212, 0.]
-            params_roll_rate = [-286.2, -23.03, 225.6]
-            params_pitch_rate = [-286.2, -23.03, 225.6]
-            params_yaw_rate = [-192.9, -22.22, 323.5]
+            # params_acc = [32.221212, 0.]
+            # params_roll_rate = [-286.2, -23.03, 225.6]
+            # params_pitch_rate = [-286.2, -23.03, 225.6]
+            # params_yaw_rate = [-192.9, -22.22, 323.5]
+
+            self.beta_1 = prior_prop.get('beta_1', 32.221212)
+            self.beta_2 = prior_prop.get('beta_2', 0.)
+            self.alpha_1 = prior_prop.get('alpha_1', -286.2)
+            self.alpha_2 = prior_prop.get('alpha_2', -23.03)
+            self.alpha_3 = prior_prop.get('alpha_3', 225.6)
+            self.alpha_4 = prior_prop.get('alpha_4', -286.2)
+            self.alpha_5 = prior_prop.get('alpha_5', -23.03)
+            self.alpha_6 = prior_prop.get('alpha_6', 225.6)
+            self.alpha_7 = prior_prop.get('alpha_7', -192.9)
+            self.alpha_8 = prior_prop.get('alpha_8', -22.22)
+            self.alpha_9 = prior_prop.get('alpha_9', 323.5)
             
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
             X_dot = cs.vertcat(x_dot,
-                               (params_acc[0] * T + params_acc[1]) * (
+                               (self.beta_1 * T + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                               (params_acc[0] * T + params_acc[1]) * (
+                               (self.beta_1 * T + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                               (params_acc[0] * T + params_acc[1]) * cs.cos(phi) * cs.cos(theta) - g,
+                               (self.beta_1 * T + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
-                               params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R,
-                               params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P,
-                               params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y)
+                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R,
+                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P,
+                               self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
 

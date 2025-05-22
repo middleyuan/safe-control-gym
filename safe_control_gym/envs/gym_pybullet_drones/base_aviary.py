@@ -940,7 +940,7 @@ class BaseAviary(BenchmarkEnv):
         # self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         # self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
 
-    def setup_dynamics_si_3d_expression(self):
+    def setup_dynamics_si_3d_expression(self, prop_values=None):
         # Casadi states
         x = cs.MX.sym('x')
         y = cs.MX.sym('y')
@@ -991,26 +991,43 @@ class BaseAviary(BenchmarkEnv):
         # params_pitch_rate = [-99.94, -13.3, 84.73]
         # params_yaw_rate = [0., 0., 0.]
         # Marcel's model
-        params_acc = [32.221212, 0.]
-        params_roll_rate = [-286.2, -23.03, 225.6]
-        params_pitch_rate = [-286.2, -23.03, 225.6]
-        params_yaw_rate = [-192.9, -22.22, 323.5]
-        
-        X_dot = cs.vertcat(x_dot,
-                           (params_acc[0] * T + params_acc[1]) * (
-                                       cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[
-                               0] / self.MASS,
-                           y_dot,
-                           (params_acc[0] * T + params_acc[1]) * (
-                                   cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                           z_dot,
-                           (params_acc[0] * T + params_acc[1]) * cs.cos(phi) * cs.cos(theta) - g + d[1] / self.MASS,
-                           phi_dot,
-                           theta_dot,
-                           psi_dot,
-                           params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R,
-                           params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P,
-                           params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y)
+        if prop_values is None:
+            params_acc = [32.221212, 0.]
+            params_roll_rate = [-286.2, -23.03, 225.6]
+            params_pitch_rate = [-286.2, -23.03, 225.6]
+            params_yaw_rate = [-192.9, -22.22, 323.5]
+            
+            X_dot = cs.vertcat(x_dot,
+                            (params_acc[0] * T + params_acc[1]) * (
+                                        cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[
+                                0] / self.MASS,
+                            y_dot,
+                            (params_acc[0] * T + params_acc[1]) * (
+                                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                            z_dot,
+                            (params_acc[0] * T + params_acc[1]) * cs.cos(phi) * cs.cos(theta) - g + d[1] / self.MASS,
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R,
+                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P,
+                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y)
+        else:
+            X_dot = cs.vertcat(x_dot,
+                            (prop_values['beta_1'] * T + prop_values['beta_2']) * (
+                                        cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[
+                                0] / self.MASS,
+                            y_dot,
+                            (prop_values['beta_1'] * T + prop_values['beta_2']) * (
+                                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                            z_dot,
+                            (prop_values['beta_1'] * T + prop_values['beta_2']) * cs.cos(phi) * cs.cos(theta) - g + d[1] / self.MASS,
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            prop_values['alpha_1'] * phi + prop_values['alpha_2'] * phi_dot + prop_values['alpha_3'] * R,
+                            prop_values['alpha_4'] * theta + prop_values['alpha_5'] * theta_dot + prop_values['alpha_6'] * P,
+                            prop_values['alpha_7'] * psi + prop_values['alpha_8'] * psi_dot + prop_values['alpha_9'] * Y)
 
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
 
