@@ -39,3 +39,52 @@ hpo_config:
     # objective
     rew_state_weight: [20., .1, 20., .1, .1, 0.001]
     rew_act_weight: [.1, .1]
+  
+  dr:
+    activation: '"relu"'
+    actor_lr: 0.0001502439178364
+    critic_lr: 0.0005644344598561
+    entropy_lr: 5.426083578653605e-05
+    gamma: 0.99
+    hidden_dim: 128
+    init_temperature: 0.0216903493132697
+    max_buffer_size: 200000
+    max_env_steps: 660000
+    rew_act_weight:
+    - 10.122087371084454
+    - 8.306659848964445
+    rew_state_weight:
+    - 10.120089123835088
+    - 13.543118023818435
+    - 7.985507844066319
+    - 11.694823083806385
+    - 11.191851361196933
+    - 14.758409710486772
+    tau: 0.2770771492745251
+    train_batch_size: 256
+    train_interval: 500
+    warm_up_steps: 1000
+  tr:
+    activation: '"relu"'
+    actor_lr: 0.0002924970319654
+    critic_lr: 2.7120136431851444e-05
+    entropy_lr: 1.0e-05
+    gamma: 0.99
+    hidden_dim: 128
+    init_temperature: 0.842351721868723
+    max_buffer_size: 350000
+    max_env_steps: 660000
+    rew_act_weight:
+    - 0.009364343147852675
+    - 0.001
+    rew_state_weight:
+    - 0.03809558520220185
+    - 6.987611274682076
+    - 20.0
+    - 0.001
+    - 0.001
+    - 19.983284759280185
+    tau: 1.0
+    train_batch_size: 64
+    train_interval: 2000
+    warm_up_steps: 1000
