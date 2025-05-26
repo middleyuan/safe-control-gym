@@ -15,11 +15,11 @@
     test_data_ratio: 0.2
     soft_constraints: null
     optimization_iterations:
-      - 1000 # 1200
-      - 1000 # 1200
+    - 1500
+    - 1500
     learning_rate:
-      - 0.009475726364304235
-      - 0.009475726364304235
+    - 0.03153821761966455
+    - 0.03153821761966455
     normalize_training_data: False
     # normalize_training_data: True
     prior_info:

@@ -98,7 +98,7 @@ class iLQR(BaseController):
             self.warm_start_action = traj_data['trajs_data']['action'][0]
             self.warm_start_state = traj_data['trajs_data']['state'][0]
         elif self.warm_start_traj.endswith('.npy'):
-            self.warm_start_traj = self.warm_start_traj.replace('_9_', f'_{int(self.env.EPISODE_LEN_SEC)}_')
+            self.warm_start_traj = self.warm_start_traj.replace('_11_', f'_{int(self.env.EPISODE_LEN_SEC)}_')
             traj_data = np.load(self.warm_start_traj, allow_pickle=True).item()
             self.warm_start_action = traj_data['action']
             self.warm_start_state = traj_data['obs']
