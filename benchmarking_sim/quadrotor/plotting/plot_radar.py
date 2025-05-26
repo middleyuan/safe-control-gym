@@ -1,6 +1,7 @@
 import os
 import sys
 
+# import seaborn
 import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
@@ -23,6 +24,19 @@ def load_metric(transfer_metric, method):
 # get the pyplot default color wheel
 prop_cycle = plt.rcParams['axes.prop_cycle']
 
+# set up Nature sytle plotting
+# set up seaborn style
+# seaborn.set(style='whitegrid', palette='deep')
+# set up matplotlib style
+# plt.style.use('seaborn-whitegrid')
+# plt.rcParams.update({
+#     # 'font.family': 'arial',
+#     'grid.alpha': 0.3,
+#     'savefig.bbox': 'tight',
+#     'savefig.transparent': True,
+#     # 'font.size': 20,
+# })
+
 SYS = 'quadrotor_2D_attitude'
 tag_ctrl_list = {
     'iLQR': 'ilqr',
@@ -32,6 +46,13 @@ tag_ctrl_list = {
     'Nonlinear MPC': 'mpc_acados',
     'F-MPC': 'fmpc',
     'GP-MPC': 'gpmpc_acados_TP' if SYS == 'quadrotor_2D_attitude' else 'gpmpc_acados_TRP',
+    'PPO': 'ppo',
+    'SAC': 'sac',
+    'DPPO': 'dppo',
+    'PPO-MPC': 'ppo_mpc',
+    'PPO-ID': 'ppo_id',
+    'SAC-ID': 'sac_id',
+    'DPPO-ID': 'dppo_id',
 }
 transfer_metric = {}
 episode_len_list = [9, 10, 11, 12, 13, 14, 15]
@@ -54,6 +75,10 @@ plot_colors = {
     'F-MPC': 'darkblue',
     "iLQR": "slateblue",
     'LQR': 'blueviolet',
+    'PPO-MPC': 'tan',
+    # 'PPO-ID': 'orange',
+    # 'SAC-ID': 'red',
+    # 'DPPO-ID': 'tab:pink',
     'MAX': 'none',
     'MIN': 'none',
 }
@@ -88,6 +113,28 @@ inverted_axes_name = [
 ]
 inverted_axes_index = [metric_index[i] for i in inverted_axes_name]
 
+ID_numbers = {
+    'SAC':{
+    'robustness_proc': 12,
+    'robustness_obs': 100,
+    'robustness_param': 5,
+},
+    'PPO':{
+    'robustness_proc': 20,
+    'robustness_obs': 80,
+    'robustness_param': 4,
+},
+    'DPPO':{
+    'robustness_proc':35,
+    'robustness_obs': 90,
+    'robustness_param': 5,
+},
+    # 'PPO-MPC':{
+    # 'robustness_proc': 0,
+    # 'robustness_obs': 1,
+    # 'robustness_param': 2,
+}
+
 def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding=1.25, plt_name=''):
     categories = df._get_numeric_data().columns.tolist()
     data = df[categories].to_dict(orient='list')
@@ -116,6 +163,8 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
 
     normalized_data = {key: np.array(value) / max_values[key] + lower_padding for key, value in data.items()}
 
+    # normalized ID numbers
+    # ID_normalized = {key: np.array(value) / max_values[key] + lower_padding for key, value in ID_numbers.items()}
     num_vars = len(data.keys()) # number of axes
     tiks = list(data.keys())
     tiks += tiks[:1]
@@ -168,7 +217,9 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
             elif _x == angles[metric_index['model_complexity']]:
                 if t == 1: t = 'Model-free'
                 if t == 40: t = '   Linear\n   model'
-                if t == 80: t = 'Nonlinear\n   model'
+                if t == 80: t = '   Partially uncertain \n nonlinear model'
+                if model_name == 'PID': t = '   Kinematic \n   model'
+                if t == 120: t = 'Perfect nonlinear\n   model'
             elif _x == angles[metric_index['robustness_param']]:
                 t = f'{t:.1f}' if isinstance(t, float) else str(t)
             else:
@@ -192,6 +243,19 @@ def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding
                 ax.text(_x - 0., _y, t, size=small_text_size)
             else: # shift all the other axes 
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
+            
+            # # plot extra dot for ID numbers
+            # if model_name in ID_normalized.keys():
+            #     if _x == angles[metric_index['robustness_proc']]:
+            #         # plot a dot for the ID number
+            #         ax.scatter(_x, ID_normalized[model_name]['robustness_proc'],
+            #                 facecolor=plot_colors[model_name], s=100, edgecolor='black', linewidth=1)
+            #     if _x == angles[metric_index['robustness_obs']]:
+            #         ax.scatter(_x, ID_numbers[model_name]['robustness_obs'],
+            #                 facecolor=plot_colors[model_name], s=100, edgecolor='black', linewidth=1)
+            #     if _x == angles[metric_index['robustness_param']]:
+            #         ax.scatter(_x, ID_numbers[model_name]['robustness_param'],
+            #                 facecolor=plot_colors[model_name], s=100, edgecolor='black', linewidth=1)
     
     # add additional text for robustness axes
     ax.text(angles[metric_index['robustness_obs']], 1.25, 'Robustness', size=small_text_size)
@@ -215,12 +279,16 @@ slow_performance = [transfer_metric['GP-MPC']['rmse'][-1],  # GP-MPC
                    transfer_metric['Linear MPC']['rmse'][-1], # Linear-MPC
                    transfer_metric['Nonlinear MPC']['rmse'][-1],  # MPC
                    transfer_metric['F-MPC']['rmse'][-1], # F-MPC
-                   0.15347746,  # PPO
-                   0.11081217,  # SAC
-                   0.16864583,  # DPPO
+                   0.107995445,  # PPO
+                   0.08379055,  # SAC
+                   0.13267572,  # DPPO
+                   0.01077949, # PPO-MPC
                    transfer_metric['PID']['rmse'][-1], # PID
                    transfer_metric['iLQR']['rmse'][-1], # iLQR
                    transfer_metric['LQR']['rmse'][-1], # LQR
+                #    0.12597461,  # PPO-ID
+                #    0.26743613,  # SAC-ID
+                #    0.00123366,  # DPPO-ID
 ]
 
 fast_performance = [
@@ -228,16 +296,18 @@ fast_performance = [
     transfer_metric['Linear MPC']['rmse'][0],
     transfer_metric['Nonlinear MPC']['rmse'][0],
     transfer_metric['F-MPC']['rmse'][0],
-    0.1233724,
-    0.12137596,
-    0.13649782,
+    0.11419083, # PPO
+    0.20906559, # SAC
+    0.14269699, # DPPO
+    0.04358512, # PPO-MPC
     transfer_metric['PID']['rmse'][0], 
     transfer_metric['iLQR']['rmse'][0], 
     transfer_metric['LQR']['rmse'][0], 
+    # 0.1367247, # PPO-ID
+    # 0.26879758, # SAC-ID
+    # 0.20101124, # DPPO-ID
 ]
 
-# worst_generalization_performance = [max(transfer_metric[method]['rmse']) \
-#                                     for method in tag_ctrl_list.keys()] 
 worst_generalization_performance = [
     max(i, j) for i, j in zip(fast_performance, slow_performance)
 ]
@@ -245,15 +315,18 @@ print('worst_generalization_performance:', worst_generalization_performance)
 
 performance = [transfer_metric['GP-MPC']['rmse'][2],   # GP-MPC
                transfer_metric['Linear MPC']['rmse'][2],   # Linear-MPC
-            #    transfer_metric['Nonlinear MPC']['rmse'][2],   # MPC
-               0.017000,   # MPC
+               transfer_metric['Nonlinear MPC']['rmse'][2],   # MPC
                transfer_metric['F-MPC']['rmse'][2],   # F-MPC
-               0.021604097983791027,  # PPO
-               0.04410137020535634,  # SAC
-               0.03087288620530012,  # DPPO
+               0.012809196573431799,  # PPO
+               0.032350691213897304,  # SAC
+               0.021298943332121172,  # DPPO
+               0.01362814727788425, # PPO-MPC
                transfer_metric['PID']['rmse'][2], # PID
                transfer_metric['iLQR']['rmse'][2], # iLQR
                transfer_metric['LQR']['rmse'][2], # LQR
+                # 0.012809196573431799,  # PPO-ID
+                # 0.032350691213897304,  # SAC-ID
+                # 0.021298943332121172,  # DPPO-ID
                ]
 inference_time = [transfer_metric['GP-MPC']['inference_time'],  # GP-MPC
                   transfer_metric['Linear MPC']['inference_time'],  # Linear-MPC
@@ -262,68 +335,93 @@ inference_time = [transfer_metric['GP-MPC']['inference_time'],  # GP-MPC
                   7.31e-5, # PPO
                   8.72e-5, # SAC
                   7.28e-5, # DPPO
+                  2.25e-3, # PPO-MPC
                   transfer_metric['PID']['inference_time'],  # PID
                   transfer_metric['iLQR']['inference_time'],  # iLQR
                   transfer_metric['LQR']['inference_time'],  # LQR
+                    # 7.31e-5, # PPO-ID
+                    # 8.72e-5, # SAC-ID
+                    # 7.28e-5, # DPPO-ID
+
                   ]
 model_complexity = [80, # GP-MPC
                     40, # Linear-MPC
-                    80, # MPC
-                    80, # F-MPC
+                    120, # MPC
+                    120, # F-MPC
                     1, # PPO
                     1, # SAC
                     1, # DPPO
-                    1, # PID
-                    80, # iLQR
+                    80, # PPO-MPC
+                    80, # PID
+                    120, # iLQR
                     40, # LQR 
+                    # 1, # PPO-ID
+                    # 1, # SAC-ID
+                    # 1, # DPPO-ID
                     ]
 sampling_complexity = [ int(660),
                         int(1),
                         int(1),
                         int(1),
-                        int(2.5 * 1e5), # PPO
-                        int(1.32 * 1e5), # SAC
-                        int(4.09 * 1e5), # DPPO
+                        int(1e6), # PPO
+                        int(0.8e6), # SAC
+                        int(1e6), # DPPO
+                        int(0.4e6), # PPO-MPC
                         int(1),
                         int(1),
                         int(1),
+                        # int(1e6), # PPO-ID
+                        # int(0.8e6), # SAC-ID
+                        # int(1e6), # DPPO-ID
                        ]
-robustness_proc = [ 5, # GP-MPC
+robustness_proc = [ 4, # GP-MPC
                     10, # Linear-MPC
-                    4, # MPC
+                    2, # MPC
                     3, # F-MPC
                     4, # PPO
-                    10, # SAC
-                    3, # DPPO
+                    6, # SAC
+                    7, # DPPO
+                    3, # PPO-MPC
                     10, # PID
-                    4, # iLQR
-                    15, # LQR
+                    2, # iLQR
+                    20, # LQR
+                    # ID_numbers['PPO']['robustness_proc'], # PPO-ID
+                    # ID_numbers['SAC']['robustness_proc'], # SAC-ID
+                    # ID_numbers['DPPO']['robustness_proc'], # DPPO-ID
               ]
 
 robustness_obs = [
-    60, # GP-MPC
+    70, # GP-MPC
     120, # Linear-MPC
-    100, # MPC
+    60, # MPC
     100, # F-MPC
-    15, # PPO
+    18, # PPO
     100, # SAC
-    15, # DPPO
+    25, # DPPO
+    45, # PPO-MPC
     120, # PID
-    70, # iLQR
+    40, # iLQR
     120, # LQR   
+    # ID_numbers['PPO']['robustness_obs'], # PPO-ID
+    # ID_numbers['SAC']['robustness_obs'], # SAC-ID
+    # ID_numbers['DPPO']['robustness_obs'], # DPPO-ID
 ]
 
 robustness_param = [
-    5.1, # GP-MPC
-    5.1, # Linear-MPC
-    3.4, # MPC
+    4.8, # GP-MPC
+    4.8, # Linear-MPC
+    1.4, # MPC
     2.8, # F-MPC
-    1.0, # PPO
+    1.2, # PPO
     2.0, # SAC
-    1.2, # DPPO
+    1.8, # DPPO
+    2.8, # PPO-MPC
     4.8, # PID
-    2.8, # iLQR
-    5.1, # LQR
+    1.2, # iLQR
+    4.8, # LQR
+    # ID_numbers['PPO']['robustness_param'], # PPO-ID
+    # ID_numbers['SAC']['robustness_param'], # SAC-ID
+    # ID_numbers['DPPO']['robustness_param'], # DPPO-ID
 ]
 
 data = [
@@ -354,12 +452,16 @@ for i in metric_index.values():
 # manually tune some axes
 # min_values[metric_index['fast']] = 0.25 # gen performance fast
 # min_values[metric_index['performance']] = 0.0
-max_values[metric_index['performance']] = 0.02
+max_values[metric_index['performance']] = 0.05
+min_values[metric_index['performance']] = 0.005
 max_values[metric_index['worst_generalization_performance']] = 0.2
 min_values[metric_index['worst_generalization_performance']] = 0.033
 min_values[metric_index['inference_time']] = 1.0e-3
 # max_values[metric_index['robustness_proc']] = 50
 max_values[metric_index['robustness_obs']] = 80
+max_values[metric_index['robustness_proc']] = 20
+min_values[metric_index['robustness_proc']] = 2
+
 max_values[metric_index['robustness_param']] = 5.0
 
 # append the max and min values to the data (but only plot empty)
@@ -375,39 +477,51 @@ algos = ['GP-MPC',
          'PPO',
          'SAC',
          'DPPO',
+         'PPO-MPC',
          'PID',
          'iLQR',
          'LQR',
+         'PPO-ID',
+         'SAC-ID',
+         'DPPO-ID',
          'MAX', 'MIN']
 
 # read the argv
 if len(sys.argv) > 1:
     # masks_algo = [int(i) for i in sys.argv[1:]]
     algo = sys.argv[1]
-    # masks_algo.append(-2, -1)
-    # masks_algo.append()
     if algo == 'GP-MPC':
-        masks_algo = [0, -2, -1]
+        masks_algo = [0]
     elif algo == 'PPO':
-        masks_algo = [4, -2, -1]
+        masks_algo = [4]
     elif algo == 'SAC':
-        masks_algo = [5, -2, -1]
+        masks_algo = [5]
     elif algo == 'DPPO':
-        masks_algo = [6, -2, -1]
+        masks_algo = [6]
+    elif algo == 'PPO-MPC':
+        masks_algo = [7]
     elif algo == 'PID':
-        masks_algo = [7, -2, -1]
+        masks_algo = [8]
     elif algo == 'iLQR':
-        masks_algo = [8, -2, -1]
+        masks_algo = [9]
     elif algo == 'LQR':
-        masks_algo = [9, -2, -1]
+        masks_algo = [10]
     elif algo == 'F-MPC':
-        masks_algo = [3, -2, -1]
+        masks_algo = [3]
     elif algo == 'Nonlinear-MPC':
-        masks_algo = [2, -2, -1]
+        masks_algo = [2]
     elif algo == 'Linear-MPC':
-        masks_algo = [1 , -2, -1]
+        masks_algo = [1 ]
+    elif algo == 'PPO-ID':
+        masks_algo = [11]
+    elif algo == 'SAC-ID':
+        masks_algo = [12]
+    elif algo == 'DPPO-ID':
+        masks_algo = [13]
 else:
-    masks_algo = [7,  -2, -1] # PID
+    masks_algo = [8] # PID
+masks_algo += [-2, -1]  # add MAX and MIN
+
 data = np.array(data)[:, masks_algo]
 data = data.tolist()
 algos = [algos[i] for i in masks_algo]
