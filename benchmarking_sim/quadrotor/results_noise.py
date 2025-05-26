@@ -16,11 +16,13 @@ gp_model_tag = sys.argv[3] if len(sys.argv) > 3 else ''
 # noise factor test
 additional = '_11'
 if noise_type == 'obs_noise':
-    noise_factor_list = [0,1,2,3,4,5,10,15,20,25,\
-                        30,40,50,60,70,80,90,100]
+    noise_factor_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,\
+                         12, 14, 16, 18, 20, 25, 30, 35, 40, \
+                         45, 50, 60, 70, 80, 90, 100]
 elif noise_type == 'proc_noise':
-    noise_factor_list = [0,1,2,3,4,5,10,15,20,25,\
-                         30,40,50]
+    noise_factor_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,\
+                         12, 14, 16, 18, 20, 25, 30, 35, 40, \
+                         45, 50, 60, 70, 80, 90, 100]
 num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)

@@ -16,6 +16,8 @@ additional = '_downwash'
 num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
+dw_height_list = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, \
+                3.0, 3.5, 4.0, 4.5, 5.0]
 
 time1 = time.perf_counter()
 # for dw_height_scale in np.arange(0.0, 1.0, 0.05):

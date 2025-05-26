@@ -21,7 +21,11 @@ gp_model_tag = sys.argv[3] if len(sys.argv) > 3 else ''
 additional = '_11'
 # noise_factor_list = [0,1,2,3,4,5,10,15,20,25] #,\
                     #  30,40,50,60,70,80,90,100]
-noise_factor_list = np.arange(0, 5.0, 0.2)
+# noise_factor_list = np.arange(0, 5.0, 0.2)
+noise_factor_list = [0, 0.01, 0.02, 0.05, 0.1, \
+                     0.2, 0.4, 0.6, 0.8, 1.0, 1.2, \
+                     1.4, 1.6, 1.8, 2.0, 2.2, 2.4, \
+                     2.6, 2.8, 3.0, 3.5, 4.0, 4.5, 5.0]
 num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
