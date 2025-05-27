@@ -219,15 +219,15 @@ class MLPActorCritic(nn.Module):
         # Value function.
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
-    def step(self, obs):
-        dist, _, info, results_dict, optimal_flag = self.actor(obs)
+    def step(self, obs, info=None):
+        dist, _, info, results_dict, optimal_flag = self.actor(obs, info=info)
         a = dist.sample()
         logp_a = dist.log_prob(a)
         v = self.critic(obs)
         return a.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy(), info, results_dict, optimal_flag
 
-    def act(self, obs):
-        dist, _, _, _, _ = self.actor(obs)
+    def act(self, obs, info=None):
+        dist, _, _, _, _ = self.actor(obs, info=info)
         a = dist.mode()
         return a.cpu().numpy()
 
@@ -281,14 +281,15 @@ class MPCActor(nn.Module):
         self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc)),
                            'f': np.array(self.model_param)}
 
-    def forward(self, obs, act=None):
+    def forward(self, obs, act=None, info=None):
         theta = self.get_theta_param(obs)
+        traj_param = self.get_references(info)
         if obs.ndim > 1:
             action, info, results_dict, optimal_flag = self.mpc.select_action_batch(obs, theta.numpy(),
-                                                                                    self.traj_param.numpy())
+                                                                                    traj_param)
         else:
             action, info, results_dict, optimal_flag = self.mpc.select_action(obs, theta.numpy(),
-                                                                              self.traj_param.numpy())
+                                                                              traj_param)
         action = torch.FloatTensor(np.array(action))
         optimal_flag = torch.FloatTensor(np.array(optimal_flag))
         dist = self.dist_fn(action)
@@ -314,11 +315,33 @@ class MPCActor(nn.Module):
     def get_theta_param(self, obs):
         if obs.ndim > 1:
             theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
-            theta += torch.rand_like(theta) * 1e-5
         else:
             theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
-            theta += torch.rand_like(theta) * 1e-5
+        theta += torch.rand_like(theta) * 1e-5
         return theta
+
+    def get_references(self, info_batch):
+        """Constructs reference states along mpc horizon.(nx, T+1)."""
+        goal_states_batch = []
+        for info in info_batch:
+            traj_step = info['current_step']
+            traj_ref = info['x_ref'].T
+            if self.mpc.env.TASK == Task.STABILIZATION:
+                # Repeat goal state for horizon steps.
+                goal_states = np.tile(self.mpc.env.X_GOAL.reshape(-1, 1), (1, self.mpc.T + 1))
+            elif self.mpc.env.TASK == Task.TRAJ_TRACKING:
+                # Slice trajectory for horizon steps, if not long enough, repeat last state.
+                start = min(traj_step, traj_ref.shape[-1])
+                end = min(traj_step + self.mpc.T + 1, traj_ref.shape[-1])
+                remain = max(0, self.mpc.T + 1 - (end - start))
+                goal_states = np.concatenate([
+                    traj_ref[:, start:end],
+                    np.tile(traj_ref[:, -1:], (1, remain))
+                ], -1)
+            else:
+                raise Exception('Reference for this mode is not implemented.')
+            goal_states_batch.append(goal_states)
+        return goal_states_batch  # list of (nx, T+1).
 
     def get_ref_param(self, info_batch):
         goal_states_batch = torch.FloatTensor()
@@ -714,10 +737,6 @@ class MPCPolicyFunction:
             start = min(traj_step, self.traj.shape[-1])
             end = min(traj_step + self.T + 1, self.traj.shape[-1])
             remain = max(0, self.T + 1 - (end - start))
-            # goal_states = np.concatenate([
-            #     self.traj[:, start:end] + 1.0 * traj_change[:, start:end],
-            #     np.tile(self.traj[:, -1:] + 1.0 * traj_change[:, -1:], (1, remain))
-            # ], -1)
             goal_states = np.concatenate([
                 traj_ref[:, start:end],
                 np.tile(traj_ref[:, -1:], (1, remain))
@@ -746,8 +765,9 @@ class MPCPolicyFunction:
 
         # Collect the fixed param
         # Assign reference trajectory within horizon.
-        goal_states = self.get_references(self.traj_step, traj_ref)
         fixed_param = obs[:self.model.nx, None]
+        # goal_states = self.get_references(self.traj_step, traj_ref)
+        goal_states = traj_ref[0].copy()
         ref_param = goal_states.T.reshape(-1, 1)
         # Collect learnable parameters
         p_param = np.concatenate((fixed_param, ref_param, theta[:, None]))[:, 0]
@@ -804,19 +824,20 @@ class MPCPolicyFunction:
         lang_mult_fn = solver_dict['lang_mult_fn_parallel']
         rkkt_fn = solver_dict['rkkt_fn_parallel']
         traj_step = self.traj_step
-        goal_states = self.get_references(traj_step, traj_ref)
+        # goal_states = self.get_references(traj_step, traj_ref)
         if self.mode == 'tracking':
             self.traj_step += 1
 
         # eval_data_batch = []
-        x0, fixed_p = [], []
-        ref_param = goal_states.T.reshape(-1, 1).repeat(obs_batch.shape[0], 1)
+        x0, fixed_p, ref_p = [], [], []
+        # ref_param = goal_states.T.reshape(-1, 1).repeat(obs_batch.shape[0], 1)
         lbg = con_lbg.full().repeat(obs_batch.shape[0], 1)
         ubg = con_ubg.full().repeat(obs_batch.shape[0], 1)
         if not obs_batch.ndim > 1:
             obs_batch = obs_batch[None, :]
         for i, obs in enumerate(obs_batch):
             fixed_param = obs[:self.model.nx]
+            ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
             opt_vars_init = np.zeros((solver_dict['opt_vars'].shape[0], solver_dict['opt_vars'].shape[1]))
             if self.infos is not None:  # shift previous solutions by 1 step based on last soln
                 opt_vars_init = self.infos[i]['opt_var']
@@ -826,9 +847,11 @@ class MPCPolicyFunction:
 
             x0.append(opt_vars_init[:, 0])
             fixed_p.append(fixed_param)
+            ref_p.append(ref_param)
         x0 = np.array(x0).T
         fixed_p = np.array(fixed_p).T
-        p = np.concatenate((fixed_p, ref_param, theta.T), axis=0)
+        ref_p = np.array(ref_p).T
+        p = np.concatenate((fixed_p, ref_p, theta.T), axis=0)
         soln_batch = solver(x0=x0, p=p, lbg=lbg, ubg=ubg)
         lamb_batch, mu_batch = lang_mult_fn(soln_batch['lam_g'])
         z = cs.vertcat(soln_batch['x'], lamb_batch, mu_batch)
@@ -848,7 +871,7 @@ class MPCPolicyFunction:
                 'horizon_states': deepcopy(x_prev),
                 'horizon_inputs': deepcopy(u_prev),
                 'horizon_slacks': deepcopy(sigma_prev),
-                'goal_states': deepcopy(goal_states)
+                'goal_states': deepcopy(ref_p[:, i])
             }
             # results_dict['t_wall'].append(opti.stats()['t_wall_total'])
 
@@ -863,7 +886,7 @@ class MPCPolicyFunction:
                 'success': optimal_batch[i],
                 'opt_var': opt_vars,
                 'fixed_param': deepcopy(fixed_p[:, i]),
-                'ref_param': deepcopy(ref_param[:, i]),
+                'ref_param': deepcopy(ref_p[:, i]),
                 'theta_param': deepcopy(theta[i, :]),
                 'traj_step': deepcopy(self.traj_step) - 1
             }
@@ -892,11 +915,12 @@ class MPCPolicyFunction:
             obs_batch = obs_batch[None, :]
         for i, obs in enumerate(obs_batch):
             info = info_batch[i]
-            traj_step = info['traj_step']
             opt_vars_init = info['opt_var']
-            goal_states = self.get_references(traj_step, traj_ref)
             fixed_param = obs[:self.model.nx]
-            ref_param = goal_states.T.reshape(-1, 1)[:, 0]
+            ref_param = info['ref_param']
+            # traj_step = info['traj_step']
+            # goal_states = self.get_references(traj_step, traj_ref)
+            # ref_param = goal_states.T.reshape(-1, 1)[:, 0]
 
             x0.append(opt_vars_init)
             fixed_p.append(fixed_param)
