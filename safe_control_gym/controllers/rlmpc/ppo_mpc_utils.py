@@ -156,6 +156,8 @@ class PPO_MPC_Agent:
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     (theta_loss.sum()).backward()
                     self.actor_opt.step()
+                    with torch.no_grad():
+                        self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
 
                     p_loss_epoch += policy_loss.item()
                     e_loss_epoch += entropy_loss.item()
@@ -665,7 +667,8 @@ class MPCPolicyFunction:
         dRdP = cs.horzcat(dRdP_theta)
 
         # Generate sensitivity of the optimal solution
-        dzdP = -cs.inv(dRdz) @ dRdP
+        # dzdP = -cs.inv(dRdz) @ dRdP
+        dzdP = -cs.solve(dRdz, dRdP)
         dPi = dzdP[nx: nx + nu, :].T
         dPi_zeros = cs.MX.zeros(dPi.shape)
         f_true = cs.Function('f_true', [z, fixed_param, ref_param, theta], [dPi])
@@ -1086,8 +1089,8 @@ def _create_semi_definite_matrix(n):
     n_param = n
     P = cs.MX.sym('P', n)
     W = cs.diag(P)
-    WW = cs.sqrt(W.T @ W)
-    return WW, P, n_param
+    # WW = cs.sqrt(W.T @ W)
+    return W, P, n_param
 
 
 def random_sample(indices, batch_size, drop_last=True):

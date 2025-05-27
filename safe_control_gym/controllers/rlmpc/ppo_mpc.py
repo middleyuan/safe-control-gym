@@ -244,7 +244,8 @@ class PPO_MPC(BaseController):
         start = time.time()
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                act, v, logp, agent_info, results_dict, optimal = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
+                act, v, logp, agent_info, results_dict, optimal = self.agent.ac.step(
+                    torch.FloatTensor(obs).to(self.device))
             next_obs, rew, done, info = self.venv.step(act)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
