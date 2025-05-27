@@ -76,9 +76,6 @@ plot_colors = {
     "iLQR": "slateblue",
     'LQR': 'blueviolet',
     'PPO-MPC': 'tan',
-    # 'PPO-ID': 'orange',
-    # 'SAC-ID': 'red',
-    # 'DPPO-ID': 'tab:pink',
     'MAX': 'none',
     'MIN': 'none',
 }
@@ -129,10 +126,6 @@ ID_numbers = {
     'robustness_obs': 90,
     'robustness_param': 5,
 },
-    # 'PPO-MPC':{
-    # 'robustness_proc': 0,
-    # 'robustness_obs': 1,
-    # 'robustness_param': 2,
 }
 
 def spider(df, *, id_column, title=None, subtitle=None, max_values=None, padding=1.25, plt_name=''):
@@ -286,9 +279,6 @@ slow_performance = [transfer_metric['GP-MPC']['rmse'][-1],  # GP-MPC
                    transfer_metric['PID']['rmse'][-1], # PID
                    transfer_metric['iLQR']['rmse'][-1], # iLQR
                    transfer_metric['LQR']['rmse'][-1], # LQR
-                #    0.12597461,  # PPO-ID
-                #    0.26743613,  # SAC-ID
-                #    0.00123366,  # DPPO-ID
 ]
 
 fast_performance = [
@@ -303,9 +293,6 @@ fast_performance = [
     transfer_metric['PID']['rmse'][0], 
     transfer_metric['iLQR']['rmse'][0], 
     transfer_metric['LQR']['rmse'][0], 
-    # 0.1367247, # PPO-ID
-    # 0.26879758, # SAC-ID
-    # 0.20101124, # DPPO-ID
 ]
 
 worst_generalization_performance = [
@@ -324,9 +311,6 @@ performance = [transfer_metric['GP-MPC']['rmse'][2],   # GP-MPC
                transfer_metric['PID']['rmse'][2], # PID
                transfer_metric['iLQR']['rmse'][2], # iLQR
                transfer_metric['LQR']['rmse'][2], # LQR
-                # 0.012809196573431799,  # PPO-ID
-                # 0.032350691213897304,  # SAC-ID
-                # 0.021298943332121172,  # DPPO-ID
                ]
 inference_time = [transfer_metric['GP-MPC']['inference_time'],  # GP-MPC
                   transfer_metric['Linear MPC']['inference_time'],  # Linear-MPC
@@ -339,10 +323,6 @@ inference_time = [transfer_metric['GP-MPC']['inference_time'],  # GP-MPC
                   transfer_metric['PID']['inference_time'],  # PID
                   transfer_metric['iLQR']['inference_time'],  # iLQR
                   transfer_metric['LQR']['inference_time'],  # LQR
-                    # 7.31e-5, # PPO-ID
-                    # 8.72e-5, # SAC-ID
-                    # 7.28e-5, # DPPO-ID
-
                   ]
 model_complexity = [80, # GP-MPC
                     40, # Linear-MPC
@@ -355,9 +335,6 @@ model_complexity = [80, # GP-MPC
                     80, # PID
                     120, # iLQR
                     40, # LQR 
-                    # 1, # PPO-ID
-                    # 1, # SAC-ID
-                    # 1, # DPPO-ID
                     ]
 sampling_complexity = [ int(660),
                         int(1),
@@ -370,9 +347,6 @@ sampling_complexity = [ int(660),
                         int(1),
                         int(1),
                         int(1),
-                        # int(1e6), # PPO-ID
-                        # int(0.8e6), # SAC-ID
-                        # int(1e6), # DPPO-ID
                        ]
 robustness_proc = [ 4, # GP-MPC
                     10, # Linear-MPC
@@ -385,9 +359,6 @@ robustness_proc = [ 4, # GP-MPC
                     10, # PID
                     2, # iLQR
                     20, # LQR
-                    # ID_numbers['PPO']['robustness_proc'], # PPO-ID
-                    # ID_numbers['SAC']['robustness_proc'], # SAC-ID
-                    # ID_numbers['DPPO']['robustness_proc'], # DPPO-ID
               ]
 
 robustness_obs = [
@@ -402,9 +373,6 @@ robustness_obs = [
     120, # PID
     40, # iLQR
     120, # LQR   
-    # ID_numbers['PPO']['robustness_obs'], # PPO-ID
-    # ID_numbers['SAC']['robustness_obs'], # SAC-ID
-    # ID_numbers['DPPO']['robustness_obs'], # DPPO-ID
 ]
 
 robustness_param = [
@@ -418,10 +386,7 @@ robustness_param = [
     2.8, # PPO-MPC
     4.8, # PID
     1.2, # iLQR
-    4.8, # LQR
-    # ID_numbers['PPO']['robustness_param'], # PPO-ID
-    # ID_numbers['SAC']['robustness_param'], # SAC-ID
-    # ID_numbers['DPPO']['robustness_param'], # DPPO-ID
+    4.2, # LQR
 ]
 
 data = [
@@ -458,11 +423,12 @@ max_values[metric_index['worst_generalization_performance']] = 0.2
 min_values[metric_index['worst_generalization_performance']] = 0.033
 min_values[metric_index['inference_time']] = 1.0e-3
 # max_values[metric_index['robustness_proc']] = 50
-max_values[metric_index['robustness_obs']] = 80
-max_values[metric_index['robustness_proc']] = 20
-min_values[metric_index['robustness_proc']] = 2
-
-max_values[metric_index['robustness_param']] = 5.0
+max_values[metric_index['robustness_obs']] = 120
+min_values[metric_index['robustness_obs']] = 20
+max_values[metric_index['robustness_proc']] = 10
+min_values[metric_index['robustness_proc']] = 1
+max_values[metric_index['robustness_param']] = 4.8
+min_values[metric_index['robustness_param']] = 1.2
 
 # append the max and min values to the data (but only plot empty)
 for i, d in enumerate(data): 
@@ -481,9 +447,9 @@ algos = ['GP-MPC',
          'PID',
          'iLQR',
          'LQR',
-         'PPO-ID',
-         'SAC-ID',
-         'DPPO-ID',
+        #  'PPO-ID',
+        #  'SAC-ID',
+        #  'DPPO-ID',
          'MAX', 'MIN']
 
 # read the argv
