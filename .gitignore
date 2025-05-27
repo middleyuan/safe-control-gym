@@ -179,3 +179,4 @@ benchmarking_sim/quadrotor/plotting/convergence
 # benchmarking_sim/quadrotor/mpc_acados
 gym_backup.zip
 examples/hpo/*
+cluster/
