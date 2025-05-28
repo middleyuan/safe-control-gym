@@ -9,11 +9,8 @@ MPSC_COST='one_step_cost'
 FILTER=True
 SF_PEN=0.3
 
-if [ "$FILTER" == 'True' ]; then
-    TAG="mpsf_${SF_PEN}"
-else
-    TAG=none
-fi
+# TAG="no_noise"
+TAG="noise"
 
 # Train the unsafe controller/agent.
 python3 train_rl.py \
@@ -32,3 +29,6 @@ python3 train_rl.py \
         algo_config.filter_train_actions=${FILTER} \
         algo_config.penalize_sf_diff=${FILTER} \
         algo_config.sf_penalty=${SF_PEN} \
+        task_config.seed=42 \
+        algo_config.seed=42 \
+        sf_config.seed=42

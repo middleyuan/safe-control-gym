@@ -13,12 +13,13 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(plot=False, model='ppo'):
+def run(plot=False, model='ppo', n_episodes=1):
     '''Main function to run MPSC experiments.
 
     Args:
         plot (bool): Whether to plot the results.
         model (str): Optional model name to use for RL agent.
+        n_episodes (int): Number of episodes to run.
 
     Returns:
         X_GOAL (np.ndarray): The goal (stabilization or reference trajectory) of the experiment.
@@ -33,7 +34,7 @@ def run(plot=False, model='ppo'):
     config = fac.merge()
     config.algo_config['training'] = False
     config.task_config['done_on_violation'] = False
-    config.task_config['randomized_init'] = False
+    config.task_config['randomized_init'] = True
 
     system = 'quadrotor_2D_attitude'
 
@@ -52,6 +53,12 @@ def run(plot=False, model='ppo'):
                        config.task,
                        **config.task_config)
 
+    config_copy = config.copy()
+    config_copy.task_config.disturbances = None
+    sf_env_func = partial(make,
+                          config_copy.task,
+                          **config_copy.task_config)
+
     # Setup controller.
     ctrl = make(config.algo,
                 env_func,
@@ -67,12 +74,12 @@ def run(plot=False, model='ppo'):
 
     # Run without safety filter
     experiment = BaseExperiment(env, ctrl)
-    uncert_results, uncert_metrics = experiment.run_evaluation(n_episodes=1)
+    uncert_results, uncert_metrics = experiment.run_evaluation(n_episodes=n_episodes)
     ctrl.reset()
 
     # Setup MPSC.
     safety_filter = make(config.safety_filter,
-                         env_func,
+                         sf_env_func,
                          **config.sf_config)
     safety_filter.reset()
 
@@ -84,7 +91,7 @@ def run(plot=False, model='ppo'):
 
     # Run with safety filter
     experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)
-    cert_results, cert_metrics = experiment.run_evaluation(n_episodes=1)
+    cert_results, cert_metrics = experiment.run_evaluation(n_episodes=n_episodes)
     experiment.close()
     safety_filter.close()
 
@@ -130,14 +137,20 @@ def run(plot=False, model='ppo'):
     return env.X_GOAL, uncert_results, uncert_metrics, cert_results, cert_metrics
 
 
-def run_multiple_models(plot, all_models):
-    '''Runs all models at every saved starting point.'''
+def run_multiple_models(plot, all_models, n_episodes=10):
+    '''Runs all models at every saved starting point.
+
+    Args:
+        plot (bool): Whether to plot the results.
+        all_models (list): List of model names to run.
+        n_episodes (int): Number of episodes to run.
+    '''
 
     fac = ConfigFactory()
     config = fac.merge()
 
     for model in all_models:
-        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, model=model)
+        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, model=model, n_episodes=n_episodes)
         all_uncert_results, all_cert_results = uncert_results, cert_results
         for key in all_cert_results.keys():
             if key in all_uncert_results:
@@ -162,5 +175,5 @@ def run_multiple_models(plot, all_models):
 
 
 if __name__ == '__main__':
-    # run(plot=True, model='mpsf')
-    run_multiple_models(plot=False, all_models=['none'])
+    # run(plot=True, model='noise', n_episodes=1)
+    run_multiple_models(plot=False, all_models=['noise'], n_episodes=10)

@@ -39,6 +39,12 @@ def train():
                        **config.task_config
                        )
 
+    config_copy = config.copy()
+    config_copy.task_config.disturbances = None
+    sf_env_func = partial(make,
+                          config_copy.task,
+                          **config_copy.task_config)
+
     # Create the controller/control_agent
     ctrl = make(config.algo,
                 env_func,
@@ -50,7 +56,7 @@ def train():
     # Setup MPSC
     if config.algo in ['ppo', 'sac']:
         safety_filter = make(config.safety_filter,
-                             env_func,
+                             sf_env_func,
                              **config.sf_config)
         safety_filter.reset()
 
