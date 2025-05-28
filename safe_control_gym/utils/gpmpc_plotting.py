@@ -144,16 +144,21 @@ def get_constraint_violations(test_runs,
         num_samples += n
     return num_train_samples_by_epoch, violations_per_epoch, mean_violations_per_epoch, max_violations_per_epoch
 
-def plot_constraint_violation(viol_samp, viols, dir):
-    violations = np.array(viols)
+def plot_constraint_violation(viol_samp, 
+                              num_viols, 
+                              dir,
+                              num_state_violations=None,
+                              num_input_violations=None):
+    violations = np.array(num_viols)
     train_time = np.array(viol_samp)
-    mean_viol = np.mean(violations, axis=1)
-    max = np.max(violations, axis=1)
-    min = np.min(violations, axis=1)
+    # mean_viol = np.mean(violations, axis=1)
+    # max = np.max(violations, axis=1)
+    # min = np.min(violations, axis=1)
 
-    plt.plot(train_time, mean_viol, label='mean')
-    plt.plot(train_time, max, label='max')
-    plt.plot(train_time, min, label='min')
+    # plt.plot(train_time, mean_viol, label='mean')
+    # plt.plot(train_time, max, label='max')
+    # plt.plot(train_time, min, label='min')
+    plt.plot(train_time, violations, label='violations')
     plt.legend()
     plt.xlabel('Train Steps')
     plt.ylabel('Number of violations')
@@ -163,12 +168,21 @@ def plot_constraint_violation(viol_samp, viols, dir):
     plt.cla()
     plt.clf()
 
-    data = np.vstack((train_time, mean_viol, max, min)).T
+    # data = np.vstack((train_time, mean_viol, max, min)).T
+    header = 'Train Steps, Violations'
+    data = np.vstack((train_time, violations))
+    if num_state_violations is not None:
+        data = np.vstack((data, num_state_violations))
+        header += ', Num State Violations'
+    if num_input_violations is not None:
+        data = np.vstack((data, num_input_violations))
+        header += ', Num Input Violations'
     fname = os.path.join(dir, stem + '.csv')
     np.savetxt( fname,
-                data,
+                data.T,
                 delimiter=',',
-                header='Train Steps (s),Mean,Max,Min')
+                header=header)
+                # header='Train Steps (s),Mean,Max,Min')
     
 def get_average_rmse_error(runs):
     num_epochs = len(runs)
@@ -350,6 +364,23 @@ def make_quad_plots(test_runs, train_runs, trajectory, dir):
     # rmse_error = get_quad_average_rmse_error(test_runs, trajectory
     rmse_error = [test_runs[epoch][0][1]['rmse'] for epoch in range(num_epochs)]
     plot_learning_curve(rmse_error, num_points_per_epoch, 'rmse_error_learning_curve', fig_dir)
+    # plot constraint violation
+    constraint_values = [[test_runs[epoch][0][0]['info'][0][i]['constraint_values'] \
+            for i in range(1, len(test_runs[epoch][0][0]['info'][0]))]  for epoch in range(num_epochs)]
+    num_constraint_violations = [test_runs[epoch][0][1]['constraint_violation'] for epoch in range(num_epochs)]
+    # state_violations = [np.any(constraint_values[i][:2*nx] > 0) for i in range(len(constraint_values))]
+    state_violations = [[np.any(constraint_values[epoch][i][:2*nx] > 0) \
+         for i in range(len(constraint_values[epoch]))] for epoch in range(num_epochs)]
+    num_state_violations = [np.sum(state_violations[epoch]) for epoch in range(num_epochs)]
+    input_violations = [[np.any(constraint_values[epoch][i][2*nx:] > 0) \
+         for i in range(len(constraint_values[epoch]))] for epoch in range(num_epochs)]
+    num_input_violations = [np.sum(input_violations[epoch]) for epoch in range(num_epochs)]
+    
+    plot_constraint_violation(num_points_per_epoch, 
+                              num_constraint_violations, 
+                              fig_dir,
+                              num_state_violations=num_state_violations,
+                              num_input_violations=num_input_violations,)
     # rmse_error_xz = get_quad_average_rmse_error_xz_only(test_runs, trajectory)
     # plot_learning_curve(rmse_error_xz, num_points_per_epoch, 'rmse_xz_error_learning_curve', fig_dir)
     # rmse_error_state = get_quad_average_rmse_error_xyz(test_runs, trajectory)

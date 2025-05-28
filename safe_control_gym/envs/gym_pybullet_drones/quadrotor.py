@@ -732,14 +732,14 @@ class Quadrotor(BaseAviary):
                             self.disturbances[keys].disturbances[0].std =\
                                 self.disturbances[keys].disturbances[0].std * np.random.choice(values[0]['scale'])
 
+        # Update task goals
+        # NOTE: Task info will be randomized when set_goals() is called.
+        self.set_goals()
+
         # Update BaseAviary internal variables before calling self._get_observation().
         self._update_and_store_kinematic_information()
         obs, info = self._get_observation(), self._get_reset_info()
         obs, info = super().after_reset(obs, info)
-
-        # Update task goals
-        # NOTE: Task info will be randomized when set_goals() is called.
-        self.set_goals()
 
         # reset disturbance model
         if 'downwash' in self.disturbances:

@@ -230,7 +230,7 @@ class PPO_MPC(BaseController):
 
         with torch.no_grad():
             # obs = torch.FloatTensor(obs).to(self.device)
-            action = self.agent.ac.act(obs)
+            action = self.agent.ac.act(obs, info=info)
         return action
 
     def train_step(self):
@@ -242,10 +242,13 @@ class PPO_MPC(BaseController):
                              self.rollout_batch_size)
         obs = self.obs
         start = time.time()
+        agent_info = []
+        for env in self.venv.envs:
+            agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                act, v, logp, agent_info, results_dict, optimal = self.agent.ac.step(
-                    torch.FloatTensor(obs).to(self.device))
+                act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(
+                    torch.FloatTensor(obs).to(self.device), info=agent_info)
             next_obs, rew, done, info = self.venv.step(act)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
@@ -253,6 +256,7 @@ class PPO_MPC(BaseController):
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
+                agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
                 if 'terminal_info' not in inf:
                     continue
                 inff = inf['terminal_info']
@@ -264,7 +268,7 @@ class PPO_MPC(BaseController):
                     self.agent.reset()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
-                 'info': agent_info, 'results_dict': results_dict, 'optimal': optimal}
+                 'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
             )
             obs = next_obs
         self.obs = obs
@@ -311,13 +315,14 @@ class PPO_MPC(BaseController):
             #     env.add_tracker('mse', 0, mode='queue')
             pass
 
-        obs, info = env.reset()
+        obs, env_info = env.reset()
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
+        agent_info= [{'current_step': 0, 'x_ref': env.X_GOAL}]
         mse, ep_rmse = [], []
         while len(ep_returns) < n_episodes:
-            action = self.select_action(obs=obs, info=info)
+            action = self.select_action(obs=obs, info=agent_info)
             obs, _, done, info = env.step(action)
             mse.append(info['mse'])
             if render:
@@ -331,9 +336,11 @@ class PPO_MPC(BaseController):
                 mse = []
                 ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
-                obs, _ = env.reset()
+                obs, env_info = env.reset()
+                info['current_step'] = 0
                 self.agent.reset()
             obs = self.obs_normalizer(obs)
+            agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
         ep_returns = np.asarray(ep_returns)
