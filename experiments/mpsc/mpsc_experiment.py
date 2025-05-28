@@ -7,7 +7,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 
-from safe_control_gym.experiments.base_experiment import BaseExperiment, MetricExtractor
+from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
@@ -150,26 +150,18 @@ def run_multiple_models(plot, all_models, n_episodes=10):
     config = fac.merge()
 
     for model in all_models:
-        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, model=model, n_episodes=n_episodes)
-        all_uncert_results, all_cert_results = uncert_results, cert_results
-        for key in all_cert_results.keys():
-            if key in all_uncert_results:
-                all_uncert_results[key].append(uncert_results[key][0])
-            all_cert_results[key].append(cert_results[key][0])
+        X_GOAL, uncert_results, uncert_metrics, cert_results, cert_metrics = run(plot=plot, model=model, n_episodes=n_episodes)
 
-        met = MetricExtractor()
-        uncert_metrics = met.compute_metrics(data=all_uncert_results, max_steps=660)
-        cert_metrics = met.compute_metrics(data=all_cert_results, max_steps=66)
-
-        all_results = {'uncert_results': all_uncert_results,
+        all_results = {'uncert_results': uncert_results,
                        'uncert_metrics': uncert_metrics,
-                       'cert_results': all_cert_results,
+                       'cert_results': cert_results,
                        'cert_metrics': cert_metrics,
                        'config': config,
                        'X_GOAL': X_GOAL}
 
         if config.sf_config.mpc_mode:
             model = 'mpc'
+
         with open(f'./results_mpsc/{model}.pkl', 'wb') as f:
             pickle.dump(all_results, f)
 
