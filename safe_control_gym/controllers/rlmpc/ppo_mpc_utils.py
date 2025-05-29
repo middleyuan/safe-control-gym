@@ -262,12 +262,13 @@ class MPCActor(nn.Module):
         self.q_mpc = actor_config['q_mpc']
         self.r_mpc = actor_config['r_mpc']
         self.qt_mpc = actor_config['qt_mpc']
+        self.back_off = actor_config['back_off']
         self.model_param = actor_config['model_param']
         self._init_param_val()
         self.n_learnable_param = 0
         for k in self.param_dict.keys():
             self.n_learnable_param += self.param_dict[k].shape[0]
-        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.model_param))
+        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.back_off, self.model_param))
         self.mpc_param = nn.Parameter(torch.FloatTensor(temp))
         self.param_net = MLP(obs_dim, self.n_learnable_param, hidden_dims, activation)
         # self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
@@ -279,6 +280,7 @@ class MPCActor(nn.Module):
 
     def _init_param_val(self):
         self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
+                           'b': np.array(self.back_off),
                            'f': np.array(self.model_param)}
 
     def forward(self, obs, act=None, info=None):
@@ -535,6 +537,7 @@ class MPCPolicyFunction:
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
+        back_off_param = cs.MX.sym("back_off_param", nx)
         # Model
         model_param = cs.MX.sym('f_param', npl)
 
@@ -586,15 +589,15 @@ class MPCPolicyFunction:
             # State bounds
             for sc_i, state_constraint in enumerate(self.state_constraints_sym):
                 cost += w @ sigma_var[:, i]
-                con_list.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i])
-                con_list.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i])
+                con_list.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i] + back_off_param)
+                con_list.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i] + back_off_param)
                 con_list.append(-sigma_var[:, i])
                 con_lbg.append(-cs.DM.inf(3 * nx, 1))
                 con_ubg.append(cs.DM.zeros(3 * nx, 1))
                 con_eq += [False] * 3 * nx
 
-                H_ieq.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i])
-                H_ieq.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i])
+                H_ieq.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i] + back_off_param)
+                H_ieq.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i] + back_off_param)
                 H_ieq.append(-sigma_var[:, i])
                 lm = cs.MX.sym('lm', 3 * nx)
                 mult.append(lm)
@@ -615,15 +618,15 @@ class MPCPolicyFunction:
         # Final state constraints.
         for sc_i, state_constraint in enumerate(self.state_constraints_sym):
             cost += w @ sigma_var[:, -1]
-            con_list.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1])
-            con_list.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1])
+            con_list.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param)
+            con_list.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param)
             con_list.append(-sigma_var[:, -1])
             con_lbg.append(-cs.DM.inf(3 * nx, 1))
             con_ubg.append(cs.DM.zeros(3 * nx, 1))
             con_eq += [False] * 3 * nx
 
-            H_ieq.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1])
-            H_ieq.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1])
+            H_ieq.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param)
+            H_ieq.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param)
             H_ieq.append(-sigma_var[:, -1])
             lm = cs.MX.sym('lm', 3 * nx)
             mult.append(lm)
@@ -656,7 +659,7 @@ class MPCPolicyFunction:
         vnlp_prob = {
             'f': cost,
             'x': opt_vars,
-            'p': cs.vertcat(fixed_param, ref_param, cost_param, model_param),
+            'p': cs.vertcat(fixed_param, ref_param, cost_param, back_off_param, model_param),
             'g': con_list,
         }
         vsolver = cs.nlpsol('vsolver', 'fatrop', vnlp_prob, opts_setting)
@@ -678,7 +681,7 @@ class MPCPolicyFunction:
         )
         # z contains all variables of the lagrangian
         z = cs.vertcat(opt_vars, lamb, mu)
-        theta = cs.vertcat(cost_param, model_param)
+        theta = cs.vertcat(cost_param, back_off_param, model_param)
 
         # Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function('rkkt_fn', [z, fixed_param, ref_param, theta], [R_kkt])
