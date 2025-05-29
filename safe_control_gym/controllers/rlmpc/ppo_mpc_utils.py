@@ -261,13 +261,13 @@ class MPCActor(nn.Module):
         # Parameters
         self.q_mpc = actor_config['q_mpc']
         self.r_mpc = actor_config['r_mpc']
-        # self.qt_mpc = actor_config['qt_mpc']
+        self.qt_mpc = actor_config['qt_mpc']
         self.model_param = actor_config['model_param']
         self._init_param_val()
         self.n_learnable_param = 0
         for k in self.param_dict.keys():
             self.n_learnable_param += self.param_dict[k].shape[0]
-        temp = np.concatenate((self.q_mpc, self.r_mpc, self.model_param))
+        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.model_param))
         self.mpc_param = nn.Parameter(torch.FloatTensor(temp))
         self.param_net = MLP(obs_dim, self.n_learnable_param, hidden_dims, activation)
         # self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
@@ -278,7 +278,7 @@ class MPCActor(nn.Module):
         self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
     def _init_param_val(self):
-        self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc)),
+        self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
                            'f': np.array(self.model_param)}
 
     def forward(self, obs, act=None, info=None):
@@ -532,9 +532,9 @@ class MPCPolicyFunction:
         # Cost
         Q, th_q, nq = _create_semi_definite_matrix(nx)
         R, th_r, nr = _create_semi_definite_matrix(nu)
-        # Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
+        Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
-        cost_param = cs.vertcat(th_q, th_r)
+        cost_param = cs.vertcat(th_q, th_r, th_qt)
         # Model
         model_param = cs.MX.sym('f_param', npl)
 
@@ -554,7 +554,7 @@ class MPCPolicyFunction:
                                             u=np.zeros((nu, 1)),
                                             Xr=x_ref[:, -1],
                                             Ur=np.zeros((nu, 1)),
-                                            Q=Q,
+                                            Q=Qt,
                                             R=np.zeros((nu, nu)))['l']
         # Constraints
         con_list, con_lbg, con_ubg, con_eq = [], [], [], []
@@ -855,7 +855,7 @@ class MPCPolicyFunction:
         soln_batch = solver(x0=x0, p=p, lbg=lbg, ubg=ubg)
         lamb_batch, mu_batch = lang_mult_fn(soln_batch['lam_g'])
         z = cs.vertcat(soln_batch['x'], lamb_batch, mu_batch)
-        rkkt_batch = rkkt_fn(z, fixed_p, ref_param, theta.T)
+        rkkt_batch = rkkt_fn(z, fixed_p, ref_p, theta.T)
         optimal_batch = [True if np.linalg.norm(rkkt_batch[:, i]) ** 2 <= 1e-3 else False for i in
                          range(obs_batch.shape[0])]
 

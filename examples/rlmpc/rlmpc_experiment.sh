@@ -20,7 +20,7 @@ fi
 python3 ./rlmpc_experiment.py \
     --task ${SYS_NAME} \
     --algo ${ALGO} \
-    --seed 3 \
+    --seed 0 \
     --overrides \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \

@@ -319,7 +319,7 @@ class PPO_MPC(BaseController):
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
-        agent_info= [{'current_step': 0, 'x_ref': env.X_GOAL}]
+        agent_info = [{'current_step': 0, 'x_ref': env.X_GOAL}]
         mse, ep_rmse = [], []
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=agent_info)
