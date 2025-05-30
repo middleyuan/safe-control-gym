@@ -643,8 +643,7 @@ class Quadrotor(BaseAviary):
             prop_values['alpha_8'] = self.alpha_8
             prop_values['alpha_9'] = self.alpha_9
         if self.RANDOMIZED_INERTIAL_PROP:
-            prop_values = self._randomize_values_by_info(
-                prop_values, self.INERTIAL_PROP_RAND_INFO)
+            prop_values = self._randomize_values_by_info(prop_values, self.INERTIAL_PROP_RAND_INFO)
             if any(phy_quantity < 0 for phy_quantity in prop_values.values()):
                 if self.QUAD_TYPE != QuadType.TWO_D_ATTITUDE and self.QUAD_TYPE != QuadType.THREE_D_ATTITUDE:
                     raise ValueError('[ERROR] in Quadrotor.reset(), negative randomized inertial properties.')

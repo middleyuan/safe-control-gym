@@ -120,11 +120,11 @@ class BaseExperiment:
         if isinstance(self.env.EPISODE_LEN_SEC, list):
             # reset the max steps to handle task randomization
             self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.episode_len)
-
+        agent_info = [{'current_step': 0, 'x_ref': self.env.X_GOAL}]
         if n_episodes is not None:
             while trajs < n_episodes:
                 time_start = time()
-                action = self._select_action(obs=obs, info=info)
+                action = self._select_action(obs=obs, info=agent_info)
                 inference_time_data.append(time() - time_start)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
@@ -139,11 +139,13 @@ class BaseExperiment:
                             seed = seeds[trajs]
                         self.env.save_data()
                         obs, info = self._evaluation_reset(ctrl_data=ctrl_data, sf_data=sf_data)
+                        info['current_step'] = 0
                         break
+                agent_info[0] = {'current_step': info['current_step'], 'x_ref': self.env.X_GOAL}
         elif n_steps is not None:
             while steps < n_steps:
                 time_start = time()
-                action = self._select_action(obs=obs, info=info)
+                action = self._select_action(obs=obs, info=agent_info)
                 inference_time_data.append(time() - time_start)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
@@ -163,7 +165,9 @@ class BaseExperiment:
                         steps = 0
                         self.env.save_data()
                         obs, info = self._evaluation_reset(ctrl_data=ctrl_data, sf_data=sf_data)
+                        info['current_step'] = 0
                         break
+                agent_info[0] = {'current_step': info['current_step'], 'x_ref': self.env.X_GOAL}
 
         trajs_data = self.env.data
         trajs_data['controller_data'].append(munchify(dict(ctrl_data)))
