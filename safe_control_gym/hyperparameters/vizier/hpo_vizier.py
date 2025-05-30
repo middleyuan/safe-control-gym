@@ -11,6 +11,7 @@ import os
 import time
 
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import pandas as pd
 import yaml, json
@@ -21,7 +22,7 @@ from vizier.service import servers
 from safe_control_gym.hyperparameters.base_hpo import BaseHPO
 from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
 from safe_control_gym.hyperparameters.hpo_utils import get_smallest_and_latest_seed_folder
-
+matplotlib.use('Agg')
 
 class HPO_Vizier(BaseHPO):
 

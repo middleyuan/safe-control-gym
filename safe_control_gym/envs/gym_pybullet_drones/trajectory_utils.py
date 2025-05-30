@@ -539,7 +539,67 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
         print(f"Trajectory plot saved to {save_path}")
     except:
         pass
+    plt.show()
     plt.close(fig)
+
+def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, waypoints=None, strings=None, save_path=None):
+    if pos_ref is None:
+        print("Missing position reference data for kinematic plotting.")
+        return
+
+    time_ref = np.linspace(0, len(pos_ref) - 1, len(pos_ref))  # Assumes uniform time steps
+    axis_labels = ['X', 'Y', 'Z']
+
+    # Plot position, velocity, and acceleration for each axis
+    for i in range(3):
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.plot(time_ref, pos_ref[:, i], 'b-', linewidth=1.5, label=f'Position {axis_labels[i]}')
+
+        if vel_ref is not None:
+            ax.plot(time_ref, vel_ref[:, i], 'g-', linewidth=1.5, label=f'Velocity {axis_labels[i]}')
+
+        if acc_ref is not None:
+            ax.plot(time_ref, acc_ref[:, i], 'm-', linewidth=1.5, label=f'Acceleration {axis_labels[i]}')
+
+        ax.set_xlabel("Time (arbitrary units)")
+        ax.set_ylabel(f"{axis_labels[i]}-axis")
+        ax.set_title(f"{axis_labels[i]}-Axis Kinematics")
+        ax.legend(loc="upper right")
+        ax.grid(True)
+        fig.tight_layout()
+
+        if save_path is not None:
+            save_axis_path = f"{save_path}_{axis_labels[i].lower()}.png"
+            try:
+                fig.savefig(save_axis_path)
+                print(f"Kinematics plot saved to {save_axis_path}")
+            except Exception as e:
+                print(f"Failed to save plot {save_axis_path}: {e}")
+
+        plt.show()
+        plt.close(fig)
+
+    # Plot speed magnitude on separate plot
+    if speed_ref is not None:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.plot(time_ref, speed_ref, 'r-', linewidth=1.5, label='Speed (Magnitude)')
+        ax.set_xlabel("Time (arbitrary units)")
+        ax.set_ylabel("Speed")
+        ax.set_title("Speed Magnitude vs Time")
+        ax.legend(loc="upper right")
+        ax.grid(True)
+        fig.tight_layout()
+
+        if save_path is not None:
+            save_speed_path = f"{save_path}_speed.png"
+            try:
+                fig.savefig(save_speed_path)
+                print(f"Speed plot saved to {save_speed_path}")
+            except Exception as e:
+                print(f"Failed to save plot {save_speed_path}: {e}")
+
+        plt.show()
+        plt.close(fig)
 
 
 class TrajectoryPlanner:
@@ -633,6 +693,12 @@ class TrajectoryPlanner:
                     h.append(0.5 - d - Sigma[j * k, i])
                     h.append(-Sigma[j * k, i])
             cost += 1e2 * Sigma[:, i].T @ Sigma[:, i]
+        
+        for wp in self.waypoint_list[1:-1]:  # skip start and end
+            t_idx = int(wp['time'] / self.dt)  # convert time to index
+            pos = X[:3, t_idx]  # predicted position at that time
+            desired = cs.vertcat(*wp['position'])  # desired waypoint
+            cost += 5 * cs.sumsqr(pos - desired)  # soft penalty
 
         G = cs.vertcat(*g)
         H = cs.vertcat(*h)

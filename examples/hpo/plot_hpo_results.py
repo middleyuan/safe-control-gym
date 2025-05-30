@@ -11,11 +11,11 @@ import ast
 from safe_control_gym.hyperparameters.hpo_utils import get_smallest_seed_folder, load_trials_data
 
 # Define the base directory
-base_dir = 'examples/hpo/hpo'  # Change this if needed
-algorithms = ['fmpc']
+base_dir = './hpo'  # Change this if needed
+algorithms = ['pid']
 trials = 60  # Number of trials for HPO
-scenarios = ['basic', 'ob_ns=5', 'proc_ns=3', 'ob_ns=5_proc_ns=3', 'dr']  # List your scenarios here
-metric_weights = [0.45, 0.55]  # Weights for combining RMSE and RMS Action Change
+scenarios = ['firefly']  # List your scenarios here
+metric_weights = [1,0]  # Weights for combining RMSE and RMS Action Change
 
 # Function to load hand-tuned performance data
 def load_handtune_data(algorithm, folder='vizier'):

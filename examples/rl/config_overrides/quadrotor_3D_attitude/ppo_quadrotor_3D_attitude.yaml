@@ -23,7 +23,7 @@ algo_config:
   rollout_steps: 660
   eval_batch_size: 10
 
-  # misc
+  # misc 
   log_interval: 13200
   save_interval: 660000
   num_checkpoints: 0

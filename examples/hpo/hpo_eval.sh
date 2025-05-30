@@ -17,6 +17,7 @@ hpo_postfix=$7 # ""  "_eval" "_basic" "_dw_h=1dot5" "_dw_h=2dot5" "_dw_h=4" "_ob
 if [ "$localOrHost" == 'local' ]; then
     source /home/tsung/anaconda3/etc/profile.d/conda.sh
     conda activate safe
+    
 elif [ "$localOrHost" == 'host0' ]; then
     source /home/tueilsy-st01/anaconda3/etc/profile.d/conda.sh
     conda activate safe

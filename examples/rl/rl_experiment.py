@@ -37,8 +37,10 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
         system = f'quadrotor_{str(config.task_config.quad_type)}D'
+        print(system)
     else:
         system = config.task
+        print(system)
 
     # Experiment settings
     if config.experiment_type == 'robustness_ob':
@@ -73,12 +75,13 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     # Load state_dict from trained.
     # ctrl.load(f'{curr_path}/models/{config.algo}/{config.algo}_model_{system}_{task}.pt')
     # ctrl.load(f'{curr_path}/models/{config.algo}/model_latest.pt')
+    # Force-load from a specific model path
+    
     if 'pretrain_path' in config.keys():
         # ctrl.load(config.pretrain_path + "model_latest.pt")
         ctrl.load(config.pretrain_path + "model_best.pt")
     else:
         ctrl.load(f'{curr_path}/models/{config.algo}/model_best.pt')
-
     # Remove temporary files and directories
     shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
 
@@ -125,7 +128,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         np.save(temp, data, allow_pickle=True)
     print(metrics)
 
-    if plot is False:
+    if plot is True:
         if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3
@@ -146,6 +149,11 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
             graph1_2 = 5
             graph3_1 = 0
             graph3_2 = 2
+        elif system == 'quadrotor_6D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
 
         _, ax3 = plt.subplots()
         ax3.plot(results['obs'][0][:, graph3_1], results['obs'][0][:, graph3_2], 'r--', label='RL Trajectory')
@@ -157,9 +165,39 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         if config.task == Environment.CARTPOLE:
             ax3.set_ylabel(r'Vel')
         elif config.task == Environment.QUADROTOR:
-            ax3.set_ylabel(r'Z')
+            ax3.set_ylabel(r'Y')
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
+
+        actual_traj = results['obs'][0][:, [graph3_1, graph3_2]]
+        ref_traj = env.X_GOAL[:, [graph3_1, graph3_2]]
+        # Ensure they have the same number of time steps
+        print(len(actual_traj), len(ref_traj))
+        # min_len = min(len(actual_traj), len(ref_traj))
+        # actual_traj = actual_traj[:min_len]
+        # ref_traj = ref_traj[:min_len]
+        ref_traj = ref_traj[1:]
+        # Calculate RMSE
+        rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
+        print(f"Trajectory RMSE: {rmse:.4f}")
+        print((actual_traj - ref_traj))
+        
+        diff = actual_traj - ref_traj
+        time_steps = range(len(diff))
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(time_steps, diff[:, 0], label='X difference')
+        plt.plot(time_steps, diff[:, 1], label='Y difference')
+        plt.xlabel('Time step')
+        plt.ylabel('Difference')
+        plt.title('Trajectory Differences Over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
+        rmse = np.sqrt(np.mean(errors**2))
+        print(f"2ndTrajectory RMSE: {rmse:.4f}")
+        
 
         post_analysis(results['obs'][0], results['action'][0], env)
         plt.savefig(f"{curr_path}/perf.png")

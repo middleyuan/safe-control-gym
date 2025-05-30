@@ -2,9 +2,9 @@
 
 import numpy as np
 from matplotlib.colors import to_rgba
-
+import matplotlib
 from safe_control_gym.hyperparameters.base_hpo import BaseHPO
-
+matplotlib.use('Agg')
 class HPOEval(BaseHPO):
 
     def __init__(self,

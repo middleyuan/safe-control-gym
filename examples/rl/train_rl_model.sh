@@ -2,16 +2,16 @@
 
 # SYS='cartpole'
 # SYS='quadrotor_2D'
-SYS='quadrotor_2D_attitude'
+# SYS='quadrotor_2D_attitude'
 # SYS='quadrotor_3D'
-# SYS='quadrotor_3D_attitude'
+SYS='quadrotor_3D_attitude'
 
 # TASK='stab'
 TASK='track'
 
-ALGO='ppo'
+# ALGO='ppo'
 # ALGO='sac'
-# ALGO='dppo'
+ALGO='dppo'
 # ALGO='safe_explorer_ppo'
 
 EXP_NAME='test'
@@ -46,7 +46,7 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-SEED=0
+SEED=8
 python3 ../../safe_control_gym/experiments/train_rl_controller.py \
     --algo ${ALGO} \
     --task ${SYS_NAME} \

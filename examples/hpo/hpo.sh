@@ -25,9 +25,11 @@ hpo_postfix=${12} # ""  "_eval" "_basic" "_dw_h=1dot5" "_dw_h=2dot5" "_dw_h=4" "
 
 # activate the environment
 if [ "$localOrHost" == 'local' ]; then
-    source /home/tsung/anaconda3/etc/profile.d/conda.sh
-    conda activate safe
-    cd ~/safe-control-gym
+    # source /home/tsung/anaconda3/etc/profile.d/conda.sh
+    # ~/miniconda3/etc/profile.d/conda.sh
+    # conda activate safe
+    # cd ~/safe-control-gym
+    cd ~/LSY_Projects/safe_control_gym/safe-control-gym
 elif [ "$localOrHost" == 'host0' ]; then
     source /home/tueilsy-st01/anaconda3/etc/profile.d/conda.sh
     conda activate safe

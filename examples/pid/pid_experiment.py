@@ -123,6 +123,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
         # # Print the last action and the information returned at each step.
         # print(i, '-th step.')
         # print(action, '\n', obs, '\n', reward, '\n', done, '\n', info, '\n')
+        # print(obs)
+        
 
     elapsed_sec = trajs_data['timestamp'][0][-1] - trajs_data['timestamp'][0][0]
     # print(f'\n{iterations} iterations (@{config.task_config.ctrl_freq}Hz) in {elapsed_sec:.2f} seconds, i.e. {iterations / elapsed_sec:.2f} steps/sec for a {(iterations * (1. / config.task_config.ctrl_freq)) / elapsed_sec:.2f}x speedup.\n')
@@ -154,8 +156,13 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
             graph1_1 = 6
             graph1_2 = 9
             graph3_1 = 0
-            graph3_2 = 4
-
+            graph3_2 = 2
+        elif system == 'quadrotor_3D_attitude':
+            graph1_1 = 6
+            graph1_2 = 9
+            graph3_1 = 0
+            graph3_2 = 2
+        print(system)
         _, ax = plt.subplots()
         # ax.plot(trajs_data['obs'][0][:, graph1_1], trajs_data['obs'][0][:, graph1_2], 'r--', label='Agent Trajectory')
         # ax.scatter(trajs_data['obs'][0][0, graph1_1], trajs_data['obs'][0][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
@@ -195,7 +202,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
         if config.task == Environment.CARTPOLE:
             ax3.set_ylabel(r'Vel')
         elif config.task == Environment.QUADROTOR:
-            ax3.set_ylabel(r'Z')
+            ax3.set_ylabel(r'Y')
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
 

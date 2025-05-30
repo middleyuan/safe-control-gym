@@ -8,6 +8,7 @@ from functools import partial
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import colorsys
 
 from safe_control_gym.experiments.base_experiment import BaseExperiment
@@ -16,7 +17,7 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.logging import ExperimentLogger
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import mkdirs
-
+matplotlib.use('Agg')
 def interpolate_color(base_hex, light_hex, num_seeds, max_seeds):
     # Convert HEX to RGB
     def hex_to_rgb(hex_color):
