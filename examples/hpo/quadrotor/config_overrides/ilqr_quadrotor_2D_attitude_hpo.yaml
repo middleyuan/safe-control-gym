@@ -21,80 +21,80 @@ hpo_config:
     lamb_factor: 10
     lamb_max: 1000
     epsilon: 0.01
-  basic_init:
-    q_lqr:
-    - 11.902573972698155
-    - 0.0001
-    - 20.0
-    - 20.0
-    - 0.0001
-    - 0.0001
-    r_lqr:
-    - 5.0
-    - 0.6266401395970063
-    max_iterations: 15
-    lamb_factor: 10
-    lamb_max: 1000
-    epsilon: 0.01
-  dr_init:
-    q_lqr:
-    - 11.902573972698155
-    - 0.0001
-    - 20.0
-    - 20.0
-    - 0.0001
-    - 0.0001
-    r_lqr:
-    - 5.0
-    - 0.6266401395970063
-    max_iterations: 15
-    lamb_factor: 10
-    lamb_max: 1000
-    epsilon: 0.01
-  ob_ns=5_init:
-    q_lqr:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 8.312441762017196
-    - 0.0001
-    - 0.0001
-    r_lqr:
-    - 5.0
-    - 0.4583866110862476
-    lamb_factor: 10
-    lamb_max: 1000
-    epsilon: 0.01
-  ob_ns=5_proc_ns=3_init:
-    q_lqr:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 0.0001
-    - 0.0001
-    - 0.0001
-    r_lqr:
-    - 5.0
-    - 0.09314138912453233
-    max_iterations: 15
-    lamb_factor: 10
-    lamb_max: 1000
-    epsilon: 0.01
-  proc_ns=3_init:
-    q_lqr:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 13.858696460029103
-    - 0.0001
-    - 0.0001
-    r_lqr:
-    - 3.7553504219779223
-    - 1.7726632268528717
-    max_iterations: 15
-    lamb_factor: 10
-    lamb_max: 1000
-    epsilon: 0.01
+  # basic_init:
+  #   q_lqr:
+  #   - 11.902573972698155
+  #   - 0.0001
+  #   - 20.0
+  #   - 20.0
+  #   - 0.0001
+  #   - 0.0001
+  #   r_lqr:
+  #   - 5.0
+  #   - 0.6266401395970063
+  #   max_iterations: 15
+  #   lamb_factor: 10
+  #   lamb_max: 1000
+  #   epsilon: 0.01
+  # dr_init:
+  #   q_lqr:
+  #   - 11.902573972698155
+  #   - 0.0001
+  #   - 20.0
+  #   - 20.0
+  #   - 0.0001
+  #   - 0.0001
+  #   r_lqr:
+  #   - 5.0
+  #   - 0.6266401395970063
+  #   max_iterations: 15
+  #   lamb_factor: 10
+  #   lamb_max: 1000
+  #   epsilon: 0.01
+  # ob_ns=5_init:
+  #   q_lqr:
+  #   - 20.0
+  #   - 0.0001
+  #   - 20.0
+  #   - 8.312441762017196
+  #   - 0.0001
+  #   - 0.0001
+  #   r_lqr:
+  #   - 5.0
+  #   - 0.4583866110862476
+  #   lamb_factor: 10
+  #   lamb_max: 1000
+  #   epsilon: 0.01
+  # ob_ns=5_proc_ns=3_init:
+  #   q_lqr:
+  #   - 20.0
+  #   - 0.0001
+  #   - 20.0
+  #   - 0.0001
+  #   - 0.0001
+  #   - 0.0001
+  #   r_lqr:
+  #   - 5.0
+  #   - 0.09314138912453233
+  #   max_iterations: 15
+  #   lamb_factor: 10
+  #   lamb_max: 1000
+  #   epsilon: 0.01
+  # proc_ns=3_init:
+  #   q_lqr:
+  #   - 20.0
+  #   - 0.0001
+  #   - 20.0
+  #   - 13.858696460029103
+  #   - 0.0001
+  #   - 0.0001
+  #   r_lqr:
+  #   - 3.7553504219779223
+  #   - 1.7726632268528717
+  #   max_iterations: 15
+  #   lamb_factor: 10
+  #   lamb_max: 1000
+  #   epsilon: 0.01
   basic:
     epsilon: 0.0001
     lamb_factor: 25

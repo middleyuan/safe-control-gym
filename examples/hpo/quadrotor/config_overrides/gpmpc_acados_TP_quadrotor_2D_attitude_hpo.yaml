@@ -63,15 +63,15 @@ hpo_config:
     num_epochs: 6
     num_samples: 50
     q_mpc:
-    - 11.902573972698155
-    - 0.0001
-    - 20.0
-    - 20.0
-    - 0.0001
+    - 12
+    - 0.1
+    - 12
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.6266401395970063
+    - 3
+    - 3
   dr_init:
     horizon: 30
     learning_rate:
@@ -92,15 +92,15 @@ hpo_config:
     num_epochs: 6
     num_samples: 50
     q_mpc:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 20.0
-    - 0.0001
+    - 12
+    - 0.1
+    - 12
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.0439605475782572
+    - 3
+    - 3
     param_noise_std:
       beta_1: # Nominal: 17.7906
         distrib: 'normal'
@@ -137,15 +137,15 @@ hpo_config:
     num_epochs: 6
     num_samples: 50
     q_mpc:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 0.0001
-    - 0.0001
+    - 12
+    - 0.1
+    - 12
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.09314138912453233
+    - 3
+    - 3
   ob_ns=5_proc_ns=3_init:
     horizon: 30
     learning_rate:
@@ -166,15 +166,15 @@ hpo_config:
     num_epochs: 6
     num_samples: 50
     q_mpc:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 0.0001
-    - 0.0001
+    - 12
+    - 0.1
+    - 12
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.09314138912453233
+    - 3
+    - 3
   proc_ns=3_init:
     horizon: 30
     learning_rate:
@@ -195,15 +195,15 @@ hpo_config:
     num_epochs: 6
     num_samples: 50
     q_mpc:
-    - 13.292406412280716
-    - 0.0001
-    - 20.0
-    - 10.305046091004552
-    - 0.0001
+    - 12
+    - 0.1
+    - 12
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 3.6596089573941435
-    - 0.9668690221532095
+    - 3
+    - 3
   tr_init:
     horizon: 30
     learning_rate:
