@@ -1012,9 +1012,9 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.u_guess = self.u_prev
 
         time_after = time.time()
-        print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats("sqp_iter")}; qp iter {self.acados_ocp_solver.get_stats("qp_iter")}')
-        if time_after - time_before > 1 / 60:
-            print(colored(f'========= Warning: GPMPC ACADOS took {time_after - time_before:.3f} seconds =========', 'yellow'))
+        # print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats("sqp_iter")}; qp iter {self.acados_ocp_solver.get_stats("qp_iter")}')
+        # if time_after - time_before > 1 / 60:
+        #     print(colored(f'========= Warning: GPMPC ACADOS took {time_after - time_before:.3f} seconds =========', 'yellow'))
         self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
         
         if hasattr(self, 'K'):

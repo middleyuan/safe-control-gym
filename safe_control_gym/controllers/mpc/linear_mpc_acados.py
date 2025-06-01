@@ -202,7 +202,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             # get the solver status
             n_sqp_iter = self.acados_ocp_solver.get_stats('sqp_iter')
             n_qp_iter = self.acados_ocp_solver.get_stats('qp_iter')
-            print(f'acados returned status {status}. SQP iterations: {n_sqp_iter}. QP iterations: {n_qp_iter}.')
+            # print(f'acados returned status {status}. SQP iterations: {n_sqp_iter}. QP iterations: {n_qp_iter}.')
 
         except Exception:
             print(colored('Infeasible MPC Problem', 'red'))
