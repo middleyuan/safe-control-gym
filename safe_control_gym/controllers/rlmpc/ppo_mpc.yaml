@@ -10,7 +10,7 @@ clip_reward: 10
 actor_config:
   q_mpc: [ 1.0 ]
   r_mpc: [ 1.0 ]
-  # qt_mpc: [ 1.0 ]
+  qt_mpc: [ 1.0 ]
   model_param: [1., 1., 1., 1., 1.]
   mpc_config:
     horizon: 20

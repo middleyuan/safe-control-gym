@@ -265,7 +265,7 @@ class PPO_MPC(BaseController):
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
                     terminal_v[idx] = terminal_val
-                    self.agent.reset()
+                    # self.agent.reset()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
                  'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
@@ -294,12 +294,7 @@ class PPO_MPC(BaseController):
         # results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
-    def run(self,
-            env=None,
-            render=False,
-            n_episodes=1,
-            verbose=False,
-            ):
+    def run(self, env=None, render=False, n_episodes=1, verbose=False):
         """Runs evaluation with current policy."""
         self.agent.reset()
         self.agent.eval()
@@ -338,7 +333,7 @@ class PPO_MPC(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, env_info = env.reset()
                 info['current_step'] = 0
-                self.agent.reset()
+                # self.agent.reset()
             obs = self.obs_normalizer(obs)
             agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.
@@ -415,3 +410,5 @@ class PPO_MPC(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+        print(self.agent.ac.actor.mpc_param.detach().numpy())
+        print(self.agent.ac.actor.logstd.detach().numpy())

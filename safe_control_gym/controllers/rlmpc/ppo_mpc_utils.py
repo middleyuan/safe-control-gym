@@ -176,8 +176,6 @@ class PPO_MPC_Agent:
             results['approx_kl'].append(kl_epoch / num_mini_batch)
             results['theta_loss'].append(theta_loss_epoch / num_mini_batch)
             results['ref_loss'].append(ref_loss_epoch / num_mini_batch)
-        print(self.ac.actor.mpc_param.detach().numpy())
-        print(self.ac.actor.logstd.detach().numpy())
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -220,14 +218,14 @@ class MLPActorCritic(nn.Module):
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
     def step(self, obs, info=None):
-        dist, _, info, results_dict, optimal_flag = self.actor(obs, info=info)
+        dist, _, info, results_dict, optimal_flag = self.actor(obs, actor_info=info)
         a = dist.sample()
         logp_a = dist.log_prob(a)
         v = self.critic(obs)
         return a.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy(), info, results_dict, optimal_flag
 
     def act(self, obs, info=None):
-        dist, _, _, _, _ = self.actor(obs, info=info)
+        dist, _, _, _, _ = self.actor(obs, actor_info=info)
         a = dist.mode()
         return a.cpu().numpy()
 
@@ -283,15 +281,17 @@ class MPCActor(nn.Module):
                            'b': np.array(self.back_off),
                            'f': np.array(self.model_param)}
 
-    def forward(self, obs, act=None, info=None):
+    def forward(self, obs, act=None, actor_info=None):
         theta = self.get_theta_param(obs)
-        traj_param = self.get_references(info)
+        traj_param = self.get_references(actor_info)
         if obs.ndim > 1:
-            action, info, results_dict, optimal_flag = self.mpc.select_action_batch(obs, theta.numpy(),
-                                                                                    traj_param)
+            action, info, results_dict, optimal_flag = self.mpc.select_action_batch(
+                obs, theta.numpy(), traj_param, actor_info
+            )
         else:
-            action, info, results_dict, optimal_flag = self.mpc.select_action(obs, theta.numpy(),
-                                                                              traj_param)
+            action, info, results_dict, optimal_flag = self.mpc.select_action(
+                obs, theta.numpy(), traj_param
+            )
         action = torch.FloatTensor(np.array(action))
         optimal_flag = torch.FloatTensor(np.array(optimal_flag))
         dist = self.dist_fn(action)
@@ -817,7 +817,7 @@ class MPCPolicyFunction:
         }
         return action, info, results_dict, optimal
 
-    def select_action_batch(self, obs_batch, theta, traj_ref):
+    def select_action_batch(self, obs_batch, theta, traj_ref, actor_info):
         solver_dict = self.solver_dict
         solver = solver_dict['solver_parallel']
         con_lbg = solver_dict['lower_bound']
@@ -847,6 +847,8 @@ class MPCPolicyFunction:
                 x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
                 x_prev, u_prev, sigma_prev = x_prev.full(), u_prev.full(), sigma_prev.full()
                 opt_vars_init = update_initial_guess(x_prev, u_prev, sigma_prev, opt_vars_fn)
+                if actor_info[i]['current_step'] == 0:
+                    opt_vars_init = np.zeros_like(opt_vars_init)
 
             x0.append(opt_vars_init[:, 0])
             fixed_p.append(fixed_param)
@@ -891,7 +893,8 @@ class MPCPolicyFunction:
                 'fixed_param': deepcopy(fixed_p[:, i]),
                 'ref_param': deepcopy(ref_p[:, i]),
                 'theta_param': deepcopy(theta[i, :]),
-                'traj_step': deepcopy(self.traj_step) - 1
+                'traj_step': deepcopy(actor_info[i]['current_step']),
+                'x_ref': deepcopy(actor_info[i]['x_ref']),
             }
 
             # result batch
