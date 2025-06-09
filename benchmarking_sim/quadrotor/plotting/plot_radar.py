@@ -31,6 +31,8 @@ supertitle_fontsize = 30
 subtitle_fontsize = 30
 small_text_size = 20
 padding = 0.15 # padding for the radar plot
+OOD_alpha = 0.5 # alpha for the OOD data
+ID_alpha = 0.15 
 
 transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'F-MPC')
@@ -118,9 +120,9 @@ def plot_id_number(ax, metric_name, model_name, angle, plot_colors, ID_numbers, 
         angle, 
         y_pos, 
         facecolor=plot_colors[model_name], 
-        edgecolor='black', 
-        s=100, 
-        zorder=10
+        # edgecolor='black', 
+        # s=100, 
+        # zorder=10
     )
     
     # Add text with original ID number value
@@ -181,14 +183,6 @@ def spider(df,
     # normalize the data
     normalized_data = normalize_data(data, max_values, min_values, 
                                      inverted_axes_name, lower_padding)
-    
-    # for key in data.keys():
-        
-    #     temp_value =  (np.array(data[key]) - min_values[key]) \
-    #             / (max_values[key] - min_values[key])
-    #     temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
-    #     temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
-    #     normalized_data[key] = temp_value + lower_padding
 
     # normalized ID numbers
     num_axis = len(data.keys()) # number of axes
@@ -213,20 +207,52 @@ def spider(df,
     for i, model_name in enumerate(ids):
         values = [normalized_data[key][i] for key in data.keys()]
         actual_values = [data[key][i] for key in data.keys()]
-        # Invert the values to have the higher values in the center
 
         values += values[:1]  # Close the plot for a better look
-        # values = 1 - np.array(values) 
         if model_name in ['MAX', 'MIN']:
             # ax.plot(angles, values, color=plot_colors[model_name], )
             # ax.scatter(angles, values, facecolor=plot_colors[model_name], )
             # ax.fill(angles, values, alpha=1, color=plot_colors[model_name], )
             continue
         else:
-            ax.plot(angles, values, label=model_name, color=plot_colors[model_name], )
+            ax.plot(angles, values, 
+                    label=model_name, 
+                    color=plot_colors[model_name], )
             ax.scatter(angles, values, facecolor=plot_colors[model_name], )
-            ax.fill(angles, values, alpha=0.15, color=plot_colors[model_name], )
+            ax.fill(angles, values, 
+                    alpha=OOD_alpha, 
+                    color=plot_colors[model_name], )
 
+        if model_name in ['PPO', 'SAC', 'DPPO']:
+            # create a data list but replace the values with ID numbers
+            # values_ID = 
+            for metric_name in ID_numbers.keys():
+                normalized_data[metric_name] = ID_numbers_norm[metric_name][model_name]
+            values_ID = [normalized_data[key] for key in data.keys()]
+            values_ID = [i.item() if isinstance(i, np.ndarray) else i for i in values_ID]
+            values_ID += values_ID[:1]  # Close the plot for a better look
+            # plot the ID numbers
+            ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], 
+                    linestyle='--', )
+            ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], 
+                       alpha=ID_alpha,)
+            ax.fill(angles, values_ID, 
+                    alpha=ID_alpha, 
+                    color=plot_colors[model_name], )
+            ax.text(angles[metric_index['robustness_proc']], 
+                    values_ID[metric_index['robustness_proc']], 
+                    ID_numbers['robustness_proc'][model_name], size=small_text_size)
+            ax.text(angles[metric_index['robustness_obs']], 
+                    values_ID[metric_index['robustness_obs']], 
+                    ID_numbers['robustness_obs'][model_name], size=small_text_size)
+            ax.text(angles[metric_index['robustness_param']], 
+                    values_ID[metric_index['robustness_param']], 
+                    ID_numbers['robustness_param'][model_name], size=small_text_size)
+            ax.text(angles[metric_index['worst_generalization_performance']], 
+                    values_ID[metric_index['worst_generalization_performance']], 
+                    ID_numbers['worst_generalization_performance'][model_name], size=small_text_size)
+                
+       
         # customize the text
         for _x, _y, t in zip(angles, values, actual_values):
             if _x == angles[metric_index['inference_time']]:
@@ -257,19 +283,19 @@ def spider(df,
             else: # shift all the other axes 
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
             
-            # plot extra dots for ID numbers
-            for metric_name in ['robustness_obs', 'robustness_proc', 'robustness_param', 'worst_generalization_performance']:
-                if _x == angles[metric_index[metric_name]]:
-                    plot_id_number(
-                        ax=ax,
-                        metric_name=metric_name,
-                        model_name=model_name,
-                        angle=_x,
-                        plot_colors=plot_colors,
-                        ID_numbers=ID_numbers,
-                        ID_numbers_norm=ID_numbers_norm,
-                        small_text_size=small_text_size
-                    )
+            # # plot extra dots for ID numbers
+            # for metric_name in ['robustness_obs', 'robustness_proc', 'robustness_param', 'worst_generalization_performance']:
+            #     if _x == angles[metric_index[metric_name]]:
+            #         plot_id_number(
+            #             ax=ax,
+            #             metric_name=metric_name,
+            #             model_name=model_name,
+            #             angle=_x,
+            #             plot_colors=plot_colors,
+            #             ID_numbers=ID_numbers,
+            #             ID_numbers_norm=ID_numbers_norm,
+            #             small_text_size=small_text_size
+            #         )
         
             
     # add additional text for robustness axes
@@ -460,7 +486,8 @@ for key in ID_numbers.keys():
 if len(sys.argv) > 1:
     algo = sys.argv[1]
 else:
-    algo = 'pid'
+    # algo = 'pid'
+    algo = 'ppo'
 
 # convert the algo to the correct name in tag_ctrl_list
 if algo in tag_ctrl_list.values():
