@@ -1,9 +1,9 @@
 algo: pid
 algo_config:
-  prior_info:
-    prior_prop:
-      M: 0.033
-      Iyy: 0.000014
+  # prior_info:
+  #   prior_prop:
+  #     M: 0.033
+  #     Iyy: 0.000014
 
   # p_coeff_for: [0.4, 0.4, 1.25]
   # i_coeff_for: [.05, .05, .05]
