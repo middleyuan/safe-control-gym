@@ -12,12 +12,9 @@ from benchmarking_sim.quadrotor.benchmark_util.utils \
 script_dir = os.path.dirname(__file__)
 # set up Nature sytle plotting
 # set up seaborn style
-# seaborn.set(style='whitegrid', palette='deep')
-# seaborn.set_style('whitegrid')
 seaborn.set_palette('deep')
 seaborn.set_context('paper', font_scale=1.5)
 # set up matplotlib style
-# plt.style.use('seaborn-whitegrid')
 plt.rcParams.update({
     # 'font.family': 'arial',
     'grid.alpha': 1.0,
@@ -33,6 +30,7 @@ text_fontsize = 30
 supertitle_fontsize = 30
 subtitle_fontsize = 30
 small_text_size = 20
+padding = 0.15 # padding for the radar plot
 
 transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'F-MPC')
@@ -73,22 +71,90 @@ axis_legend_dict = {
 }
 
 ID_numbers = {
-'robustness_proc': {
-    'PPO': 20,
-    'SAC': 12,
-    'DPPO': 35,
-},
-'robustness_obs': {
-    'PPO': 80,
-    'SAC': 100,
-    'DPPO': 90,
-},
-'robustness_param': {
-    'PPO': 4,
-    'SAC': 5,
-    'DPPO': 5,
-},
+    'robustness_proc': {
+        'PPO': 20,
+        'SAC': 12,
+        'DPPO': 35,
+    },
+    'robustness_obs': {
+        'PPO': 80,
+        'SAC': 100,
+        'DPPO': 90,
+    },
+    'robustness_param': {
+        'PPO': 4,
+        'SAC': 5,
+        'DPPO': 5,
+    },
+    'worst_generalization_performance': {
+        'PPO': 0.043,
+        'SAC': 0.084,
+        'DPPO': 0.07
+    }
 }
+
+def plot_id_number(ax, metric_name, model_name, angle, plot_colors, ID_numbers, ID_numbers_norm, small_text_size):
+    """
+    Plot an ID number point and label for a specific metric and model.
+    
+    Args:
+        ax: Matplotlib axis object
+        metric_name: Name of the metric (e.g., 'robustness_obs')
+        model_name: Name of the model (e.g., 'PPO')
+        angle: Angle position on the radar plot
+        plot_colors: Dictionary mapping model names to colors
+        ID_numbers: Dictionary with original ID numbers
+        ID_numbers_norm: Dictionary with normalized ID numbers
+        small_text_size: Font size for text labels
+    """
+    if model_name not in ID_numbers_norm[metric_name]:
+        return
+        
+    # Get normalized value
+    y_pos = ID_numbers_norm[metric_name][model_name]
+    
+    # Plot the point
+    ax.scatter(
+        angle, 
+        y_pos, 
+        facecolor=plot_colors[model_name], 
+        edgecolor='black', 
+        s=100, 
+        zorder=10
+    )
+    
+    # Add text with original ID number value
+    x_offset = -0.3 if metric_name == 'worst_generalization_performance' else 0
+    
+    ax.text(
+        angle + x_offset, 
+        y_pos,
+        f'{ID_numbers[metric_name][model_name]}', 
+        size=small_text_size
+    )
+
+def normalize_data(data, max_values, min_values, inverted_axes_name, lower_padding):
+    """
+    Normalize the data based on max and min values, applying padding and inversion where necessary.
+    
+    Args:
+        data: Dictionary with raw data values
+        max_values: Dictionary with maximum values for each metric
+        min_values: Dictionary with minimum values for each metric
+        inverted_axes_name: List of axes that should be inverted
+        lower_padding: Padding to apply to the normalized values
+    Returns:
+        normalized_data: Dictionary with normalized values
+    """
+    normalized_data = {}
+    
+    for key in data.keys():
+        temp_value = (np.array(data[key]) - min_values[key]) / (max_values[key] - min_values[key])
+        temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
+        temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
+        normalized_data[key] = temp_value + lower_padding
+    
+    return normalized_data
 
 def spider(df, 
            *, 
@@ -112,16 +178,19 @@ def spider(df,
         key: 0 for key in data.keys()
     }
     
-    for key in data.keys():
+    # normalize the data
+    normalized_data = normalize_data(data, max_values, min_values, 
+                                     inverted_axes_name, lower_padding)
+    
+    # for key in data.keys():
         
-        temp_value =  (np.array(data[key]) - min_values[key]) \
-                / (max_values[key] - min_values[key])
-        temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
-        temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
-        normalized_data[key] = temp_value + lower_padding
+    #     temp_value =  (np.array(data[key]) - min_values[key]) \
+    #             / (max_values[key] - min_values[key])
+    #     temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
+    #     temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
+    #     normalized_data[key] = temp_value + lower_padding
 
     # normalized ID numbers
-    # ID_normalized = {key: np.array(value) / max_values[key] + lower_padding for key, value in ID_numbers.items()}
     num_axis = len(data.keys()) # number of axes
     tiks = list(data.keys())
     tiks = [axis_legend_dict.get(tik, tik) for tik in tiks]  # replace keys with axis legend dict
@@ -154,7 +223,6 @@ def spider(df,
             # ax.fill(angles, values, alpha=1, color=plot_colors[model_name], )
             continue
         else:
-            # print(f'{values=}')
             ax.plot(angles, values, label=model_name, color=plot_colors[model_name], )
             ax.scatter(angles, values, facecolor=plot_colors[model_name], )
             ax.fill(angles, values, alpha=0.15, color=plot_colors[model_name], )
@@ -189,13 +257,27 @@ def spider(df,
             else: # shift all the other axes 
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
             
+            # plot extra dots for ID numbers
+            for metric_name in ['robustness_obs', 'robustness_proc', 'robustness_param', 'worst_generalization_performance']:
+                if _x == angles[metric_index[metric_name]]:
+                    plot_id_number(
+                        ax=ax,
+                        metric_name=metric_name,
+                        model_name=model_name,
+                        angle=_x,
+                        plot_colors=plot_colors,
+                        ID_numbers=ID_numbers,
+                        ID_numbers_norm=ID_numbers_norm,
+                        small_text_size=small_text_size
+                    )
+        
+            
     # add additional text for robustness axes
-    ax.text(angles[metric_index['robustness_obs']], 1.75, 'Robustness', size=small_text_size)
+    ax.text(angles[metric_index['robustness_obs']], 1.5, 'Robustness', size=small_text_size)
     # ax.fill(angles, 1.5*np.ones(num_axis + 1), alpha=0.7, color='lightgray')
     ax.set_yticklabels([])
     ax.set_xticks(angles)
     ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
-    # ax.legend(loc='upper right', bbox_to_anchor=(0.1, 0.2), fontsize=text_fontsize)
     if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
     if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
     os.makedirs(os.path.join(script_dir, 'radar'), exist_ok=True)
@@ -227,8 +309,8 @@ for method in methods:
 
 # Fill in the data
 # GP-MPC
-metrics_data['GP-MPC']['worst_generalization_performance'] = 0.025 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
-metrics_data['GP-MPC']['performance'] = 0.019  # Manually set
+metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
+metrics_data['GP-MPC']['performance'] = 0.0147  # Manually set
 metrics_data['GP-MPC']['inference_time'] = transfer_metric['GP-MPC']['inference_time']
 metrics_data['GP-MPC']['model_complexity'] = 1
 metrics_data['GP-MPC']['sampling_complexity'] = 660
@@ -237,8 +319,10 @@ metrics_data['GP-MPC']['robustness_obs'] = 70
 metrics_data['GP-MPC']['robustness_param'] = 4.8
 
 # Linear MPC
-metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
-metrics_data['Linear MPC']['performance'] = transfer_metric['Linear MPC']['rmse'][2]
+# metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
+metrics_data['Linear MPC']['worst_generalization_performance'] = 0.036
+# metrics_data['Linear MPC']['performance'] = transfer_metric['Linear MPC']['rmse'][2]
+metrics_data['Linear MPC']['performance'] = 0.029
 metrics_data['Linear MPC']['inference_time'] = transfer_metric['Linear MPC']['inference_time']
 metrics_data['Linear MPC']['model_complexity'] = 2
 metrics_data['Linear MPC']['sampling_complexity'] = 1
@@ -247,8 +331,10 @@ metrics_data['Linear MPC']['robustness_obs'] = 120
 metrics_data['Linear MPC']['robustness_param'] = 4.8
 
 # Nonlinear MPC
-metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
-metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
+# metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
+metrics_data['Nonlinear MPC']['worst_generalization_performance'] = 0.024
+# metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
+metrics_data['Nonlinear MPC']['performance'] = 0.008
 metrics_data['Nonlinear MPC']['inference_time'] = transfer_metric['Nonlinear MPC']['inference_time']
 metrics_data['Nonlinear MPC']['model_complexity'] = 0
 metrics_data['Nonlinear MPC']['sampling_complexity'] = 1
@@ -299,7 +385,7 @@ metrics_data['DPPO']['robustness_param'] = 1.8
 # PPO-MPC
 metrics_data['PPO-MPC']['worst_generalization_performance'] = max(0.04358512, 0.01077949)
 metrics_data['PPO-MPC']['performance'] = 0.01362814727788425
-metrics_data['PPO-MPC']['inference_time'] = 2.25e-3
+metrics_data['PPO-MPC']['inference_time'] = 5.5e-4
 metrics_data['PPO-MPC']['model_complexity'] = 1
 metrics_data['PPO-MPC']['sampling_complexity'] = int(0.4e6)
 metrics_data['PPO-MPC']['robustness_proc'] = 3
@@ -340,63 +426,68 @@ max_values = {key: max([metrics_data[method][key] for method in metrics_data.key
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 
 # handtune max and min to make the plot look better
-max_values['performance'] = 0.05
-max_values['worst_generalization_performance'] = 0.2
+max_values['performance'] = 0.03
+max_values['worst_generalization_performance'] = 0.1
 max_values['robustness_proc'] = 15
-max_values['inference_time'] =1.7e-3
+max_values['inference_time'] = 1.7e-3
+
+shared_performance_axis = False
+shared_performance_axis = True
+if shared_performance_axis:
+    # merge take the crosssection of max and min performance and worst generalization performance
+    performance_max = max(max_values['performance'], max_values['worst_generalization_performance'])
+    performance_min = min(min_values['performance'], min_values['worst_generalization_performance'])
+    max_values['performance'] = performance_max
+    max_values['worst_generalization_performance'] = performance_max
+    min_values['performance'] = performance_min
+    min_values['worst_generalization_performance'] = performance_min 
+
+# prepare the ID data
+ID_numbers_norm = {
+    metric: {model: 0.0 for model in models} 
+    for metric, models in ID_numbers.items()
+}
+# normalize the ID numbeer acording to the max and min values of each category
+for key in ID_numbers.keys():
+    for method in ID_numbers[key].keys():
+        temp_number = (ID_numbers[key][method] - min_values[key]) / (max_values[key] - min_values[key])
+        ID_numbers_norm [key][method] = 1 - temp_number if key in inverted_axes_name else temp_number
+        ID_numbers_norm [key][method] = np.clip(ID_numbers_norm[key][method], 0, 1)  # clip to [0, 1]
+        ID_numbers_norm [key][method] += padding
 
 # append the max and min values to the data
 # read the argv
 if len(sys.argv) > 1:
-    # masks_algo = [int(i) for i in sys.argv[1:]]
     algo = sys.argv[1]
 else:
     algo = 'pid'
-    
+
+# convert the algo to the correct name in tag_ctrl_list
 if algo in tag_ctrl_list.values():
     algo = list(tag_ctrl_list.keys())[list(tag_ctrl_list.values()).index(algo)]
-    
 assert algo in tag_ctrl_list.keys(), f'Algorithm {algo} not found in tag_ctrl_list. Available algorithms: {list(tag_ctrl_list.keys())}'
 
+# initialize the data for the radar plot
 data = {key: 0 for key in metrics_data['GP-MPC'].keys()}
 for key in metrics_data['GP-MPC'].keys():
     data[key] = [metrics_data[algo][key]]
-    # data[key].append(max_values[key])
-    # data[key].append(min_values[key])
-# algos = [algo, 'MAX', 'MIN']
 algos = [algo]
+
 spider(
     pd.DataFrame({
         'x': algos,
-        # '$\qquad\qquad\qquad\quad$  Generalization \n $\qquad\qquad\qquad\quad$ performance\n':
-        # 'Generalization \n performance\n':
-        'worst_generalization_performance':
-            data['worst_generalization_performance'],
-        # '$\qquad\qquad\qquad\quad$ Nominal\n $\qquad\qquad\qquad\quad$ performance\n':
-        'performance':
-            data['performance'],
-        # 'Inference\ntime\n\n':
-        'inference_time':
-            data['inference_time'],
-        # 'Model                \nknowledge                ':
-        'model_complexity':
-            data['model_complexity'],
-        # '\n\n\nSampling\ncomplexity':
-        'sampling_complexity':
-            data['sampling_complexity'],
-        # 'P':
-        'robustness_proc':
-            data['robustness_proc'],
-        # 'O':
-        'robustness_obs':
-            data['robustness_obs'],
-        # r'$\theta$':
-        'robustness_param':
-            data['robustness_param'],
+        'worst_generalization_performance': data['worst_generalization_performance'],
+        'performance': data['performance'],
+        'inference_time': data['inference_time'],
+        'model_complexity': data['model_complexity'],
+        'sampling_complexity': data['sampling_complexity'],
+        'robustness_proc': data['robustness_proc'],
+        'robustness_obs': data['robustness_obs'],
+        'robustness_param': data['robustness_param'],
     }),
     id_column='x',
     title=None,
-    lower_padding=0.15,
+    lower_padding=padding,
     plt_name=algo,
     max_values=max_values,
     min_values=min_values,
