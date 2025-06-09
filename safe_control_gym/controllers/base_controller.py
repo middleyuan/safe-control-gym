@@ -68,7 +68,7 @@ class BaseController(ABC):
         '''
 
         if info is not None:
-            step = info['current_step']
+            step = info[0]['current_step']
         else:
             step = 0
 
