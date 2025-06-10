@@ -1110,8 +1110,8 @@ class Quadrotor(BaseAviary):
             T = cs.MX.sym('T_c')  # normalized thrust [N]
             R = cs.MX.sym('R_c')  # desired roll angle [rad]
             P = cs.MX.sym('P_c')  # desired pitch angle [rad]
-            Y = cs.MX.sym('Y_c')  # desired yaw angle [rad]
-            U = cs.vertcat(T, R, P, Y)
+            Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
+            U = cs.vertcat(T, R, P, Y_c)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
             # Haocheng's model
@@ -1152,9 +1152,18 @@ class Quadrotor(BaseAviary):
                                psi_dot,
                                self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R,
                                self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P,
-                               self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y)
+                               self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y_c)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
+
+            T_mapping = self.beta_1 * T + self.beta_2
+            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P
+            R_mapping = self.alpha_4 * phi  + self.alpha_5 * phi_dot + self.alpha_6 * R
+            Y_mapping = self.alpha_7 * psi  + self.alpha_8 * psi_dot + self.alpha_9 * Y_c
+            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
+            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R], [R_mapping])
+            self.Y_mapping_func = cs.Function('Y_mapping', [psi, psi_dot, Y_c], [Y_mapping])
 
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             nx, nu = 10, 3
