@@ -1207,7 +1207,7 @@ class BaseAviary(BenchmarkEnv):
         phi_dot = cs.MX.sym('phi_dot')  # Roll
         theta_dot = cs.MX.sym('theta_dot')  # Pitch
         psi_dot = cs.MX.sym('psi_dot')  # Yaw
-        forces_motor = cs.MX.sym('force_motor', 4)
+        forces_motor = cs.MX.sym('force_motor', 1)
         
         X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot,
                        phi, theta, psi, phi_dot, theta_dot, psi_dot, forces_motor)
@@ -1226,8 +1226,8 @@ class BaseAviary(BenchmarkEnv):
         params_pitch_rate = [-286.2, -23.03, 225.6]
         params_yaw_rate = [-192.9, -22.22, 323.5]
         
-        force_motor_dot = 1 / params_acc[2] * (T/4 - forces_motor)
-        thrust = cs.sum1(forces_motor)  # [N]
+        force_motor_dot = 1 / params_acc[2] * (T - forces_motor)
+        thrust = forces_motor 
         forces_motor_z = 32.221212 * (params_acc[0] * thrust + params_acc[1])  # [N]
         X_dot = cs.vertcat(x_dot, 
                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
