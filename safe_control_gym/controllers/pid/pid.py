@@ -159,7 +159,7 @@ class PID(BaseController):
             cur_pos = np.array([obs[0], 0, obs[2]])
             cur_quat = np.array(p.getQuaternionFromEuler([0, obs[4], 0]))
             cur_vel = np.array([obs[1], 0, obs[3]])
-        elif self.env.QUAD_TYPE in [3, 6, 8]:
+        elif self.env.QUAD_TYPE in [3, 6, 8, 9]:
             cur_pos = np.array([obs[0], obs[2], obs[4]])
             cur_quat = np.array(p.getQuaternionFromEuler([obs[6], obs[7], obs[8]]))
             cur_vel = np.array([obs[1], obs[3], obs[5]])
@@ -175,7 +175,7 @@ class PID(BaseController):
             elif self.env.TASK == Task.STABILIZATION:
                 target_pos = np.array([self.reference[0], 0, self.reference[2]])
                 target_vel = np.array([0, 0, 0])
-        elif self.env.QUAD_TYPE in [3, 6, 8]:
+        elif self.env.QUAD_TYPE in [3, 6, 8, 9]:
             if self.env.TASK == Task.TRAJ_TRACKING:
                 target_pos = np.array([self.reference[step, 0],
                                        self.reference[step, 2],
@@ -200,7 +200,7 @@ class PID(BaseController):
                                                                         target_rpy,
                                                                         target_vel
                                                                         )
-            if self.env.QUAD_TYPE in [4, 6, 8]:
+            if self.env.QUAD_TYPE in [4, 6, 8, 9]:
                 if self.env.QUAD_TYPE == 4:  # 2D quadrotor with attitude control
                     action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4, computed_target_rpy[1]])
                 
@@ -213,9 +213,15 @@ class PID(BaseController):
                     action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
                                     computed_target_rpy[0],
                                     computed_target_rpy[1],])
+                elif self.env.QUAD_TYPE == 9:
+                    action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                                    computed_target_rpy[0],
+                                    computed_target_rpy[1],
+                                    computed_target_rpy[2]])
                 self.last_action = action
                 time_after = time.perf_counter()
                 self.results_dict['inference_time'].append(time_after - time_before)
+                print(f'Action: {action}, ')
                 return action
             
             rpm = self._dslPIDAttitudeControl(thrust,

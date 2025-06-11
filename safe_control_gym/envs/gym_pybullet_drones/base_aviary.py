@@ -234,7 +234,7 @@ class BaseAviary(BenchmarkEnv):
         self.vel = np.zeros((self.NUM_DRONES, 3))
         self.ang_v = np.zeros((self.NUM_DRONES, 3))
         self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
-        self.motor_forces = np.zeros((self.NUM_DRONES, 4))
+        self.motor_forces = np.zeros((self.NUM_DRONES, 1))
         # if (self.PHYSICS == Physics.DYN or self.PHYSICS == Physics.RK4
         #         or self.PHYSICS == Physics.DYN_2D or self.PHYSICS == Physics.DYN_SI):
         #     self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
