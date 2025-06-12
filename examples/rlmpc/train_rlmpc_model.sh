@@ -13,9 +13,9 @@ TASK='track'
 ALGO='ppo_mpc'
 # ALGO='ppo_vmpc'
 # ALGO='appo_mpc'
-# ALGO='mpc_lstdq'
+# ALGO='sac_mpc'
 
-EXP_NAME='ppo_mpc'
+EXP_NAME='ppo_vmpc'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
