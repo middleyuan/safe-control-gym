@@ -13,13 +13,13 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.utils import seeding
 from matplotlib import pyplot as plt
+from scipy.stats import truncnorm
 
 from safe_control_gym.envs.constraints import create_constraint_list
 from safe_control_gym.envs.disturbances import create_disturbance_list
 from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import (TrajectoryPlanner, Waypoint,
                                                                         compute_trajectory_derivatives,
                                                                         generate_trajectory)
-
 
 class Cost(str, Enum):
     """Reward/cost functions enumeration class."""
@@ -307,7 +307,8 @@ class BenchmarkEnv(gym.Env, ABC):
                 noise = distrib(*d_args, **d_kwargs)
                 if dist_type is not None and scale is not None:
                     if dist_type == 'normal':
-                        noise = np.clip(noise, -3 * scale, 3 * scale)
+                        # noise = np.clip(noise, -2 * scale, 2 * scale)
+                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0*scale, high=2.0*scale)
                 randomized_values[key] += noise
         return randomized_values
 
@@ -631,7 +632,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 idx_minimized_orders=4,  # Minimize derivatives in these orders (>= 2)
                 num_continuous_orders=3,  # Constrain continuity of derivatives up to order (>= 3)
                 algorithm='closed-form'  # "closed-form" Or "constrained"
-                # algorithm='constrained'   
+                # algorithm='constrained'
             )
             # return information up to velocity (2nd derivative)
             pva = compute_trajectory_derivatives(polys, times, 3)
@@ -685,7 +686,7 @@ class BenchmarkEnv(gym.Env, ABC):
                                                                                position_offset[1],
                                                                                scaling)
                 speed_traj[t[0]] = np.linalg.norm(vel_ref_traj[t[0]])
-        # 
+        #
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
         #       ptherwise flying on the floor with z=0.0 
         if 'z' not in traj_plane and traj_type != 'snap_custom':
@@ -967,3 +968,9 @@ class BenchmarkEnv(gym.Env, ABC):
         ax.set_ylabel('y [m]')
         ax.set_zlabel('z [m]')
         plt.show()
+
+
+## Miscellaneous functions for randomization and sampling
+def sample_truncated(mu, sigma, low, high, size=None):
+    a, b = (low - mu) / sigma, (high - mu) / sigma
+    return truncnorm.rvs(a, b, loc=mu, scale=sigma, size=size)
