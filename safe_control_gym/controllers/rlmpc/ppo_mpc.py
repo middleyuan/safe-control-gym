@@ -350,9 +350,7 @@ class PPO_MPC(BaseController):
             eval_results.update(queued_stats)
         return eval_results
 
-    def log_step(self,
-                 results
-                 ):
+    def log_step(self, results):
         """Does logging after a training step."""
         step = results['step']
         # runner stats
