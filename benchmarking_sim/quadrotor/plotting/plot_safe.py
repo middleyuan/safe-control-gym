@@ -15,7 +15,10 @@ from benchmarking_sim.quadrotor.plotting.safe.plot_helper_safe import (
     plot_xz_trajectory_with_hull,
     collect_state_constraint_values,
     plot_violations_over_time,
-    plot_min_distance_to_boundary
+    plot_min_distance_to_boundary,
+    # plot_constraint_value_distribution, # This was in the original import but not defined/used yet
+    plot_constraint_violation_summary_boxplot,
+    plot_constraint_violation_summary_violinplot
 )
 
 # get the default matplotlib color cycle
@@ -121,27 +124,43 @@ cert_mpsf_traj_data = np.array(mpsf_data['cert_results']['obs'])[:,:,:nx]
 # the order of the element should be (episode, step, constraint_value_dim)
 
 # constraint value > 0 means violation
-
+# the constraint values are ordered as follows:
+# [state_lower, state_upper, input_lower, input_upper]
 
 cert_mpsf_constraint_values = collect_state_constraint_values(mpsf_data['cert_results'], nx)
 uncert_mpsf_constraint_values = collect_state_constraint_values(mpsf_data['uncert_results'], nx)
 print(f'cert_mpsf_constraint_values shape: {cert_mpsf_constraint_values.shape}')
 print(f'uncert_mpsf_constraint_values shape: {uncert_mpsf_constraint_values.shape}')
 
-# plot the constraint violations over time for all state constraints
-fig_violations, ax_violations = plt.subplots(figsize=(10, 5))
+# Calculate summed positive violations for ALL state constraints
+sum_positive_violations_cert_all = None
+if cert_mpsf_constraint_values.ndim == 3 and cert_mpsf_constraint_values.shape[0] > 0 and cert_mpsf_constraint_values.shape[1] > 0 and cert_mpsf_constraint_values.shape[2] > 0:
+    sum_positive_violations_cert_all = np.sum(np.maximum(0, cert_mpsf_constraint_values), axis=2)
+elif cert_mpsf_constraint_values.ndim == 2 and cert_mpsf_constraint_values.shape[0] > 0 and cert_mpsf_constraint_values.shape[1] > 0: # Already summed or single constraint
+    sum_positive_violations_cert_all = np.maximum(0, cert_mpsf_constraint_values)
 
-plot_violations_over_time(ax_violations, 
-                          cert_mpsf_constraint_values, 
-                          dt, label='PPO+MPSF (All State Constraints)', color=plot_colors['Linear MPC']) 
-plot_violations_over_time(ax_violations,
-                          uncert_mpsf_constraint_values, 
-                          dt, label='PPO (All State Constraints)', color=plot_colors['PPO'])
+sum_positive_violations_uncert_all = None
+if uncert_mpsf_constraint_values.ndim == 3 and uncert_mpsf_constraint_values.shape[0] > 0 and uncert_mpsf_constraint_values.shape[1] > 0 and uncert_mpsf_constraint_values.shape[2] > 0:
+    sum_positive_violations_uncert_all = np.sum(np.maximum(0, uncert_mpsf_constraint_values), axis=2)
+elif uncert_mpsf_constraint_values.ndim == 2 and uncert_mpsf_constraint_values.shape[0] > 0 and uncert_mpsf_constraint_values.shape[1] > 0: # Already summed or single constraint
+    sum_positive_violations_uncert_all = np.maximum(0, uncert_mpsf_constraint_values)
+
+# plot the constraint violations over time for all state constraints
+fig_violations, ax_violations = plt.subplots(figsize=(10, 3))
+
+if sum_positive_violations_cert_all is not None:
+    plot_violations_over_time(ax_violations, 
+                              sum_positive_violations_cert_all, 
+                              dt, label='PPO+MPSF (All State Constraints)', color=plot_colors['Linear MPC'])
+if sum_positive_violations_uncert_all is not None:
+    plot_violations_over_time(ax_violations,
+                              sum_positive_violations_uncert_all, 
+                              dt, label='PPO (All State Constraints)', color=plot_colors['PPO'])
 
 ax_violations.set_xlabel('Time (s)')
 ax_violations.set_ylabel('State Constraint violation Magnitude')
 ax_violations.set_title('State Constraint Violation Magnitude Over Time')
-ax_violations.legend()
+ax_violations.legend(ncol=2, loc='best')
 ax_violations.grid(True)
 fig_violations.tight_layout()
 violation_plot_path = f'{script_path}/safe/quadrotor_all_state_constraint_violations.png'
@@ -149,8 +168,8 @@ fig_violations.savefig(violation_plot_path, dpi=300)
 print(f'Saved all state constraint violation plot to {violation_plot_path}')
 
 # plot the mean and std of the position constraint violations over time
-# position constraint violations have index 0, 1, 4, 5
-position_constraint_indices = [0, 1, 4, 5] # x_lower, x_upper, z_lower, z_upper (example interpretation)
+# position constraint violations have index 0, 2, 6, 8 in the constraint values
+position_constraint_indices = [0, 2, 6, 8] # x_lower, x_upper, z_lower, z_upper (example interpretation)
 
 cert_pos_constraint_values = collect_state_constraint_values(mpsf_data['cert_results'], nx, constraint_indices=position_constraint_indices)
 uncert_pos_constraint_values = collect_state_constraint_values(mpsf_data['uncert_results'], nx, constraint_indices=position_constraint_indices)
@@ -158,19 +177,35 @@ uncert_pos_constraint_values = collect_state_constraint_values(mpsf_data['uncert
 print(f'cert_pos_constraint_values shape: {cert_pos_constraint_values.shape}')
 print(f'uncert_pos_constraint_values shape: {uncert_pos_constraint_values.shape}')
 
-fig_pos_violations, ax_pos_violations = plt.subplots(figsize=(10, 5))
+# Calculate summed positive violations for POSITIONAL constraints
+sum_pos_violations_cert = None
+if cert_pos_constraint_values.ndim == 3 and cert_pos_constraint_values.shape[0] > 0 and cert_pos_constraint_values.shape[1] > 0 and cert_pos_constraint_values.shape[2] > 0:
+    sum_pos_violations_cert = np.sum(np.maximum(0, cert_pos_constraint_values), axis=2)
+elif cert_pos_constraint_values.ndim == 2 and cert_pos_constraint_values.shape[0] > 0 and cert_pos_constraint_values.shape[1] > 0:
+    sum_pos_violations_cert = np.maximum(0, cert_pos_constraint_values)
 
-plot_violations_over_time(ax_pos_violations,
-                          cert_pos_constraint_values,
-                          dt, label='PPO+MPSF (Positional Constraints)', color=plot_colors['Linear MPC'])
-plot_violations_over_time(ax_pos_violations,
-                          uncert_pos_constraint_values,
-                          dt, label='PPO (Positional Constraints)', color=plot_colors['PPO'])
+sum_pos_violations_uncert = None
+if uncert_pos_constraint_values.ndim == 3 and uncert_pos_constraint_values.shape[0] > 0 and uncert_pos_constraint_values.shape[1] > 0 and uncert_pos_constraint_values.shape[2] > 0:
+    sum_pos_violations_uncert = np.sum(np.maximum(0, uncert_pos_constraint_values), axis=2)
+elif uncert_pos_constraint_values.ndim == 2 and uncert_pos_constraint_values.shape[0] > 0 and uncert_pos_constraint_values.shape[1] > 0:
+    sum_pos_violations_uncert = np.maximum(0, uncert_pos_constraint_values)
+
+
+fig_pos_violations, ax_pos_violations = plt.subplots(figsize=(10, 3))
+
+if sum_pos_violations_cert is not None:
+    plot_violations_over_time(ax_pos_violations,
+                              sum_pos_violations_cert,
+                              dt, label='PPO+MPSF (Positional Constraints)', color=plot_colors['Linear MPC'])
+if sum_pos_violations_uncert is not None:
+    plot_violations_over_time(ax_pos_violations,
+                              sum_pos_violations_uncert,
+                              dt, label='PPO (Positional Constraints)', color=plot_colors['PPO'])
 
 ax_pos_violations.set_xlabel('Time (s)')
 ax_pos_violations.set_ylabel('Positional Constraint Violation [m]') # Assuming positions are in meters
 ax_pos_violations.set_title('Positional Constraint Violation Magnitude Over Time')
-ax_pos_violations.legend()
+ax_pos_violations.legend(ncol=2, loc='best')
 ax_pos_violations.grid(True)
 fig_pos_violations.tight_layout()
 pos_violation_plot_path = f'{script_path}/safe/quadrotor_positional_constraint_violations.png'
@@ -178,7 +213,7 @@ fig_pos_violations.savefig(pos_violation_plot_path, dpi=300)
 print(f'Saved positional constraint violation plot to {pos_violation_plot_path}')
 
 # Plot the minimum distance to positional boundaries
-fig_min_dist, ax_min_dist = plt.subplots(figsize=(10, 5))
+fig_min_dist, ax_min_dist = plt.subplots(figsize=(10, 3))
 
 # Use the already collected cert_pos_constraint_values and uncert_pos_constraint_values
 # These arrays have shape (num_episodes, num_steps, num_positional_constraints)
@@ -196,8 +231,8 @@ if uncert_pos_constraint_values.size > 0:
                                   color=plot_colors['PPO'])
 
 ax_min_dist.set_xlabel('Time (s)')
-ax_min_dist.set_ylabel('Minimum Distance to Positional Boundary [m]')
-ax_min_dist.set_title('Minimum Distance to Positional Safety Boundary Over Time')
+ax_min_dist.set_ylabel('Min. Distance to Pos. Boundary [m]')
+ax_min_dist.set_title('Min. Distance to Positional Safety Boundary Over Time')
 
 # Ensure legend handles multiple lines for y=0 if called multiple times
 handles, labels = ax_min_dist.get_legend_handles_labels()
@@ -210,6 +245,53 @@ fig_min_dist.tight_layout()
 min_dist_plot_path = f'{script_path}/safe/quadrotor_min_dist_to_boundary.png'
 fig_min_dist.savefig(min_dist_plot_path, dpi=300)
 print(f'Saved minimum distance to boundary plot to {min_dist_plot_path}')
+
+# Create box plot for summary of positional constraint violations
+fig_pos_constraints_boxplot, ax_pos_constraints_boxplot = plt.subplots(figsize=(8, 4))
+all_pos_constraint_values_for_boxplot = {}
+
+if cert_pos_constraint_values is not None and cert_pos_constraint_values.size > 0 :
+    all_pos_constraint_values_for_boxplot['PPO+MPSF'] = cert_pos_constraint_values
+if uncert_pos_constraint_values is not None and uncert_pos_constraint_values.size > 0:
+    all_pos_constraint_values_for_boxplot['PPO'] = uncert_pos_constraint_values
+
+# Define colors for the box plot controllers based on existing plot_colors
+boxplot_controller_colors = {
+    'PPO+MPSF': plot_colors.get('Linear MPC', 'gray'), 
+    'PPO': plot_colors.get('PPO', 'gray')
+}
+
+if all_pos_constraint_values_for_boxplot:
+    plot_constraint_violation_summary_boxplot(ax_pos_constraints_boxplot, 
+                                              all_pos_constraint_values_for_boxplot, 
+                                              boxplot_controller_colors)
+    ax_pos_constraints_boxplot.set_title('Distribution of Positional Constraint Values')
+    fig_pos_constraints_boxplot.tight_layout()
+    pos_constraints_boxplot_path = f'{script_path}/safe/quadrotor_positional_constraint_values_boxplot.png'
+    fig_pos_constraints_boxplot.savefig(pos_constraints_boxplot_path, dpi=300)
+    print(f'Saved positional constraint values boxplot to {pos_constraints_boxplot_path}')
+else:
+    print("Skipping positional constraint values box plot generation as no data was available.")
+
+# Create violin plot for summary of positional constraint violations
+fig_pos_constraints_violinplot, ax_pos_constraints_violinplot = plt.subplots(figsize=(8, 4))
+# all_pos_constraint_values_for_boxplot is already defined and populated from the boxplot section
+# Reusing boxplot_controller_colors for consistency, or define new ones if needed
+violinplot_controller_colors = boxplot_controller_colors 
+
+if all_pos_constraint_values_for_boxplot: # Check if data exists
+    plot_constraint_violation_summary_violinplot(ax_pos_constraints_violinplot,
+                                                 all_pos_constraint_values_for_boxplot,
+                                                 violinplot_controller_colors)
+    # ax_pos_constraints_violinplot.set_title('Distribution of Positional Constraint Values (Violin Plot)') # Title is set in helper
+    # ax_pos_constraints_violinplot.set_ylabel('Constraint Value') # Y-label is set in helper
+    # ax_pos_constraints_violinplot.grid(True, axis='y') # Grid is set in helper
+    fig_pos_constraints_violinplot.tight_layout()
+    pos_constraints_violinplot_path = f'{script_path}/safe/quadrotor_positional_constraint_values_violinplot.png'
+    fig_pos_constraints_violinplot.savefig(pos_constraints_violinplot_path, dpi=300)
+    print(f'Saved positional constraint values violin plot to {pos_constraints_violinplot_path}')
+else:
+    print("Skipping positional constraint values violin plot generation as no data was available.")
 
 
 # mpc_data = np.load(mpc_data, allow_pickle=True)
@@ -275,8 +357,6 @@ ax.add_patch(rec4)
 plt.xlim(-1.1, 1.1)
 plt.ylim(0.45, 1.55)
 
-plt.xlim(-1.1, -0.4)
-plt.ylim(1.2, 1.55)
 
 ax.legend()
 ax.set_xlabel('x [m]')
@@ -286,3 +366,17 @@ ax.set_title('Constrained Trajectory Tracking')
 fig.tight_layout()
 fig.savefig(f'{script_path}/safe/quadrotor_traj_tracking_xz.png', dpi=300)
 print(f'Saved figure to {script_path}/safe/quadrotor_traj_tracking_xz.png')
+
+# save a zoomed in version of the plot focusing on the left boundary
+plt.xlim(-1.1, -0.75)
+plt.ylim(0.6, 1.0)
+fig.tight_layout()
+fig.savefig(f'{script_path}/safe/quadrotor_traj_tracking_xz_zoomed_left_boundary.png', dpi=300)
+print(f'Saved zoomed in figure to {script_path}/safe/quadrotor_traj_tracking_xz_zoomed_left_boundary.png')
+
+# save a zoomed in version of the plot focusing on the upper boundary
+plt.xlim(-1.1, -0.4)
+plt.ylim(1.2, 1.55)
+fig.tight_layout()
+fig.savefig(f'{script_path}/safe/quadrotor_traj_tracking_xz_zoomed_upper_boundary.png', dpi=300)
+print(f'Saved zoomed in figure to {script_path}/safe/quadrotor_traj_tracking_xz_zoomed_upper_boundary.png')

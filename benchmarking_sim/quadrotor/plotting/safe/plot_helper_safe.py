@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
+import matplotlib.pyplot as plt
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None,
                                  traj_color='skyblue', hull_color='lightblue',
@@ -199,4 +200,144 @@ def plot_min_distance_to_boundary(ax, constraint_values_arr, dt, label=None, col
     
     # Add a line at y=0 to indicate the boundary
     ax.axhline(0, color='black', linestyle='--', linewidth=0.8, label='Safety Boundary (0)')
+
+def plot_constraint_violation_summary_boxplot(ax, all_constraint_values_data, controller_colors):
+    """
+    Creates a box plot summarizing constraint values for multiple controllers.
+    Each box shows the distribution of constraint values
+    (flattened across all episodes, time steps, and constraints for that controller).
+
+    Args:
+        ax (matplotlib.axes.Axes): The axes to plot on.
+        all_constraint_values_data (dict): Keys are controller names (str), values are 3D numpy arrays
+                                       of shape (num_episodes, num_steps, num_constraints) representing
+                                       constraint values.
+        controller_colors (dict): Keys are controller names (str), values are color strings.
+    """
+    controller_names = list(all_constraint_values_data.keys())
+    data_to_plot = []
+    valid_controller_names_for_plot = []
+    box_plot_colors = []
+
+    for name in controller_names:
+        constraint_data = all_constraint_values_data.get(name)
+        if constraint_data is not None and constraint_data.size > 0:
+            # Flatten the data: each value is a constraint value 
+            # from any step, any episode, any of the selected constraints.
+            data_to_plot.append(constraint_data.flatten())
+            valid_controller_names_for_plot.append(name)
+            box_plot_colors.append(controller_colors.get(name, 'gray')) # Default color if not specified
+        else:
+            print(f"Warning: No or empty constraint data for controller '{name}'. Skipping from box plot.")
+
+    if not data_to_plot:
+        print("Error: No data available for any controller to create a box plot.")
+        return
+
+    bp = ax.boxplot(data_to_plot, 
+                    labels=valid_controller_names_for_plot, 
+                    patch_artist=True, # Needed to fill boxes with color
+                    showmeans=True,    # Show mean as a point
+                    meanprops={'marker':'D', 'markeredgecolor':'black', 
+                               'markerfacecolor':'firebrick', 'markersize': 8},
+                    medianprops={'color':'black', 'linewidth':1.5}) # Make median line more visible
+    
+    legend_handles = []
+    legend_labels = []
+
+    for i, patch in enumerate(bp['boxes']):
+        patch.set_facecolor(box_plot_colors[i])
+        patch.set_alpha(0.7)
+        # Use the patch itself as a handle for the legend
+        legend_handles.append(patch)
+        legend_labels.append(valid_controller_names_for_plot[i])
+
+    # Add a horizontal line at y=0 to highlight the safety boundary
+    safety_line = ax.axhline(0, color='k', linestyle='--', linewidth=1, label='Safety Boundary (y=0)')
+    legend_handles.append(safety_line)
+    legend_labels.append(safety_line.get_label())
+
+    ax.set_ylabel('Positional Constraint Value')
+    ax.set_title('Distribution of Positional Constraint Values by Controller')
+    ax.yaxis.grid(True) # Horizontal grid lines
+    ax.legend(legend_handles, legend_labels)
+
+def plot_constraint_violation_summary_violinplot(ax, all_constraint_values_data, controller_colors):
+    """
+    Creates a violin plot summarizing constraint values for multiple controllers.
+    Each violin shows the distribution of constraint values
+    (flattened across all episodes, time steps, and constraints for that controller).
+
+    Args:
+        ax (matplotlib.axes.Axes): The axes to plot on.
+        all_constraint_values_data (dict): Keys are controller names (str), values are 3D numpy arrays
+                                       of shape (num_episodes, num_steps, num_constraints) representing
+                                       constraint values.
+        controller_colors (dict): Keys are controller names (str), values are color strings.
+    """
+    controller_names = list(all_constraint_values_data.keys())
+    data_to_plot = []
+    valid_controller_names_for_plot = []
+    violin_plot_colors = []
+
+    for name in controller_names:
+        constraint_data = all_constraint_values_data.get(name)
+        if constraint_data is not None and constraint_data.size > 0:
+            # Flatten the data: each value is a constraint value
+            # from any step, any episode, any of the selected constraints.
+            data_to_plot.append(constraint_data.flatten())
+            valid_controller_names_for_plot.append(name)
+            violin_plot_colors.append(controller_colors.get(name, 'gray')) # Default color
+        else:
+            print(f"Warning: No or empty constraint data for controller '{name}'. Skipping from violin plot.")
+
+    if not data_to_plot:
+        print("Error: No data available for any controller to create a violin plot.")
+        return
+
+    vp = ax.violinplot(data_to_plot,
+                       showmeans=False, # Changed from True to False
+                       showmedians=False, # Median is often clear from violin shape
+                       showextrema=True)
+
+    legend_handles = []
+    legend_labels = []
+
+    for i, body in enumerate(vp['bodies']):
+        body.set_facecolor(violin_plot_colors[i])
+        body.set_edgecolor('black')
+        body.set_alpha(0.7)
+        # Create a patch for the legend
+        legend_patch = plt.Rectangle((0, 0), 1, 1, facecolor=violin_plot_colors[i], alpha=0.7, edgecolor='black')
+        legend_handles.append(legend_patch)
+        legend_labels.append(valid_controller_names_for_plot[i])
+    
+    # Manually calculate and plot means with desired marker style
+    means = [np.mean(data) for data in data_to_plot]
+    positions = np.arange(1, len(data_to_plot) + 1)
+    ax.plot(positions, means, linestyle='None', marker='D', color='firebrick', 
+            markersize=8, markeredgecolor='black', zorder=3) # zorder to ensure means are on top
+
+    # Remove old block for styling vp['cmeans'] as it's no longer generated or needed
+    # if 'cmeans' in vp:
+    #     vp['cmeans'].set_color('firebrick')
+    #     vp['cmeans'].set_marker('D')
+    #     vp['cmeans'].set_markersize(8)
+    #     vp['cmeans'].set_markeredgecolor('black')
+
+
+    # Add a horizontal line at y=0 to highlight the safety boundary
+    safety_line = ax.axhline(0, color='k', linestyle='--', linewidth=1, label='Safety Boundary (y=0)')
+    # Add safety line to legend if not already covered by controller labels
+    if safety_line.get_label() not in legend_labels:
+        legend_handles.append(safety_line)
+        legend_labels.append(safety_line.get_label())
+
+
+    ax.set_xticks(np.arange(1, len(valid_controller_names_for_plot) + 1))
+    ax.set_xticklabels(valid_controller_names_for_plot)
+    ax.set_ylabel('Positional Constraint Value')
+    ax.set_title('Distribution of Positional Constraint Values by Controller (Violin Plot)')
+    ax.yaxis.grid(True) # Horizontal grid lines
+    ax.legend(legend_handles, legend_labels)
 
