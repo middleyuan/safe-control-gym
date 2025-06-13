@@ -534,13 +534,179 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
     ax.set_zlabel("Z (m)")
     ax.legend(loc="upper right")
     fig.tight_layout()
-    try:
-        fig.savefig(save_path)
-        print(f"Trajectory plot saved to {save_path}")
-    except:
-        pass
+    if save_path is not None:
+        fig.savefig(save_path+'/trajectory_plot.png', dpi=300)
+        print(f"3D Trajectory plot saved to {save_path}/trajectory_plot.png")
     plt.close(fig)
 
+    # plotting X, Y, Z vs. Time
+    if pos_ref.shape[0] > 0: # Ensure pos_ref is not empty
+        if waypoints is not None and len(waypoints) > 1:
+            t_start = waypoints[0].time
+            t_end = waypoints[-1].time
+            # Ensure t_end is greater than t_start for linspace
+            if t_end <= t_start and len(pos_ref) > 1 : # If times are same or inverted, but multiple points exist
+                 # Fallback if time data from waypoints is problematic for span
+                t_actual_pos_ref = np.arange(pos_ref.shape[0])
+            elif len(pos_ref) == 1: # Single point in pos_ref
+                 t_actual_pos_ref = np.array([t_start])
+            else:
+                t_actual_pos_ref = np.linspace(t_start, t_end, num=pos_ref.shape[0])
+        else:
+            # Default time vector if waypoints are not sufficient for time span
+            t_actual_pos_ref = np.arange(pos_ref.shape[0])
+
+
+        fig_time, axs_time = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
+        fig_time.suptitle('Position vs. Time', fontsize=16)
+
+        # Plot X vs. Time
+        axs_time[0].plot(t_actual_pos_ref, pos_ref[:, 0], label='Trajectory X')
+        if waypoints is not None:
+            wp_times = np.array([wp.time for wp in waypoints])
+            wp_x = np.array([wp.position[0] for wp in waypoints])
+            axs_time[0].scatter(wp_times, wp_x, color='red', marker='x', label='Waypoint X', s=50)
+        axs_time[0].set_ylabel('X (m)')
+        axs_time[0].legend()
+        axs_time[0].grid(True)
+
+        # Plot Y vs. Time
+        axs_time[1].plot(t_actual_pos_ref, pos_ref[:, 1], label='Trajectory Y')
+        if waypoints is not None:
+            wp_y = np.array([wp.position[1] for wp in waypoints])
+            # wp_times is already computed
+            axs_time[1].scatter(wp_times, wp_y, color='green', marker='x', label='Waypoint Y', s=50)
+        axs_time[1].set_ylabel('Y (m)')
+        axs_time[1].legend()
+        axs_time[1].grid(True)
+
+        # Plot Z vs. Time
+        axs_time[2].plot(t_actual_pos_ref, pos_ref[:, 2], label='Trajectory Z')
+        if waypoints is not None:
+            wp_z = np.array([wp.position[2] for wp in waypoints])
+            # wp_times is already computed
+            axs_time[2].scatter(wp_times, wp_z, color='blue', marker='x', label='Waypoint Z', s=50)
+        axs_time[2].set_ylabel('Z (m)')
+        axs_time[2].legend()
+        axs_time[2].grid(True)
+
+        axs_time[2].set_xlabel('Time (s)')
+        
+        fig_time.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust layout for suptitle
+
+        if save_path is not None:
+            fig_time.savefig(save_path+'/trajectory_time_plot.png', dpi=300)
+            print(f"Time-series trajectory plot saved to {save_path}/trajectory_time_plot.png")
+        
+        plt.close(fig_time)
+
+    # New code for plotting 2D projections (XY, XZ, YZ)
+    if pos_ref.shape[0] > 0: # Ensure pos_ref is not empty
+        fig_proj, axs_proj = plt.subplots(1, 3, figsize=(18, 5))
+        fig_proj.suptitle('2D Projections of Trajectory', fontsize=16)
+
+        projection_threshold = 0.01 # Threshold to consider a projection a point (e.g., 1cm)
+        point_projection_marker = 'X'
+        point_projection_color = 'darkorange'
+        point_projection_size = 50
+
+
+        # XY Plane
+        axs_proj[0].plot(pos_ref[:, 0], pos_ref[:, 1], 'b', label="Trajectory")
+        if waypoints is not None:
+            wp_x = np.array([wp.position[0] for wp in waypoints])
+            wp_y = np.array([wp.position[1] for wp in waypoints])
+            axs_proj[0].plot(wp_x, wp_y, "go", label="Waypoints", markersize=5)
+        if strings is not None:
+            first_string_xy = True
+            for i, string in enumerate(strings):
+                start_x, start_y = string['start'][0], string['start'][1]
+                end_x, end_y = string['end'][0], string['end'][1]
+                
+                projected_length_xy = np.sqrt((end_x - start_x)**2 + (end_y - start_y)**2)
+                
+                current_label = "Strings" if first_string_xy else ""
+
+                if projected_length_xy < projection_threshold:
+                    # Plot as a point (e.g., at the midpoint)
+                    mid_x, mid_y = (start_x + end_x) / 2, (start_y + end_y) / 2
+                    axs_proj[0].scatter(mid_x, mid_y, color=point_projection_color, marker=point_projection_marker, s=point_projection_size, label=current_label, zorder=3)
+                    if first_string_xy: first_string_xy = False
+                else:
+                    axs_proj[0].plot([start_x, end_x], [start_y, end_y], 'r-', label=current_label, linewidth=1.5)
+                    if first_string_xy: first_string_xy = False
+        axs_proj[0].set_xlabel("X (m)")
+        axs_proj[0].set_ylabel("Y (m)")
+        axs_proj[0].set_title("XY Plane")
+        axs_proj[0].legend()
+        axs_proj[0].grid(True)
+        axs_proj[0].axis('equal')
+
+        # XZ Plane
+        axs_proj[1].plot(pos_ref[:, 0], pos_ref[:, 2], 'b', label="Trajectory")
+        if waypoints is not None:
+            wp_x = np.array([wp.position[0] for wp in waypoints])
+            wp_z = np.array([wp.position[2] for wp in waypoints])
+            axs_proj[1].plot(wp_x, wp_z, "go", label="Waypoints", markersize=5)
+        if strings is not None:
+            first_string_xz = True
+            for i, string in enumerate(strings):
+                start_x, start_z = string['start'][0], string['start'][2]
+                end_x, end_z = string['end'][0], string['end'][2]
+
+                projected_length_xz = np.sqrt((end_x - start_x)**2 + (end_z - start_z)**2)
+                current_label = "Strings" if first_string_xz else ""
+
+                if projected_length_xz < projection_threshold:
+                    mid_x, mid_z = (start_x + end_x) / 2, (start_z + end_z) / 2
+                    axs_proj[1].scatter(mid_x, mid_z, color=point_projection_color, marker=point_projection_marker, s=point_projection_size, label=current_label, zorder=3)
+                    if first_string_xz: first_string_xz = False
+                else:
+                    axs_proj[1].plot([start_x, end_x], [start_z, end_z], 'r-', label=current_label, linewidth=1.5)
+                    if first_string_xz: first_string_xz = False
+        axs_proj[1].set_xlabel("X (m)")
+        axs_proj[1].set_ylabel("Z (m)")
+        axs_proj[1].set_title("XZ Plane")
+        axs_proj[1].legend()
+        axs_proj[1].grid(True)
+        axs_proj[1].axis('equal')
+
+        # YZ Plane
+        axs_proj[2].plot(pos_ref[:, 1], pos_ref[:, 2], 'b', label="Trajectory")
+        if waypoints is not None:
+            wp_y = np.array([wp.position[1] for wp in waypoints])
+            wp_z = np.array([wp.position[2] for wp in waypoints])
+            axs_proj[2].plot(wp_y, wp_z, "go", label="Waypoints", markersize=5)
+        if strings is not None:
+            first_string_yz = True
+            for i, string in enumerate(strings):
+                start_y, start_z = string['start'][1], string['start'][2]
+                end_y, end_z = string['end'][1], string['end'][2]
+
+                projected_length_yz = np.sqrt((end_y - start_y)**2 + (end_z - start_z)**2)
+                current_label = "Strings" if first_string_yz else ""
+
+                if projected_length_yz < projection_threshold:
+                    mid_y, mid_z = (start_y + end_y) / 2, (start_z + end_z) / 2
+                    axs_proj[2].scatter(mid_y, mid_z, color=point_projection_color, marker=point_projection_marker, s=point_projection_size, label=current_label, zorder=3)
+                    if first_string_yz: first_string_yz = False
+                else:
+                    axs_proj[2].plot([start_y, end_y], [start_z, end_z], 'r-', label=current_label, linewidth=1.5)
+                    if first_string_yz: first_string_yz = False
+        axs_proj[2].set_xlabel("Y (m)")
+        axs_proj[2].set_ylabel("Z (m)")
+        axs_proj[2].set_title("YZ Plane")
+        axs_proj[2].legend()
+        axs_proj[2].grid(True)
+        axs_proj[2].axis('equal')
+
+        fig_proj.tight_layout(rect=[0, 0, 1, 0.95]) # Adjust layout for suptitle
+
+        if save_path is not None:
+            fig_proj.savefig(save_path+'/trajectory_projections_plot.png', dpi=300)
+            print(f"2D Projections plot saved to {save_path}/trajectory_projections_plot.png")
+        
+        plt.close(fig_proj)
 
 class TrajectoryPlanner:
     def __init__(self, waypoint_list, string_list, N=30):
