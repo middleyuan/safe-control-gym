@@ -194,6 +194,11 @@ class Quadrotor(BaseAviary):
             'distrib': 'uniform',
             'low': -0.01,
             'high': 0.01
+        },
+        'init_tau': {
+            'distrib': 'uniform',
+            'low': 0.033 * 9.81 - 0.01,
+            'high': 0.033 * 9.81 + 0.01
         }
     }
 
@@ -275,7 +280,7 @@ class Quadrotor(BaseAviary):
                     (self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY and len(info_mse_metric_state_weight) == 6) or \
                     (self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S and len(info_mse_metric_state_weight) == 5) or \
                     (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE and len(info_mse_metric_state_weight) == 12) or \
-                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 and len(info_mse_metric_state_weight) == 10) \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 and len(info_mse_metric_state_weight) == 10) or \
                     (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY and len(info_mse_metric_state_weight) == 13):
 
                 self.info_mse_metric_state_weight = np.array(info_mse_metric_state_weight, ndmin=1, dtype=float)
@@ -452,6 +457,13 @@ class Quadrotor(BaseAviary):
                     self.TASK_INFO['stabilization_goal'][2], 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
                 ])
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0,
+                    self.TASK_INFO['stabilization_goal'][2], 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.MASS * self.GRAVITY_ACC])
+                    
         elif self.TASK == Task.TRAJ_TRACKING:
             if isinstance(self.EPISODE_LEN_SEC, list):
                 self.episode_len = self.np_random.choice(self.EPISODE_LEN_SEC)
@@ -513,8 +525,10 @@ class Quadrotor(BaseAviary):
                     _plot_trajectory(POS_REF, 
                                      waypoints=waypoints, 
                                      strings=strings, 
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-                            
+                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data'))
+
+                
+                
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
@@ -629,7 +643,7 @@ class Quadrotor(BaseAviary):
                     np.zeros(VEL_REF.shape[0]),
                     np.zeros(VEL_REF.shape[0]),
                     np.zeros(VEL_REF.shape[0]),
-                    np.zeros(VEL_REF.shape[0]), # tau
+                    np.zeros(VEL_REF.shape[0]) * self.MASS * self.GRAVITY_ACC, 
                 ]).transpose()
 
     def reset(self, seed=None):
@@ -1269,8 +1283,8 @@ class Quadrotor(BaseAviary):
             theta_dot = cs.MX.sym('theta_dot')
             psi = cs.MX.sym('psi')  # yaw angle [rad]
             psi_dot = cs.MX.sym('psi_dot')
-            force_motor = cs.MX.sym('force_motor')  # force from the motor
-            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            thrust = cs.MX.sym('thrust')  # force from the motor
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust)
             T_c = cs.MX.sym('T_c')  # normalized thrust [N]
             R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
@@ -1280,28 +1294,31 @@ class Quadrotor(BaseAviary):
             params_roll_rate = prior_prop.get('params_roll_rate', [-286.2, -23.03, 225.6])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-286.2, -23.03, 225.6])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-192.9, -22.22, 323.5])
-            force_motor_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
-            thrust = force_motor
-            force_motor_z = 32.221212 * (params_acc[0] * thrust + params_acc[1])  # [N]
+            thrust_dot = 1/params_acc[2] * (T_c - thrust)  # [N/s]
+            thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
+            thrust_applied = thrust_scaled / 0.033
             # Define dynamics equations.
             X_dot = cs.vertcat(x_dot,
-                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                              (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                              (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                              (force_motor_z) * cs.cos(phi) * cs.cos(theta) - g,
+                              (thrust_applied) * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                               force_motor_dot)
+                               thrust_dot)
             # Define observation.
-            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust_dot)
             
         # Set the equilibrium values for linearizations.
         X_EQ = np.zeros(self.state_dim)
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY]:
+            X_EQ[-1] = self.MASS * g  # thrust equilibrium
+            
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S]:
             U_EQ = np.array([u_eq, 0])
@@ -1483,6 +1500,12 @@ class Quadrotor(BaseAviary):
         self.psi_dot_threshold_radians = 500 * math.pi / 180
         self.force_motor_low = 0.08  # [N] measured from hardware data
         self.force_motor_high = 0.45  # [N] measured from hardware data
+        
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
+            # space for obstacle course
+            self.x_threshold = 3
+            self.y_threshold = 2
+            self.z_threshold = 2.5
 
         # Define obs/state bounds, labels and units.
         if self.QUAD_TYPE == QuadType.ONE_D:
