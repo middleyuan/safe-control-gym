@@ -318,13 +318,6 @@ def plot_constraint_violation_summary_violinplot(ax, all_constraint_values_data,
     ax.plot(positions, means, linestyle='None', marker='D', color='firebrick', 
             markersize=8, markeredgecolor='black', zorder=3) # zorder to ensure means are on top
 
-    # Remove old block for styling vp['cmeans'] as it's no longer generated or needed
-    # if 'cmeans' in vp:
-    #     vp['cmeans'].set_color('firebrick')
-    #     vp['cmeans'].set_marker('D')
-    #     vp['cmeans'].set_markersize(8)
-    #     vp['cmeans'].set_markeredgecolor('black')
-
 
     # Add a horizontal line at y=0 to highlight the safety boundary
     safety_line = ax.axhline(0, color='k', linestyle='--', linewidth=1, label='Safety Boundary (y=0)')
@@ -340,4 +333,132 @@ def plot_constraint_violation_summary_violinplot(ax, all_constraint_values_data,
     ax.set_title('Distribution of Positional Constraint Values by Controller (Violin Plot)')
     ax.yaxis.grid(True) # Horizontal grid lines
     ax.legend(legend_handles, legend_labels)
+
+def plot_violation_count_boxplot(ax, all_constraint_values_data, controller_colors):
+    """
+    Plots a box plot showing the number of constraint violations per episode for each controller.
+
+    Args:
+        ax (matplotlib.axes.Axes): The axes to plot on.
+        all_constraint_values_data (dict): Keys are controller names (str), values are 3D numpy arrays
+                                           of shape (num_episodes, num_steps, num_constraints).
+        controller_colors (dict): Keys are controller names (str), values are color strings.
+    """
+    controller_names = list(all_constraint_values_data.keys())
+    data_to_plot = []
+    valid_controller_names_for_plot = []
+    box_plot_colors = []
+
+    for name in controller_names:
+        constraint_data = all_constraint_values_data.get(name)
+        if constraint_data is not None and constraint_data.size > 0:
+            # Count number of violations (constraint_value > 0) per episode
+            violations_per_episode = np.sum(constraint_data > 0, axis=(1, 2))
+            data_to_plot.append(violations_per_episode)
+            valid_controller_names_for_plot.append(name)
+            box_plot_colors.append(controller_colors.get(name, 'gray'))
+        else:
+            print(f"Warning: No or empty constraint data for controller '{name}'. Skipping from violation count box plot.")
+
+    if not data_to_plot:
+        print("Error: No data available for any controller to create a violation count box plot.")
+        return
+
+    bp = ax.boxplot(data_to_plot,
+                    labels=valid_controller_names_for_plot,
+                    patch_artist=True,
+                    showmeans=True,
+                    meanprops={'marker':'D', 'markeredgecolor':'black',
+                               'markerfacecolor':'firebrick', 'markersize': 8},
+                    medianprops={'color':'black', 'linewidth':1.5})
+
+    for i, patch in enumerate(bp['boxes']):
+        patch.set_facecolor(box_plot_colors[i])
+        patch.set_alpha(0.7)
+
+    ax.set_ylabel('Number of Violations per Episode')
+    ax.set_title('Constraint Violation Counts per Episode by Controller')
+    ax.yaxis.grid(True)
+
+def plot_violation_count_boxplot_broken_axis(fig, ax_upper, ax_lower, all_constraint_values_data, controller_colors,
+                                            ylims_upper=(0, 10), ylims_lower=(50, 100)):
+    """
+    Plots a box plot with a broken y-axis for the number of constraint violations per episode for each controller.
+
+    Args:
+        fig (matplotlib.figure.Figure): The figure object.
+        ax_upper (matplotlib.axes.Axes): The upper axes (for lower y values).
+        ax_lower (matplotlib.axes.Axes): The lower axes (for higher y values).
+        all_constraint_values_data (dict): Controller data.
+        controller_colors (dict): Controller colors.
+        ylims_upper (tuple): y-limits for the upper axis (e.g., (0, 10)).
+        ylims_lower (tuple): y-limits for the lower axis (e.g., (50, 100)).
+    """
+    controller_names = list(all_constraint_values_data.keys())
+    data_to_plot = []
+    valid_controller_names_for_plot = []
+    box_plot_colors = []
+
+    for name in controller_names:
+        constraint_data = all_constraint_values_data.get(name)
+        if constraint_data is not None and constraint_data.size > 0:
+            violations_per_episode = np.sum(constraint_data > 0, axis=(1, 2))
+            data_to_plot.append(violations_per_episode)
+            valid_controller_names_for_plot.append(name)
+            box_plot_colors.append(controller_colors.get(name, 'gray'))
+        else:
+            print(f"Warning: No or empty constraint data for controller '{name}'. Skipping from violation count box plot.")
+
+    if not data_to_plot:
+        print("Error: No data available for any controller to create a violation count box plot.")
+        return
+
+    # Plot on both axes
+    bp_upper = ax_upper.boxplot(data_to_plot,
+                                labels=valid_controller_names_for_plot,
+                                patch_artist=True,
+                                showmeans=True,
+                                meanprops={'marker':'D', 'markeredgecolor':'black',
+                                           'markerfacecolor':'firebrick', 'markersize': 8},
+                                medianprops={'color':'black', 'linewidth':1.5})
+    bp_lower = ax_lower.boxplot(data_to_plot,
+                                labels=valid_controller_names_for_plot,
+                                patch_artist=True,
+                                showmeans=True,
+                                meanprops={'marker':'D', 'markeredgecolor':'black',
+                                           'markerfacecolor':'firebrick', 'markersize': 8},
+                                medianprops={'color':'black', 'linewidth':1.5})
+
+    for i, patch in enumerate(bp_upper['boxes']):
+        patch.set_facecolor(box_plot_colors[i])
+        patch.set_alpha(0.7)
+    for i, patch in enumerate(bp_lower['boxes']):
+        patch.set_facecolor(box_plot_colors[i])
+        patch.set_alpha(0.7)
+
+    # Set y-limits
+    ax_upper.set_ylim(*ylims_upper)
+    ax_lower.set_ylim(*ylims_lower)
+
+    # Hide the spines between ax_upper and ax_lower
+    ax_upper.spines['bottom'].set_visible(False)
+    ax_lower.spines['top'].set_visible(False)
+    ax_upper.xaxis.tick_top()
+    ax_upper.tick_params(labeltop=False)  # Don't put tick labels at the top
+    ax_lower.xaxis.tick_bottom()
+
+    # Diagonal lines to indicate the break
+    d = .015  # size of diagonal lines
+    kwargs = dict(transform=ax_upper.transAxes, color='k', clip_on=False)
+    ax_upper.plot((-d, +d), (-d, +d), **kwargs)        # top-left diagonal
+    ax_upper.plot((1 - d, 1 + d), (-d, +d), **kwargs)  # top-right diagonal
+
+    kwargs.update(transform=ax_lower.transAxes)  # switch to the lower axes
+    ax_lower.plot((-d, +d), (1 - d, 1 + d), **kwargs)  # bottom-left diagonal
+    ax_lower.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)  # bottom-right diagonal
+
+    ax_lower.set_ylabel('Number of Violations per Episode')
+    ax_upper.set_title('Constraint Violation Counts per Episode by Controller (Broken Axis)')
+    ax_upper.yaxis.grid(True)
+    ax_lower.yaxis.grid(True)
 
