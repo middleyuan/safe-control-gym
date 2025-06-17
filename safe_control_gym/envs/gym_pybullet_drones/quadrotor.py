@@ -224,6 +224,7 @@ class Quadrotor(BaseAviary):
                  rew_state_weight=1.0,
                  rew_act_weight=0.0001,
                  rew_exponential=True,
+                 use_rl_reward_weights=False,
                  done_on_out_of_bound=True,
                  info_mse_metric_state_weight=None,
                  **kwargs
@@ -251,6 +252,7 @@ class Quadrotor(BaseAviary):
         self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
         self.R = np.diag(self.rew_act_weight)
         self.rew_exponential = rew_exponential
+        self.use_rl_reward_weights = use_rl_reward_weights
         self.done_on_out_of_bound = done_on_out_of_bound
         if info_mse_metric_state_weight is None:
             if self.QUAD_TYPE == QuadType.ONE_D:
@@ -1928,8 +1930,9 @@ class Quadrotor(BaseAviary):
             return rew
 
         # Control cost.
-        # self.Q = np.diag(self.rew_state_weight)
-        # self.R = np.diag(self.rew_act_weight)
+        if self.use_rl_reward_weights:
+            self.Q = np.diag(self.rew_state_weight)
+            self.R = np.diag(self.rew_act_weight)
         if self.COST == Cost.QUADRATIC:
             if self.TASK == Task.STABILIZATION:
                 return float(-1 * self.symbolic.loss(x=obs,
