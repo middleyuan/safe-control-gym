@@ -22,7 +22,7 @@ from safe_control_gym.math_and_models.symbolic_systems import SymbolicModel
 from safe_control_gym.math_and_models.transformations import (csRotXYZ, get_quaternion_from_euler,
                                                               transform_trajectory)
 from safe_control_gym.envs.disturbances import Downwash
-from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import _plot_trajectory
+from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import _plot_trajectory, _plot_xyz_kinematics
 
 script_dir = os.path.dirname(__file__)
 
@@ -491,7 +491,7 @@ class Quadrotor(BaseAviary):
                 else:
                     strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
                     waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
-                    POS_REF, VEL_REF, _ = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                    POS_REF, VEL_REF, ACC_REF, SPD_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
                                                                     traj_length=self.episode_len,
                                                                     num_cycles=self.TASK_INFO['num_cycles'],
                                                                     traj_plane=self.TASK_INFO['trajectory_plane'],
@@ -514,7 +514,10 @@ class Quadrotor(BaseAviary):
                                      waypoints=waypoints, 
                                      strings=strings, 
                                      save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-                            
+                    _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
+                                     waypoints=waypoints, 
+                                     strings=strings, 
+                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
@@ -1469,9 +1472,9 @@ class Quadrotor(BaseAviary):
 
     def _set_observation_space(self):
         """Sets the observation space of the environment."""
-        self.x_threshold = 2
-        self.y_threshold = 2
-        self.z_threshold = 2
+        self.x_threshold = 6
+        self.y_threshold = 6
+        self.z_threshold = 6
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
         self.psi_threshold_radians = 180 * math.pi / 180  # Do not bound yaw.
