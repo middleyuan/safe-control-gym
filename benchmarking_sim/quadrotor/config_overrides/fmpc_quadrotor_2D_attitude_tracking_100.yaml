@@ -11,8 +11,8 @@ algo_config:
   - 0.0001
   - 0.0001
   r_mpc:
-  - 1e-10
-  - 1e-10
+  - 1.0e-10
+  - 1.0e-10
   # Prior info
   prior_info:
     prior_prop: null
