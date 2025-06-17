@@ -10,7 +10,7 @@ hpo_config:
   seed: 24
   save_n_best_hps: 1
   # budget
-  trials: 60
+  trials: 50
 
   # hyperparameters
   hps_config:
