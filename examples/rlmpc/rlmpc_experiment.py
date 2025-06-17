@@ -129,7 +129,7 @@ def run(gui=False, plot=True, n_episodes=5, n_steps=None, curr_path='.'):
     # with open(f'./ppo_mpc_safety_config_results.pkl', 'wb') as f:
     #     pickle.dump(results, f)
 
-    if plot is True:
+    if plot is False:
         if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3
