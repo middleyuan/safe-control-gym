@@ -63,6 +63,7 @@ class PPO_VMPC(BaseController):
             target_kl=self.target_kl,
             entropy_coef=self.entropy_coef,
             exploration_init=self.exploration_init,
+            value_loss_coef=self.value_loss_coef,
             actor_lr=self.actor_lr,
             critic_lr=self.critic_lr,
             opt_epochs=self.opt_epochs,
@@ -264,9 +265,9 @@ class PPO_VMPC(BaseController):
                     # terminal_obs = inf['terminal_observation']
                     # terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     # terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_val = self.agent.ac.value(agent_info[idx])[:, None]  #.detach().cpu().numpy()[:, None]
+                    terminal_val = self.agent.ac.value(soln_info[idx])[:, None]  #.detach().cpu().numpy()[:, None]
                     terminal_v[idx] = terminal_val
-                    self.agent.reset()
+                    # self.agent.reset()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
                  'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
@@ -412,3 +413,5 @@ class PPO_VMPC(BaseController):
         self.logger.dump_scalars()
         print(self.agent.ac.actor.mpc_param.detach().numpy())
         print(self.agent.ac.actor.logstd.detach().numpy())
+        # print(self.agent.ac.critic_param.detach().numpy())
+        print(self.agent.ac.critic_param.numpy())

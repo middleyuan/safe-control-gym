@@ -37,6 +37,7 @@ class PPO_VMPC_Agent:
                  target_kl=0.02,
                  entropy_coef=0.002,
                  exploration_init=-1.0,
+                 value_loss_coef=0.0,
                  actor_lr=0.001,
                  critic_lr=0.001,
                  opt_epochs=10,
@@ -53,6 +54,7 @@ class PPO_VMPC_Agent:
         self.target_kl = target_kl
         self.entropy_coef = entropy_coef
         self.exploration_init = exploration_init
+        self.value_loss_coef = value_loss_coef
         self.opt_epochs = opt_epochs
         self.mini_batch_size = mini_batch_size
         self.activation = activation
@@ -73,7 +75,7 @@ class PPO_VMPC_Agent:
         # Optimizers.
         self.actor_opt = torch.optim.Adam(self.ac.actor.parameters(), actor_lr)
         self.actor_mpc_opt = AdamOptimizer(actor_lr)
-        self.critic_opt = torch.optim.Adam([self.ac.critic_param], critic_lr)
+        # self.critic_opt = torch.optim.Adam([self.ac.critic_param], critic_lr)
 
     def to(self, device):
         '''Puts agent to device.'''
@@ -96,7 +98,7 @@ class PPO_VMPC_Agent:
         return {
             'ac': self.ac.state_dict(),
             'actor_opt': self.actor_opt.state_dict(),
-            'critic_opt': self.critic_opt.state_dict()
+            # 'critic_opt': self.critic_opt.state_dict()
         }
 
     def load_state_dict(self, state_dict, strict=True):
@@ -117,7 +119,7 @@ class PPO_VMPC_Agent:
         # Policy.
         ratio = torch.exp(logp - logp_old)
         clip_adv = torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param) * adv
-        policy_loss = torch.min(ratio * adv, clip_adv)
+        policy_loss = -torch.min(ratio * adv, clip_adv)
         # mask = ratio*adv > clip_adv
         # policy_loss[mask] = 0.0
         policy_loss = torch.where(optimal > 0.9, policy_loss, torch.nan).nanmean()
@@ -125,7 +127,7 @@ class PPO_VMPC_Agent:
         entropy_loss = torch.where(optimal > 0.9, -dist.entropy(), torch.nan).nanmean()
         # KL/trust region.
         approx_kl = torch.where(optimal > 0.9, (logp_old - logp), torch.nan).nanmean()
-        return policy_loss, entropy_loss, approx_kl, action_th, v_mpc, nabla_v_theta, nabla_pi_ref, nabla_pi_theta
+        return policy_loss, entropy_loss, approx_kl, action_th, v_mpc, nabla_v_theta, nabla_pi_ref, nabla_pi_theta, optimal
 
     def compute_value_loss(self, batch_th, v_mpc, nabla_v_theta):
         '''Returns value loss(es) given batch of data.'''
@@ -142,22 +144,26 @@ class PPO_VMPC_Agent:
         '''Updates model parameters based on current training batch.'''
         results = defaultdict(list)
         num_mini_batch = rollouts.max_length * rollouts.batch_size // self.mini_batch_size
+
         # assert if num_mini_batch is 0
         assert num_mini_batch != 0, 'num_mini_batch is 0'
         for _ in range(self.opt_epochs):
-            p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
+            p_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0
             theta_loss_epoch, ref_loss_epoch, v_theta_loss_epoch = 0, 0, 0
+            Av, bv = [], []
 
             for batch, batch_th in rollouts.sampler(self.mini_batch_size, device):
                 (policy_loss, entropy_loss, approx_kl, action_th, v_mpc, nabla_v_theta,
-                 nabla_pi_ref, nabla_pi_theta) = self.compute_policy_loss(batch, batch_th)
+                 nabla_pi_ref, nabla_pi_theta, optimal) = self.compute_policy_loss(batch, batch_th)
+                v_cur = - v_mpc - (nabla_v_theta.unsqueeze(1) @ self.ac.critic_param.unsqueeze(1)).squeeze(2)
+                # v_cur = - v_mpc
 
-                # Critic update.
-                value_loss, td_value = self.compute_value_loss(batch_th, v_mpc, nabla_v_theta)
-                self.critic_opt.zero_grad()
-                value_loss.backward()
-                self.critic_opt.step()
-                v_loss_epoch += value_loss.item()
+                # Value function loss.
+                for i, flag in enumerate(optimal):
+                    if flag:
+                        Av.append(-nabla_v_theta[i, :])
+                        bv.append(batch_th['ret'][i, 0] + v_mpc[i, 0])
+
                 # Actor update.
                 # Update only when no KL constraint or constraint is satisfied.
                 if (self.target_kl <= 0) or (self.target_kl > 0 and approx_kl <= 1.5 * self.target_kl):
@@ -167,11 +173,12 @@ class PPO_VMPC_Agent:
                     # Passing the gradients through the mpc
                     theta = self.ac.actor.get_theta_param(batch_th['obs'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
+                    td_value = batch_th['ret'].float() - v_cur
                     v_theta_loss = td_value.unsqueeze(2) @ nabla_v_theta.unsqueeze(1) @ theta.unsqueeze(2)
                     # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
-                    (theta_loss.sum() + 1e-4*v_theta_loss.mean()).backward()
-                    # self.actor_opt.step()
+                    (theta_loss.sum() + float(self.value_loss_coef) * v_theta_loss.mean()).backward()
+                    self.actor_opt.step()
                     with torch.no_grad():
                         self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
 
@@ -181,13 +188,39 @@ class PPO_VMPC_Agent:
                     theta_loss_epoch += theta_loss.sum().item()
                     # ref_loss_epoch += ref_loss.sum().item()
                     v_theta_loss_epoch += v_theta_loss.mean().item()
+            # If there are no valid samples, skip the critic update.
+            if len(Av) > 0:
+                Av, bv = np.array(Av), np.array(bv)
+                lstsq_soln = np.linalg.lstsq(Av, bv, rcond=None)
+                self.ac.critic_param = torch.FloatTensor(lstsq_soln[0])
+                results['value_loss'].append(0.5 * lstsq_soln[1][0] / np.array(Av).shape[0])
+
             results['policy_loss'].append(p_loss_epoch / num_mini_batch)
-            results['value_loss'].append(v_loss_epoch / num_mini_batch)
+            # results['value_loss'].append(v_loss_epoch / num_mini_batch)
             results['entropy_loss'].append(e_loss_epoch / num_mini_batch)
             results['approx_kl'].append(kl_epoch / num_mini_batch)
             results['theta_loss'].append(theta_loss_epoch / num_mini_batch)
             results['ref_loss'].append(ref_loss_epoch / num_mini_batch)
             results['v_theta_loss'].append(v_theta_loss_epoch / num_mini_batch)
+
+        # # critic update
+        # Av, bv = [], []
+        # for batch, batch_th in rollouts.sampler(self.mini_batch_size, device):
+        #     obs, act, info, ret = batch_th['obs'], batch_th['act'], batch['info'], batch['ret']
+        #     action_th, _, _, v_mpc, nabla_v_theta, _, _, optimal = (
+        #         self.ac.actor.forward_train(obs, act, info)
+        #     )
+        #     for i, flag in enumerate(optimal):
+        #         if flag:
+        #             Av.append(-nabla_v_theta[i, :])
+        #             bv.append(ret[i, 0] + v_mpc[i, 0])
+        # # If there are no valid samples, skip the critic update.
+        # if len(Av) > 0:
+        #     Av, bv = np.array(Av), np.array(bv)
+        #     lstsq_soln = np.linalg.lstsq(Av, bv, rcond=None)
+        #     self.ac.critic_param = torch.FloatTensor(lstsq_soln[0])
+        #     results['value_loss'].append(0.5 * lstsq_soln[1][0] / np.array(Av).shape[0])
+
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -226,7 +259,7 @@ class MLPActorCritic(nn.Module):
             env, obs_dim, act_dim, hidden_dims, activation, gamma, model, exploration_init, actor_config
         )
         # Value function.
-        self.critic_param = nn.Parameter(torch.zeros(self.actor.n_learnable_param))
+        self.critic_param = torch.zeros(self.actor.n_learnable_param)
 
     def step(self, obs, info=None):
         dist, _, soln_info, results_dict, optimal_flag = self.actor(obs, actor_info=info)
@@ -285,7 +318,7 @@ class MPCActor(nn.Module):
         self.n_learnable_param = 0
         for k in self.param_dict.keys():
             self.n_learnable_param += self.param_dict[k].shape[0]
-        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.back_off, self.model_param))
+        temp = np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc, self.model_param))
         self.mpc_param = nn.Parameter(torch.FloatTensor(temp))
         self.param_net = MLP(obs_dim, self.n_learnable_param, hidden_dims, activation)
         # self.traj_param = nn.Parameter(torch.FloatTensor(self.mpc.traj))
@@ -297,7 +330,7 @@ class MPCActor(nn.Module):
 
     def _init_param_val(self):
         self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
-                           'b': np.array(self.back_off),
+                           # 'b': np.array(self.back_off),
                            'f': np.array(self.model_param)}
 
     def forward(self, obs, act=None, actor_info=None):
@@ -556,7 +589,7 @@ class MPCPolicyFunction:
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
-        back_off_param = cs.MX.sym("back_off_param", nx)
+        # back_off_param = cs.MX.sym("back_off_param", nx)
         # Model
         model_param = cs.MX.sym('f_param', npl)
 
@@ -608,15 +641,15 @@ class MPCPolicyFunction:
             # State bounds
             for sc_i, state_constraint in enumerate(self.state_constraints_sym):
                 cost += w @ sigma_var[:, i]
-                con_list.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i] + back_off_param)
-                con_list.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i] + back_off_param)
+                con_list.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i])
+                con_list.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i])
                 con_list.append(-sigma_var[:, i])
                 con_lbg.append(-cs.DM.inf(3 * nx, 1))
                 con_ubg.append(cs.DM.zeros(3 * nx, 1))
                 con_eq += [False] * 3 * nx
 
-                H_ieq.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i] + back_off_param)
-                H_ieq.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i] + back_off_param)
+                H_ieq.append(state_constraint(x_var[:, i])[:nx] - sigma_var[:, i])
+                H_ieq.append(state_constraint(x_var[:, i])[nx:] - sigma_var[:, i])
                 H_ieq.append(-sigma_var[:, i])
                 lm = cs.MX.sym('lm', 3 * nx)
                 mult.append(lm)
@@ -637,15 +670,15 @@ class MPCPolicyFunction:
         # Final state constraints.
         for sc_i, state_constraint in enumerate(self.state_constraints_sym):
             cost += w @ sigma_var[:, -1]
-            con_list.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param)
-            con_list.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param)
+            con_list.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1])
+            con_list.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1])
             con_list.append(-sigma_var[:, -1])
             con_lbg.append(-cs.DM.inf(3 * nx, 1))
             con_ubg.append(cs.DM.zeros(3 * nx, 1))
             con_eq += [False] * 3 * nx
 
-            H_ieq.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param)
-            H_ieq.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param)
+            H_ieq.append(state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1])
+            H_ieq.append(state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1])
             H_ieq.append(-sigma_var[:, -1])
             lm = cs.MX.sym('lm', 3 * nx)
             mult.append(lm)
@@ -678,7 +711,7 @@ class MPCPolicyFunction:
         vnlp_prob = {
             'f': cost,
             'x': opt_vars,
-            'p': cs.vertcat(fixed_param, ref_param, cost_param, back_off_param, model_param),
+            'p': cs.vertcat(fixed_param, ref_param, cost_param, model_param),
             'g': con_list,
         }
         vsolver = cs.nlpsol('vsolver', 'fatrop', vnlp_prob, opts_setting)
@@ -700,7 +733,7 @@ class MPCPolicyFunction:
         )
         # z contains all variables of the lagrangian
         z = cs.vertcat(opt_vars, lamb, mu)
-        theta = cs.vertcat(cost_param, back_off_param, model_param)
+        theta = cs.vertcat(cost_param, model_param)
 
         # Sensitivities for value function
         lagrangian_fn = cs.Function('Lagrangian', [z, fixed_param, ref_param, theta], [lagrangian])
@@ -961,7 +994,24 @@ class MPCPolicyFunction:
         self.infos = deepcopy(info_batch)
         return action_batch, info_batch, results_dict_batch, optimal_batch
 
-    def select_action_batch_train(self, obs_batch, theta, traj_ref, info_batch):
+    def select_action_batch_train(self, obs_batch, theta, traj_ref, info_batch, compute_v_sensitivity=True,
+                                  compute_dpi_sensitivity=True):
+        """Solves nonlinear mpc problem to get next action for training.
+        Args:
+            obs_batch (ndarray): Current state/observation.
+            theta (ndarray): Learnable param based on current state
+            traj_ref (ndarray): Learnable trajectory
+            info_batch (list): List of info dicts for each batch element.
+            compute_v_sensitivity (bool): Whether to compute sensitivity of value function.
+            compute_dpi_sensitivity (bool): Whether to compute sensitivity of policy.
+        Returns:
+            action_batch (torch.Tensor): Input/action to the task/env.
+            V_mpc (torch.Tensor): Value function for each batch element.
+            dVdtheta (torch.Tensor): Sensitivity of value function w.r.t. theta.
+            nabla_pi_ref_batch (torch.Tensor): Sensitivity of policy w.r.t. reference.
+            nabla_pi_theta_batch (torch.Tensor): Sensitivity of policy w.r.t. theta.
+            optimal_batch (torch.Tensor): Optimality status for each batch element.
+        """
         solver_dict = self.solver_dict
         solver = solver_dict['solver_train']
         con_lbg = solver_dict['lower_bound']
@@ -1003,13 +1053,16 @@ class MPCPolicyFunction:
 
         # Post-processing the solution
         V_mpc = V_fn(z, fixed_p, ref_p, theta.T).full().T
-        dVdtheta = dVdtheta_fn(optimal_batch, z, fixed_p, ref_p, theta.T).full().T
+        dVdtheta = np.zeros((obs_batch.shape[0], theta.shape[1]))
+        if compute_v_sensitivity:
+            dVdtheta = dVdtheta_fn(optimal_batch, z, fixed_p, ref_p, theta.T).full().T
         action_batch = opt_act_fn(soln_batch['x']).full().T
         dpi_cs = dpi_fn_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
         nabla_pi_ref_batch, nabla_pi_theta_batch = [], []
-        for i in range(obs_batch.shape[0]):
-            # nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], self.model.nu * i: self.model.nu * (i + 1)].T)
-            nabla_pi_theta_batch.append(dpi_cs[:, self.model.nu * i: self.model.nu * (i + 1)].T)
+        if compute_dpi_sensitivity:
+            for i in range(obs_batch.shape[0]):
+                # nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], self.model.nu * i: self.model.nu * (i + 1)].T)
+                nabla_pi_theta_batch.append(dpi_cs[:, self.model.nu * i: self.model.nu * (i + 1)].T)
         action_batch = torch.FloatTensor(action_batch)
         nabla_pi_ref_batch = torch.FloatTensor(np.array(nabla_pi_ref_batch))
         nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
