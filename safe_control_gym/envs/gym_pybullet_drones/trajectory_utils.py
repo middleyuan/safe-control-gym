@@ -510,7 +510,7 @@ def _distance_to_line(start, end, point):
     return cs.sqrt((cross.T @ cross) / (string.T @ string))
 
 def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
-    
+
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(5, 4))
     ax.plot(pos_ref[:, 0], pos_ref[:, 1], pos_ref[:, 2], 'b', label="Position Trajectory")
     if waypoints is not None:
@@ -579,6 +579,48 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
         plt.show()
         plt.close(fig)
 
+    # Plot X vs Y
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.plot(pos_ref[:, 0], pos_ref[:, 1], 'c-', linewidth=1.5, label='X vs Y')
+    ax.set_xlabel('X Position')
+    ax.set_ylabel('Y Position')
+    ax.set_title('X vs Y Trajectory')
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+
+    if save_path is not None:
+        save_xy_path = f"{save_path}_xy.png"
+        try:
+            fig.savefig(save_xy_path)
+            print(f"XY plot saved to {save_xy_path}")
+        except Exception as e:
+            print(f"Failed to save plot {save_xy_path}: {e}")
+
+    plt.show()
+    plt.close(fig)
+
+    # Plot X vs Z
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.plot(pos_ref[:, 0], pos_ref[:, 2], 'orange', linewidth=1.5, label='X vs Z')
+    ax.set_xlabel('X Position')
+    ax.set_ylabel('Z Position')
+    ax.set_title('X vs Z Trajectory')
+    ax.grid(True)
+    ax.legend()
+    fig.tight_layout()
+
+    if save_path is not None:
+        save_xz_path = f"{save_path}_xz.png"
+        try:
+            fig.savefig(save_xz_path)
+            print(f"XZ plot saved to {save_xz_path}")
+        except Exception as e:
+            print(f"Failed to save plot {save_xz_path}: {e}")
+
+    plt.show()
+    plt.close(fig)
+
     # Plot speed magnitude on separate plot
     if speed_ref is not None:
         fig, ax = plt.subplots(figsize=(5, 4))
@@ -600,7 +642,7 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
 
         plt.show()
         plt.close(fig)
-
+    
 
 class TrajectoryPlanner:
     def __init__(self, waypoint_list, string_list, N=30):
@@ -611,25 +653,80 @@ class TrajectoryPlanner:
         self.dt = self.T / N
         self.string_discrete_point = 10
 
-        # waypoints
+        # # waypoints
+        # length_w = len(waypoint_list)
+        # self.start_loc = waypoint_list[0]['position']
+        # self.end_loc = waypoint_list[length_w - 1]['position']
+        # pos_init = np.array([]).reshape(0, 6)
+        # for i in range(length_w - 1):
+        #     dt = waypoint_list[i + 1]['time'] - waypoint_list[i]['time']
+        #     sub_waypoints = np.linspace(waypoint_list[i]['position'] + [0., 0., 0.],
+        #                                 waypoint_list[i + 1]['position'] + [0., 0., 0.],
+        #                                 round(dt * N / self.T))
+        #     pos_init = np.concatenate((pos_init, sub_waypoints), axis=0)
+        #     print(pos_init.shape)
+        # pos_init = np.concatenate((pos_init,
+        #                            np.array(waypoint_list[-1]['position'] + [0., 0., 0.])[None, :]), axis=0)
         length_w = len(waypoint_list)
         self.start_loc = waypoint_list[0]['position']
         self.end_loc = waypoint_list[length_w - 1]['position']
-        pos_init = np.array([]).reshape(0, 6)
+
+        # Total number of trajectory steps (excluding the final point)
+        total_steps = self.N
+        segment_durations = [
+            waypoint_list[i + 1]['time'] - waypoint_list[i]['time']
+            for i in range(length_w - 1)
+        ]
+
+        # Normalize segment durations to allocate points proportionally
+        total_duration = sum(segment_durations)
+        proportions = [d / total_duration for d in segment_durations]
+
+        # Allocate number of points per segment (excluding last point)
+        segment_steps = [int(p * total_steps) for p in proportions]
+
+        # Adjust for rounding error so sum(segment_steps) == total_steps
+        while sum(segment_steps) < total_steps:
+            # Add remaining points to the segment with largest remainder
+            remainders = [(p * total_steps) - s for p, s in zip(proportions, segment_steps)]
+            segment_steps[np.argmax(remainders)] += 1
+
+        # Interpolate points
+        pos_init = np.zeros((0, 6))
         for i in range(length_w - 1):
-            dt = waypoint_list[i + 1]['time'] - waypoint_list[i]['time']
-            sub_waypoints = np.linspace(waypoint_list[i]['position'] + [0., 0., 0.],
-                                        waypoint_list[i + 1]['position'] + [0., 0., 0.],
-                                        round(dt * N / self.T))
-            pos_init = np.concatenate((pos_init, sub_waypoints), axis=0)
-        pos_init = np.concatenate((pos_init,
-                                   np.array(waypoint_list[-1]['position'] + [0., 0., 0.])[None, :]), axis=0)
+            start = waypoint_list[i]['position'] + [0., 0., 0.]
+            end = waypoint_list[i + 1]['position'] + [0., 0., 0.]
+            num_pts = segment_steps[i]
+
+            # linspace includes both ends, so we exclude last point to avoid duplicates
+            if num_pts > 0:
+                sub_waypoints = np.linspace(start, end, num_pts, endpoint=False)
+                pos_init = np.concatenate((pos_init, sub_waypoints), axis=0)
+
+        # Append final point (to make N+1)
+        final = np.array(waypoint_list[-1]['position'] + [0., 0., 0.])[None, :]
+        pos_init = np.concatenate((pos_init, final), axis=0)
+
+        print("Final pos_init shape:", pos_init.shape)  # Should be (N+1, 6)
+        print(pos_init.shape)
+        print("Expected:", self.N + 1, "Actual:", pos_init.shape[0])
         self.dynamics_fn()
         self.traj_solver = self.traj_optimizer()
+        u_init = np.zeros((self.N * 3, 1))
+        print("U shape:", u_init.shape)
+
+        x_init = pos_init.reshape(-1, 1)
+        print("X shape:", x_init.shape)
+
+        sigma_init = np.zeros(((self.N + 1) * len(self.string_list) * self.string_discrete_point, 1))
+        print("Sigma shape:", sigma_init.shape)
+
+        x0 = np.concatenate((u_init, x_init, sigma_init), axis=0)
+        print("x0 shape:", x0.shape)
         x0 = np.concatenate((np.zeros((self.N * 3, 1)),
                              pos_init.reshape(-1, 1),
                              np.zeros(((self.N + 1) * len(self.string_list) * self.string_discrete_point, 1))), axis=0)
-
+        print(x0.shape, self.lbg.shape, self.ubg.shape)
         soln = self.traj_solver(x0=x0, p=[], lbg=self.lbg, ubg=self.ubg)
         ref = soln['x'].full()
         if not self.traj_solver.stats()['success']:
@@ -692,14 +789,15 @@ class TrajectoryPlanner:
                     d = _distance_to_point(point, X[:3, i])
                     h.append(0.5 - d - Sigma[j * k, i])
                     h.append(-Sigma[j * k, i])
-            cost += 1e2 * Sigma[:, i].T @ Sigma[:, i]
-        
+            cost += 1 * Sigma[:, i].T @ Sigma[:, i]
         for wp in self.waypoint_list[1:-1]:  # skip start and end
             t_idx = int(wp['time'] / self.dt)  # convert time to index
             pos = X[:3, t_idx]  # predicted position at that time
             desired = cs.vertcat(*wp['position'])  # desired waypoint
-            cost += 5 * cs.sumsqr(pos - desired)  # soft penalty
-
+            cost += 10 * cs.sumsqr(pos - desired)  # soft penalty
+        z_vals = X[2, :]  # (1, N+1)
+        z_mean = cs.sum1(z_vals) / z_vals.shape[0]
+        cost += 5e12 * cs.sumsqr(z_vals - z_mean)  # scale 50 is tunable
         G = cs.vertcat(*g)
         H = cs.vertcat(*h)
         G_con = cs.vertcat(*g, *h)

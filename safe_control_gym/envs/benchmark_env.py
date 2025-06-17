@@ -669,9 +669,9 @@ class BenchmarkEnv(gym.Env, ABC):
         # 
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
         #       ptherwise flying on the floor with z=0.0 
-        if 'z' not in traj_plane:
-            pos_ref_traj[:, 2] = 1.0
-            vel_ref_traj[:, 2] = 0.0
+        # if 'z' not in traj_plane:
+        #     pos_ref_traj[:, 2] = 1.0
+        #     vel_ref_traj[:, 2] = 0.0
 
         # # calculate the maximul acceleration and velocity
         # max_vel = np.max(speed_traj)
