@@ -31,7 +31,7 @@ supertitle_fontsize = 30
 subtitle_fontsize = 30
 small_text_size = 20
 padding = 0.15 # padding for the radar plot
-OOD_alpha = 0.5 # alpha for the OOD data
+OOD_alpha = 0.4 # alpha for the OOD data
 ID_alpha = 0.15 
 
 transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
@@ -62,10 +62,10 @@ inverted_axes_name = [
 inverted_axes_index = [metric_index[i] for i in inverted_axes_name]
 
 axis_legend_dict = {
-    'worst_generalization_performance': '$\qquad\qquad\qquad\quad$  Generalization \n $\qquad\qquad\qquad\quad$ performance\n',
-    'performance': '$\qquad\qquad\qquad\quad$ Nominal\n $\qquad\qquad\qquad\quad$ performance\n',
-    'inference_time': 'Inference\ntime\n\n',
-    'model_complexity': 'Model                \nknowledge                ',
+    'worst_generalization_performance': '$\qquad\qquad\qquad\quad$  Generalization',
+    'performance': '$\qquad\qquad\qquad\quad$ Performance',
+    'inference_time': 'Online     \nComputation     \n\n',
+    'model_complexity': 'Required Model                    \nKnowledge                    ',
     'sampling_complexity': '\n\n\nSampling\ncomplexity',
     'robustness_proc': 'P',
     'robustness_obs': 'O',
@@ -299,8 +299,9 @@ def spider(df,
         
             
     # add additional text for robustness axes
-    ax.text(angles[metric_index['robustness_obs']], 1.5, 'Robustness', size=small_text_size)
+    ax.text(angles[metric_index['robustness_obs']], 1.55, 'Robustness', size=small_text_size)
     # ax.fill(angles, 1.5*np.ones(num_axis + 1), alpha=0.7, color='lightgray')
+    ax.set_ylim(0, 1.25)
     ax.set_yticklabels([])
     ax.set_xticks(angles)
     ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
@@ -335,37 +336,41 @@ for method in methods:
 
 # Fill in the data
 # GP-MPC
-metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
-metrics_data['GP-MPC']['performance'] = 0.0147  # Manually set
+# metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
+# metrics_data['GP-MPC']['performance'] = 0.0147  # Manually set
+metrics_data['GP-MPC']['worst_generalization_performance'] = max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
+metrics_data['GP-MPC']['performance'] = transfer_metric['GP-MPC']['rmse'][2]
 metrics_data['GP-MPC']['inference_time'] = transfer_metric['GP-MPC']['inference_time']
 metrics_data['GP-MPC']['model_complexity'] = 1
 metrics_data['GP-MPC']['sampling_complexity'] = 660
-metrics_data['GP-MPC']['robustness_proc'] = 4
-metrics_data['GP-MPC']['robustness_obs'] = 70
-metrics_data['GP-MPC']['robustness_param'] = 4.8
+metrics_data['GP-MPC']['robustness_proc'] = 5
+metrics_data['GP-MPC']['robustness_obs'] = 50
+metrics_data['GP-MPC']['robustness_param'] = 4.5
+
 
 # Linear MPC
-# metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
-metrics_data['Linear MPC']['worst_generalization_performance'] = 0.036
-# metrics_data['Linear MPC']['performance'] = transfer_metric['Linear MPC']['rmse'][2]
-metrics_data['Linear MPC']['performance'] = 0.029
+metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
+# metrics_data['Linear MPC']['worst_generalization_performance'] = 0.036
+metrics_data['Linear MPC']['performance'] = transfer_metric['Linear MPC']['rmse'][2]
+# metrics_data['Linear MPC']['performance'] = 0.029
 metrics_data['Linear MPC']['inference_time'] = transfer_metric['Linear MPC']['inference_time']
 metrics_data['Linear MPC']['model_complexity'] = 2
 metrics_data['Linear MPC']['sampling_complexity'] = 1
-metrics_data['Linear MPC']['robustness_proc'] = 10
+metrics_data['Linear MPC']['robustness_proc'] = 6
 metrics_data['Linear MPC']['robustness_obs'] = 120
 metrics_data['Linear MPC']['robustness_param'] = 4.8
 
 # Nonlinear MPC
-# metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
-metrics_data['Nonlinear MPC']['worst_generalization_performance'] = 0.024
-# metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
-metrics_data['Nonlinear MPC']['performance'] = 0.008
-metrics_data['Nonlinear MPC']['inference_time'] = transfer_metric['Nonlinear MPC']['inference_time']
+metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
+# metrics_data['Nonlinear MPC']['worst_generalization_performance'] = 0.024
+metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
+# metrics_data['Nonlinear MPC']['performance'] = 0.008
+# metrics_data['Nonlinear MPC']['inference_time'] = transfer_metric['Nonlinear MPC']['inference_time']
+metrics_data['Nonlinear MPC']['inference_time'] = 5.5e-4
 metrics_data['Nonlinear MPC']['model_complexity'] = 0
 metrics_data['Nonlinear MPC']['sampling_complexity'] = 1
-metrics_data['Nonlinear MPC']['robustness_proc'] = 2
-metrics_data['Nonlinear MPC']['robustness_obs'] = 60
+metrics_data['Nonlinear MPC']['robustness_proc'] = 3
+metrics_data['Nonlinear MPC']['robustness_obs'] = 50
 metrics_data['Nonlinear MPC']['robustness_param'] = 1.4
 
 # F-MPC
@@ -375,7 +380,7 @@ metrics_data['F-MPC']['inference_time'] = transfer_metric['F-MPC']['inference_ti
 metrics_data['F-MPC']['model_complexity'] = 0
 metrics_data['F-MPC']['sampling_complexity'] = 1
 metrics_data['F-MPC']['robustness_proc'] = 2
-metrics_data['F-MPC']['robustness_obs'] = 35
+metrics_data['F-MPC']['robustness_obs'] = 30
 metrics_data['F-MPC']['robustness_param'] = 1.6
 
 # PPO
@@ -424,9 +429,9 @@ metrics_data['PID']['performance'] = transfer_metric['PID']['rmse'][2]
 metrics_data['PID']['inference_time'] = transfer_metric['PID']['inference_time']
 metrics_data['PID']['model_complexity'] = 1
 metrics_data['PID']['sampling_complexity'] = 1
-metrics_data['PID']['robustness_proc'] = 10
+metrics_data['PID']['robustness_proc'] = 12
 metrics_data['PID']['robustness_obs'] = 120
-metrics_data['PID']['robustness_param'] = 4.8
+metrics_data['PID']['robustness_param'] = 4.5
 
 # iLQR
 metrics_data['iLQR']['worst_generalization_performance'] = max(transfer_metric['iLQR']['rmse'][0], transfer_metric['iLQR']['rmse'][-1])
@@ -434,9 +439,9 @@ metrics_data['iLQR']['performance'] = transfer_metric['iLQR']['rmse'][2]
 metrics_data['iLQR']['inference_time'] = transfer_metric['iLQR']['inference_time']
 metrics_data['iLQR']['model_complexity'] = 0
 metrics_data['iLQR']['sampling_complexity'] = 1
-metrics_data['iLQR']['robustness_proc'] = 2
-metrics_data['iLQR']['robustness_obs'] = 40
-metrics_data['iLQR']['robustness_param'] = 1.2
+metrics_data['iLQR']['robustness_proc'] = 3
+metrics_data['iLQR']['robustness_obs'] = 16
+metrics_data['iLQR']['robustness_param'] = 0.6
 
 # LQR
 metrics_data['LQR']['worst_generalization_performance'] = max(transfer_metric['LQR']['rmse'][0], transfer_metric['LQR']['rmse'][-1])
@@ -444,17 +449,17 @@ metrics_data['LQR']['performance'] = transfer_metric['LQR']['rmse'][2]
 metrics_data['LQR']['inference_time'] = transfer_metric['LQR']['inference_time']
 metrics_data['LQR']['model_complexity'] = 2
 metrics_data['LQR']['sampling_complexity'] = 1
-metrics_data['LQR']['robustness_proc'] = 20
+metrics_data['LQR']['robustness_proc'] = 10
 metrics_data['LQR']['robustness_obs'] = 120
-metrics_data['LQR']['robustness_param'] = 4.2
+metrics_data['LQR']['robustness_param'] = 5.0
 
 max_values = {key: max([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 
 # handtune max and min to make the plot look better
-max_values['performance'] = 0.03
-max_values['worst_generalization_performance'] = 0.1
-max_values['robustness_proc'] = 15
+max_values['performance'] = 0.04
+max_values['worst_generalization_performance'] = 0.07
+max_values['robustness_proc'] = 10
 max_values['inference_time'] = 1.7e-3
 
 shared_performance_axis = False
