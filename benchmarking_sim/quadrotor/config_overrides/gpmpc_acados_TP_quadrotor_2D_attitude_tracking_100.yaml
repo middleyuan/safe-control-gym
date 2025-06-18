@@ -36,8 +36,8 @@
     # use_linear_prior: True
     # obs_noise_std: 0.0
     # act_noise_std: 0.0
-    # obs_noise_std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
-    # act_noise_std: [0.03116, 0.03450]
+    obs_noise_std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
+    act_noise_std: [0.03116, 0.03450]
     # prior_param_coeff: 0.2
     prior_param_coeff: 1.0
     prob: 0.95
