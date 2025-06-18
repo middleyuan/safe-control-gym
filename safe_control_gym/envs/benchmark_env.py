@@ -972,5 +972,8 @@ class BenchmarkEnv(gym.Env, ABC):
 
 ## Miscellaneous functions for randomization and sampling
 def sample_truncated(mu, sigma, low, high, size=None):
+    if np.isclose(sigma, 0.0):
+        # If sigma is zero, return a constant value
+        return np.full(size, mu) if size is not None else mu
     a, b = (low - mu) / sigma, (high - mu) / sigma
     return truncnorm.rvs(a, b, loc=mu, scale=sigma, size=size)
