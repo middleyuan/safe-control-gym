@@ -6,14 +6,16 @@ import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
 import seaborn
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
 from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import plot_colors, load_metric, tag_ctrl_list
+    import load_metric, tag_ctrl_list
 
 script_dir = os.path.dirname(__file__)
 # set up Nature sytle plotting
 # set up seaborn style
 seaborn.set_palette('deep')
 seaborn.set_context('paper', font_scale=1.5)
+
 # set up matplotlib style
 plt.rcParams.update({
     # 'font.family': 'arial',
@@ -22,6 +24,16 @@ plt.rcParams.update({
     # 'savefig.transparent': True,
     # 'font.size': 20,
 })
+
+if len(sys.argv) > 2 and sys.argv[2] == 'abs':
+    robustness_type = 'abs'
+    save_folder = 'radar_abs'
+else:
+    robustness_type = 'relative'
+    save_folder = 'radar'
+    # robustness_type = 'abs'
+    # save_folder = 'radar_abs'
+print(f"Plotting with {robustness_type} robustness.")
 
 # set up matplotlib parameters
 transfer_metric = {}
@@ -38,7 +50,7 @@ transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'F-MPC')
 transfer_metric = load_metric(script_dir, transfer_metric, 'Nonlinear MPC')
 transfer_metric = load_metric(script_dir, transfer_metric, 'Linear MPC')
-transfer_metric = load_metric(script_dir, transfer_metric, 'PID')
+transfer_metric = load_metric(script_dir, transfer_metric, 'Geometric Control')
 transfer_metric = load_metric(script_dir, transfer_metric, 'LQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'GP-MPC')
 
@@ -166,7 +178,8 @@ def spider(df,
            max_values=None, 
            min_values=None,
            lower_padding=.25, 
-           plt_name=''):
+           plt_name='',
+           robustness_type='relative'):
     categories = df._get_numeric_data().columns.tolist()
     data = df[categories].to_dict(orient='list') 
     ids = df[id_column].tolist() # ['controller1', 'controller2', ...]
@@ -224,35 +237,36 @@ def spider(df,
                     color=plot_colors[model_name], )
 
         if model_name in ['PPO', 'SAC', 'DPPO']:
-            # create a data list but replace the values with ID numbers
-            # values_ID = 
-            for metric_name in ID_numbers.keys():
-                normalized_data[metric_name] = ID_numbers_norm[metric_name][model_name]
-            values_ID = [normalized_data[key] for key in data.keys()]
-            values_ID = [i.item() if isinstance(i, np.ndarray) else i for i in values_ID]
-            values_ID += values_ID[:1]  # Close the plot for a better look
-            # plot the ID numbers
-            ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], 
-                    linestyle='--', )
-            ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], 
-                       alpha=ID_alpha,)
-            ax.fill(angles, values_ID, 
-                    alpha=ID_alpha, 
-                    color=plot_colors[model_name], )
-            ax.text(angles[metric_index['robustness_proc']], 
-                    values_ID[metric_index['robustness_proc']], 
-                    ID_numbers['robustness_proc'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_obs']], 
-                    values_ID[metric_index['robustness_obs']], 
-                    ID_numbers['robustness_obs'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_param']], 
-                    values_ID[metric_index['robustness_param']], 
-                    ID_numbers['robustness_param'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['worst_generalization_performance']], 
-                    values_ID[metric_index['worst_generalization_performance']], 
-                    ID_numbers['worst_generalization_performance'][model_name], size=small_text_size)
-                
-       
+            # Handle relative robustness case
+            if robustness_type == 'relative':
+                for metric_name in ID_numbers.keys():
+                    normalized_data[metric_name] = ID_numbers_norm[metric_name][model_name]
+                values_ID = [normalized_data[key] for key in data.keys()]
+                values_ID = [i.item() if isinstance(i, np.ndarray) else i for i in values_ID]
+                values_ID += values_ID[:1]  # Close the plot for a better look
+                ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], linestyle='--')
+                ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], alpha=ID_alpha)
+                ax.fill(angles, values_ID, alpha=ID_alpha, color=plot_colors[model_name])
+                ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], ID_numbers['robustness_proc'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], ID_numbers['robustness_obs'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], ID_numbers['robustness_param'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['worst_generalization_performance']], values_ID[metric_index['worst_generalization_performance']], ID_numbers['worst_generalization_performance'][model_name], size=small_text_size)
+
+            # Handle absolute robustness case
+            elif robustness_type == 'abs':
+                for metric_name in ID_numbers.keys():
+                    normalized_data[metric_name] = ID_numbers_norm[metric_name][model_name]
+                values_ID = [normalized_data[key] for key in data.keys()]
+                values_ID = [i.item() if isinstance(i, np.ndarray) else i for i in values_ID]
+                values_ID += values_ID[:1]  # Close the plot for a better look
+                ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], linestyle='--')
+                ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], alpha=ID_alpha)
+                ax.fill(angles, values_ID, alpha=ID_alpha, color=plot_colors[model_name])
+                ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], ID_numbers['robustness_proc'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], ID_numbers['robustness_obs'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], ID_numbers['robustness_param'][model_name], size=small_text_size)
+                ax.text(angles[metric_index['worst_generalization_performance']], values_ID[metric_index['worst_generalization_performance']], ID_numbers['worst_generalization_performance'][model_name], size=small_text_size)
+
         # customize the text
         for _x, _y, t in zip(angles, values, actual_values):
             if _x == angles[metric_index['inference_time']]:
@@ -307,8 +321,8 @@ def spider(df,
     ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
     if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
     if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
-    os.makedirs(os.path.join(script_dir, 'radar'), exist_ok=True)
-    fig_save_path = os.path.join(script_dir, f'radar/radar_{plt_name}.pdf')
+    os.makedirs(os.path.join(script_dir, save_folder), exist_ok=True)
+    fig_save_path = os.path.join(script_dir, f'{save_folder}/radar_{plt_name}.pdf')
     fig.savefig(fig_save_path, dpi=300, bbox_inches='tight')
     fig.savefig(fig_save_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     print(f'figure saved as {fig_save_path}')
@@ -317,7 +331,7 @@ radar = spider
 methods = [
     'GP-MPC', 'Linear MPC', 'Nonlinear MPC', 'F-MPC', 
     'PPO', 'SAC', 'DPPO', 'PPO-MPC', 
-    'PID', 'iLQR', 'LQR'
+    'Geometric Control', 'iLQR', 'LQR'
 ]
 
 metrics_data = {}
@@ -332,6 +346,9 @@ for method in methods:
         'robustness_proc': 0,
         'robustness_obs': 0,
         'robustness_param': 0,
+        'abs_robustness_proc': 0,
+        'abs_robustness_obs': 0,
+        'abs_robustness_param': 0,
     }
 
 # Fill in the data
@@ -346,7 +363,9 @@ metrics_data['GP-MPC']['sampling_complexity'] = 660
 metrics_data['GP-MPC']['robustness_proc'] = 5
 metrics_data['GP-MPC']['robustness_obs'] = 50
 metrics_data['GP-MPC']['robustness_param'] = 4.5
-
+metrics_data['GP-MPC']['abs_robustness_obs'] = 100
+metrics_data['GP-MPC']['abs_robustness_proc'] = 7
+metrics_data['GP-MPC']['abs_robustness_param'] = 5.2
 
 # Linear MPC
 metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
@@ -357,8 +376,11 @@ metrics_data['Linear MPC']['inference_time'] = transfer_metric['Linear MPC']['in
 metrics_data['Linear MPC']['model_complexity'] = 2
 metrics_data['Linear MPC']['sampling_complexity'] = 1
 metrics_data['Linear MPC']['robustness_proc'] = 6
-metrics_data['Linear MPC']['robustness_obs'] = 120
+metrics_data['Linear MPC']['robustness_obs'] = 100
 metrics_data['Linear MPC']['robustness_param'] = 4.8
+metrics_data['Linear MPC']['abs_robustness_obs'] = 100
+metrics_data['Linear MPC']['abs_robustness_proc'] = 6
+metrics_data['Linear MPC']['abs_robustness_param'] = 5.2
 
 # Nonlinear MPC
 metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
@@ -372,6 +394,9 @@ metrics_data['Nonlinear MPC']['sampling_complexity'] = 1
 metrics_data['Nonlinear MPC']['robustness_proc'] = 3
 metrics_data['Nonlinear MPC']['robustness_obs'] = 50
 metrics_data['Nonlinear MPC']['robustness_param'] = 1.4
+metrics_data['Nonlinear MPC']['abs_robustness_obs'] = 100
+metrics_data['Nonlinear MPC']['abs_robustness_proc'] = 7
+metrics_data['Nonlinear MPC']['abs_robustness_param'] = 5.0
 
 # F-MPC
 metrics_data['F-MPC']['worst_generalization_performance'] = max(transfer_metric['F-MPC']['rmse'][0], transfer_metric['F-MPC']['rmse'][-1])
@@ -382,56 +407,74 @@ metrics_data['F-MPC']['sampling_complexity'] = 1
 metrics_data['F-MPC']['robustness_proc'] = 2
 metrics_data['F-MPC']['robustness_obs'] = 30
 metrics_data['F-MPC']['robustness_param'] = 1.6
+metrics_data['F-MPC']['abs_robustness_obs'] = 90
+metrics_data['F-MPC']['abs_robustness_proc'] = 6
+metrics_data['F-MPC']['abs_robustness_param'] = 5.0
 
 # PPO
-metrics_data['PPO']['worst_generalization_performance'] = max(0.11419083, 0.107995445)
-metrics_data['PPO']['performance'] = 0.012809196573431799
+metrics_data['PPO']['worst_generalization_performance'] = max(0.1518289,  0.13239991)
+metrics_data['PPO']['performance'] = 0.012324755078507187
 metrics_data['PPO']['inference_time'] = 7.31e-5
 metrics_data['PPO']['model_complexity'] = 3
-metrics_data['PPO']['sampling_complexity'] = int(1e6)
+metrics_data['PPO']['sampling_complexity'] = 739200
 metrics_data['PPO']['robustness_proc'] = 4
 metrics_data['PPO']['robustness_obs'] = 18
-metrics_data['PPO']['robustness_param'] = 1.2
+metrics_data['PPO']['robustness_param'] = 1.6
+metrics_data['PPO']['abs_robustness_obs'] = 50
+metrics_data['PPO']['abs_robustness_proc'] = 12
+metrics_data['PPO']['abs_robustness_param'] = 4
 
 # SAC
-metrics_data['SAC']['worst_generalization_performance'] = max(0.20906559, 0.08379055)
-metrics_data['SAC']['performance'] = 0.032350691213897304
+metrics_data['SAC']['worst_generalization_performance'] = max(0.13106732, 0.09768431)
+metrics_data['SAC']['performance'] = 0.04376849713112005
 metrics_data['SAC']['inference_time'] = 8.72e-5
 metrics_data['SAC']['model_complexity'] = 3
-metrics_data['SAC']['sampling_complexity'] = int(0.8e6)
+metrics_data['SAC']['sampling_complexity'] = 264000
 metrics_data['SAC']['robustness_proc'] = 6
 metrics_data['SAC']['robustness_obs'] = 100
-metrics_data['SAC']['robustness_param'] = 2.0
+metrics_data['SAC']['robustness_param'] = 1.8
+metrics_data['SAC']['abs_robustness_obs'] = 100
+metrics_data['SAC']['abs_robustness_proc'] = 7
+metrics_data['SAC']['abs_robustness_param'] = 2.8
 
 # DPPO
-metrics_data['DPPO']['worst_generalization_performance'] = max(0.14269699, 0.13267572)
-metrics_data['DPPO']['performance'] = 0.021298943332121172
+metrics_data['DPPO']['worst_generalization_performance'] = max(0.16318646, 0.1399848)
+metrics_data['DPPO']['performance'] = 0.024054062915447923 
 metrics_data['DPPO']['inference_time'] = 7.28e-5
 metrics_data['DPPO']['model_complexity'] = 3
-metrics_data['DPPO']['sampling_complexity'] = int(1e6)
-metrics_data['DPPO']['robustness_proc'] = 7
-metrics_data['DPPO']['robustness_obs'] = 25
+metrics_data['DPPO']['sampling_complexity'] = 607200
+metrics_data['DPPO']['robustness_proc'] = 5
+metrics_data['DPPO']['robustness_obs'] = 14
 metrics_data['DPPO']['robustness_param'] = 1.8
+metrics_data['DPPO']['abs_robustness_obs'] = 30
+metrics_data['DPPO']['abs_robustness_proc'] = 10
+metrics_data['DPPO']['abs_robustness_param'] = 3
 
 # PPO-MPC
-metrics_data['PPO-MPC']['worst_generalization_performance'] = max(0.04358512, 0.01077949)
-metrics_data['PPO-MPC']['performance'] = 0.01362814727788425
+metrics_data['PPO-MPC']['worst_generalization_performance'] = max(0.02657339, 0.00595736)
+metrics_data['PPO-MPC']['performance'] = 0.008899672476212504
 metrics_data['PPO-MPC']['inference_time'] = 5.5e-4
 metrics_data['PPO-MPC']['model_complexity'] = 1
-metrics_data['PPO-MPC']['sampling_complexity'] = int(0.4e6)
+metrics_data['PPO-MPC']['sampling_complexity'] = 224400
 metrics_data['PPO-MPC']['robustness_proc'] = 3
-metrics_data['PPO-MPC']['robustness_obs'] = 45
-metrics_data['PPO-MPC']['robustness_param'] = 2.8
+metrics_data['PPO-MPC']['robustness_obs'] = 40
+metrics_data['PPO-MPC']['robustness_param'] = 1.2
+metrics_data['PPO-MPC']['abs_robustness_obs'] = 100
+metrics_data['PPO-MPC']['abs_robustness_proc'] = 7
+metrics_data['PPO-MPC']['abs_robustness_param'] = 5.
 
 # PID
-metrics_data['PID']['worst_generalization_performance'] = max(transfer_metric['PID']['rmse'][0], transfer_metric['PID']['rmse'][-1])
-metrics_data['PID']['performance'] = transfer_metric['PID']['rmse'][2]
-metrics_data['PID']['inference_time'] = transfer_metric['PID']['inference_time']
-metrics_data['PID']['model_complexity'] = 1
-metrics_data['PID']['sampling_complexity'] = 1
-metrics_data['PID']['robustness_proc'] = 12
-metrics_data['PID']['robustness_obs'] = 120
-metrics_data['PID']['robustness_param'] = 4.5
+metrics_data['Geometric Control']['worst_generalization_performance'] = max(transfer_metric['Geometric Control']['rmse'][0], transfer_metric['Geometric Control']['rmse'][-1])
+metrics_data['Geometric Control']['performance'] = transfer_metric['Geometric Control']['rmse'][2]
+metrics_data['Geometric Control']['inference_time'] = transfer_metric['Geometric Control']['inference_time']
+metrics_data['Geometric Control']['model_complexity'] = 1
+metrics_data['Geometric Control']['sampling_complexity'] = 1
+metrics_data['Geometric Control']['robustness_proc'] = 12
+metrics_data['Geometric Control']['robustness_obs'] = 100
+metrics_data['Geometric Control']['robustness_param'] = 4.5
+metrics_data['Geometric Control']['abs_robustness_obs'] = 100
+metrics_data['Geometric Control']['abs_robustness_proc'] = 4
+metrics_data['Geometric Control']['abs_robustness_param'] = 1.8
 
 # iLQR
 metrics_data['iLQR']['worst_generalization_performance'] = max(transfer_metric['iLQR']['rmse'][0], transfer_metric['iLQR']['rmse'][-1])
@@ -442,6 +485,9 @@ metrics_data['iLQR']['sampling_complexity'] = 1
 metrics_data['iLQR']['robustness_proc'] = 3
 metrics_data['iLQR']['robustness_obs'] = 16
 metrics_data['iLQR']['robustness_param'] = 0.6
+metrics_data['iLQR']['abs_robustness_obs'] = 100
+metrics_data['iLQR']['abs_robustness_proc'] = 9
+metrics_data['iLQR']['abs_robustness_param'] = 5.2
 
 # LQR
 metrics_data['LQR']['worst_generalization_performance'] = max(transfer_metric['LQR']['rmse'][0], transfer_metric['LQR']['rmse'][-1])
@@ -450,8 +496,11 @@ metrics_data['LQR']['inference_time'] = transfer_metric['LQR']['inference_time']
 metrics_data['LQR']['model_complexity'] = 2
 metrics_data['LQR']['sampling_complexity'] = 1
 metrics_data['LQR']['robustness_proc'] = 10
-metrics_data['LQR']['robustness_obs'] = 120
+metrics_data['LQR']['robustness_obs'] = 100
 metrics_data['LQR']['robustness_param'] = 5.0
+metrics_data['LQR']['abs_robustness_obs'] = 60
+metrics_data['LQR']['abs_robustness_proc'] = 3
+metrics_data['LQR']['abs_robustness_param'] = 1.6
 
 max_values = {key: max([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
@@ -461,6 +510,13 @@ max_values['performance'] = 0.04
 max_values['worst_generalization_performance'] = 0.07
 max_values['robustness_proc'] = 10
 max_values['inference_time'] = 1.7e-3
+
+if robustness_type == 'abs':
+    for r_type in ['proc', 'obs', 'param']:
+        abs_key = f'abs_robustness_{r_type}'
+        rel_key = f'robustness_{r_type}'
+        max_values[rel_key] = max([metrics_data[method][abs_key] for method in metrics_data.keys()])
+        min_values[rel_key] = min([metrics_data[method][abs_key] for method in metrics_data.keys()])
 
 shared_performance_axis = False
 shared_performance_axis = True
@@ -505,6 +561,15 @@ for key in metrics_data['GP-MPC'].keys():
     data[key] = [metrics_data[algo][key]]
 algos = [algo]
 
+if robustness_type == 'abs':
+    robustness_proc_val = data['abs_robustness_proc']
+    robustness_obs_val = data['abs_robustness_obs']
+    robustness_param_val = data['abs_robustness_param']
+else:
+    robustness_proc_val = data['robustness_proc']
+    robustness_obs_val = data['robustness_obs']
+    robustness_param_val = data['robustness_param']
+
 spider(
     pd.DataFrame({
         'x': algos,
@@ -513,14 +578,15 @@ spider(
         'inference_time': data['inference_time'],
         'model_complexity': data['model_complexity'],
         'sampling_complexity': data['sampling_complexity'],
-        'robustness_proc': data['robustness_proc'],
-        'robustness_obs': data['robustness_obs'],
-        'robustness_param': data['robustness_param'],
+        'robustness_proc': robustness_proc_val,
+        'robustness_obs': robustness_obs_val,
+        'robustness_param': robustness_param_val,
     }),
     id_column='x',
     title=None,
     lower_padding=padding,
-    plt_name=algo,
+    plt_name=tag_ctrl_list[algo],
     max_values=max_values,
     min_values=min_values,
+    robustness_type=robustness_type,
 )

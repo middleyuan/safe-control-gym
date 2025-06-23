@@ -4,13 +4,10 @@ import sys
 import munch
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from scipy.spatial import ConvexHull
 
 from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
-from benchmarking_sim.quadrotor.benchmark_util.utils import load_gym_data
 from benchmarking_sim.quadrotor.plotting.safe.plot_helper_safe import (
     plot_xz_trajectory_with_hull,
     collect_state_constraint_values,
@@ -441,9 +438,16 @@ plot_xz_trajectory_with_hull(ax, ppo_mpc_traj_data, label='PPO-MPC',
 plot_xz_trajectory_with_hull(ax, gpmpc_traj_data, label='GP-MPC',
                             traj_color=plot_colors['GP-MPC'], hull_color=plot_colors['GP-MPC'],
                             linewidth=2.0, alpha=alpha, padding_factor=k)
-# plot_xz_trajectory_with_hull(ax, mpc_traj_data, label='MPC',
-#                             traj_color=plot_colors['Nonlinear MPC'], hull_color=plot_colors['Nonlinear MPC'],
-#                             linewidth=2.0, alpha=alpha, padding_factor=k)
+try:
+    plot_xz_trajectory_with_hull(ax, mpc_traj_data, label='MPC',
+                                traj_color=plot_colors['Nonlinear MPC'], hull_color=plot_colors['Nonlinear MPC'],
+                                linewidth=2.0, alpha=alpha, padding_factor=k)
+except Exception as e:
+    print(f"Error plotting MPC trajectory: {e}")
+    # plot only the mean trajectory if the hull fails
+    # mean_mpc_traj_data = np.mean(mpc_traj_data, axis=0)
+    # ax.plot(mean_mpc_traj_data[:, 0], mean_mpc_traj_data[:, 2],
+    #         label='MPC', color=plot_colors['Nonlinear MPC'], linewidth=2.0)
 
 rec1 = plt.Rectangle((0.9, 0), 2, 2, color='#f1d6d6')
 rec2 = plt.Rectangle((-1.9, 0), 1, 2, color='#f1d6d6')

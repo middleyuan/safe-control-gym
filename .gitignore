@@ -171,12 +171,16 @@ benchmarking_sim/quadrotor/data/*results*
 benchmarking_sim/quadrotor/data/*data*
 benchmarking_sim/quadrotor/plotting/*.png
 benchmarking_sim/quadrotor/plotting/noise
-benchmarking_sim/quadrotor/plotting/radar
+benchmarking_sim/quadrotor/plotting/radar*
 benchmarking_sim/quadrotor/plotting/traj
+benchmarking_sim/quadrotor/plotting/path
+benchmarking_sim/quadrotor/plotting/error
 benchmarking_sim/quadrotor/plotting/convergence
+benchmarking_sim/quadrotor/plotting/generalization
 # benchmarking_sim/quadrotor/plotting/*.pdf
 *.pdf
 # benchmarking_sim/quadrotor/mpc_acados
 gym_backup.zip
 examples/hpo/*
 cluster/
+wandb

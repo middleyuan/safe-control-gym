@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 # script dir
 script_dir = os.path.dirname(os.path.abspath(__file__))
 print(script_dir)
+# if the output path does not exist, create it
+output_path = os.path.join(script_dir, 'noise')
+if not os.path.exists(output_path):
+    os.makedirs(output_path)
 
 max_seed = 10
 metric_name = 'metrics.txt'

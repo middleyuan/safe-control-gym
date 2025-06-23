@@ -141,3 +141,57 @@ plot_save_name = f"robustness_model-based_{noise_option}"
 plot_save_name = os.path.join(script_dir, 'noise', f'{plot_save_name}.png')
 plt.savefig(plot_save_name,bbox_inches="tight", pad_inches=0.1)
 print(f"plots saved as {plot_save_name}")
+
+# Absolute performance degradation
+fig_abs = plt.figure(figsize=(8, 3))
+
+abs_rmse_threshold = 0.1
+abs_rmse_threshold_results = {}
+
+for method in noise_data.keys():
+    if 'rmse_mean' in noise_data[method] and 'rmse_std' in noise_data[method]:
+        plt.plot(noise_scale, noise_data[method]['rmse_mean'], label=method, color=plot_colors[method])
+        plt.fill_between(noise_scale,
+                         noise_data[method]['rmse_mean'] - s * noise_data[method]['rmse_std'],
+                         noise_data[method]['rmse_mean'] + s * noise_data[method]['rmse_std'],
+                         color=plot_colors[method], alpha=0.1)
+        # Check when absolute rmse exceeds threshold
+        for i, scale in enumerate(noise_scale):
+            if noise_data[method]['rmse_mean'][i] > abs_rmse_threshold:
+                print(f"Method {method} exceeds absolute RMSE of {abs_rmse_threshold} at noise scale {scale}")
+                abs_rmse_threshold_results[method] = scale
+                break
+    else:
+        print(f"Warning: 'rmse_mean' or 'rmse_std' not found for method {method}. Skipping absolute plot.")
+
+plt.xlabel("Noise Scale")
+plt.ylabel("RMSE")
+if noise_option == 'obs_noise':
+    plt.legend(ncol=2)
+    plt.xlim(0, 100)
+    plt.ylim(0, 0.2)
+    plt.title("Absolute Performance with Observation Noise")
+    for method in abs_rmse_threshold_results.keys():
+        plt.axvline(x=abs_rmse_threshold_results[method], linestyle='--', color=plot_colors[method])
+elif noise_option == 'proc_noise':
+    plt.legend(ncol=2, loc='upper left')
+    plt.ylim(0, 1.5)
+    plt.title("Absolute Performance with Process Noise")
+    for method in abs_rmse_threshold_results.keys():
+        plt.axvline(x=abs_rmse_threshold_results[method], linestyle='--', color=plot_colors[method])
+elif noise_option == 'param':
+    plt.title("Absolute Performance with Parametric Uncertainty")
+    plt.xlabel("Randomization scale")
+    plt.xlim(0, 5)
+    plt.ylim(0, 0.4)
+    plt.legend(ncol=2, loc='upper left')
+    for method in abs_rmse_threshold_results.keys():
+        plt.axvline(x=abs_rmse_threshold_results[method], linestyle='--', color=plot_colors[method])
+
+plt.plot(noise_scale, [abs_rmse_threshold]*len(noise_scale), \
+            color='grey', linestyle='-.', label=f'RMSE={abs_rmse_threshold}')
+
+plot_save_name_abs = f"robustness_model-based_{noise_option}_absolute"
+plot_save_name_abs = os.path.join(script_dir, 'noise', f'{plot_save_name_abs}.png')
+plt.savefig(plot_save_name_abs, bbox_inches="tight", pad_inches=0.1)
+print(f"plots saved as {plot_save_name_abs}")
