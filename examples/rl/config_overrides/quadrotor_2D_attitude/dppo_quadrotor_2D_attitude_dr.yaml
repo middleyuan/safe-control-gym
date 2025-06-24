@@ -1,6 +1,6 @@
 algo_config:
   # model args
-  hidden_dim: 128
+  hidden_dim: 256
   activation: "relu"
 
   # loss args
@@ -18,13 +18,13 @@ algo_config:
   # optim args
   opt_epochs: 20
   mini_batch_size: 256
-  actor_lr: 0.0003
-  critic_lr: 0.0003
+  actor_lr: 0.0001
+  critic_lr: 0.0001
 
   # runner args
   max_env_steps: 1320000
-  rollout_batch_size: 10
-  rollout_steps: 330
+  rollout_batch_size: 50
+  rollout_steps: 132
   eval_batch_size: 10
 
   # misc
