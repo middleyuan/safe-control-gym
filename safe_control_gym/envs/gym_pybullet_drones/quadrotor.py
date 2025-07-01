@@ -414,9 +414,7 @@ class Quadrotor(BaseAviary):
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0])
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0])
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
         else:
             self.U_GOAL = np.ones(self.action_dim) * self.MASS * self.GRAVITY_ACC / self.action_dim
@@ -1159,11 +1157,11 @@ class Quadrotor(BaseAviary):
             psi_dot = cs.MX.sym('psi_dot')
             X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
             # Define input collective thrust and theta.
-            T = cs.MX.sym('T_c')  # normalized thrust [N]
-            R = cs.MX.sym('R_c')  # desired roll angle [rad]
-            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            T_c = cs.MX.sym('T_c')  # normalized thrust [N]
+            R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
-            U = cs.vertcat(T, R, P, Y_c)
+            U = cs.vertcat(T_c, R_c, P_c, Y_c)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
             # Haocheng's model
@@ -1192,29 +1190,29 @@ class Quadrotor(BaseAviary):
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
             X_dot = cs.vertcat(x_dot,
-                               (self.beta_1 * T + self.beta_2) * (
+                               (self.beta_1 * T_c + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                               (self.beta_1 * T + self.beta_2) * (
+                               (self.beta_1 * T_c + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                               (self.beta_1 * T + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
+                               (self.beta_1 * T_c + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
-                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R,
-                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P,
+                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R_c,
+                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P_c,
                                self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y_c)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
 
-            T_mapping = self.beta_1 * T + self.beta_2
-            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P
-            R_mapping = self.alpha_4 * phi  + self.alpha_5 * phi_dot + self.alpha_6 * R
+            T_mapping = self.beta_1 * T_c + self.beta_2
+            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P_c
+            R_mapping = self.alpha_4 * phi  + self.alpha_5 * phi_dot + self.alpha_6 * R_c
             Y_mapping = self.alpha_7 * psi  + self.alpha_8 * psi_dot + self.alpha_9 * Y_c
-            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
-            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
-            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R], [R_mapping])
+            self.T_mapping_func = cs.Function('T_mapping', [T_c], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P_c], [P_mapping])
+            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R_c], [R_mapping])
             self.Y_mapping_func = cs.Function('Y_mapping', [psi, psi_dot, Y_c], [Y_mapping])
 
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
@@ -1288,8 +1286,8 @@ class Quadrotor(BaseAviary):
             theta_dot = cs.MX.sym('theta_dot')
             psi = cs.MX.sym('psi')  # yaw angle [rad]
             psi_dot = cs.MX.sym('psi_dot')
-            thrust = cs.MX.sym('thrust')  # force from the motor
-            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust)
+            force_motor = cs.MX.sym('force_motor')  # force from the motor
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             T_c = cs.MX.sym('T_c')  # normalized thrust [N]
             R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
@@ -1299,16 +1297,18 @@ class Quadrotor(BaseAviary):
             params_roll_rate = prior_prop.get('params_roll_rate', [-286.2, -23.03, 225.6])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-286.2, -23.03, 225.6])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-192.9, -22.22, 323.5])
-            thrust_dot = 1/params_acc[2] * (T_c - thrust)  # [N/s]
-            thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
-            thrust_applied = 32.221212 * thrust_scaled
+            thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+            # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
+            thrust = force_motor
+            force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
+            # force_motor_z = 32.221212 * thrust_scaled
             # Define dynamics equations.
             X_dot = cs.vertcat(x_dot,
-                              (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                              (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                              (thrust_applied) * cs.cos(phi) * cs.cos(theta) - g,
+                              (force_motor_z) * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
@@ -1789,10 +1789,17 @@ class Quadrotor(BaseAviary):
             ).reshape((10,))
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
-            force_motor = self.current_physical_action[0] if self.current_physical_action is not None else self.init_tau
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
             self.state = np.hstack(
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy[0], rpy[1], rpy[2],
-                 ang_v[0], ang_v[1], ang_v[2], force_motor]
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
             ).reshape((13,))
         # if not np.array_equal(self.state,
         #                       np.clip(self.state, self.observation_space.low, self.observation_space.high)):
