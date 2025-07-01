@@ -9,6 +9,8 @@ TASK='track'
 
 # ALGO='q_mpc'
 ALGO='ppo_mpc'
+# ALGO='ppo_vmpc'
+# ALGO='sac_mpc'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS

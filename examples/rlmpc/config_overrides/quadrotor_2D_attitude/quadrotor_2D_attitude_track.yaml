@@ -107,6 +107,7 @@ task_config:
       - disturbance_func: uniform # dummy
         low:  [0, 0, -2] # dummy
         high: [0, 0, -1] # dummy
+        randomize: False
         mode: fix
         # mode: track
         pos: [0, 0, -1] # z = 0, will cause no downwash

@@ -4,6 +4,7 @@ import sys
 import pickle
 from collections import defaultdict
 from functools import partial
+from termcolor import colored
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +12,6 @@ from matplotlib.ticker import FormatStrFormatter
 
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.experiments.base_experiment import BaseExperiment
-from safe_control_gym.experiments.epoch_experiments import EpochExperiment
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import mkdirs, set_dir_from_config, timing
@@ -60,12 +60,12 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        ALGO = 'mpc_acados'
+        # ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
-        # ALGO = 'pid'
+        ALGO = 'pid'
         # ALGO = 'fmpc'
         ADDITIONAL = ''
         CTRL_ADD = ''
@@ -75,9 +75,13 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # CTRL_ADD = '_param'
     # ADDITIONAL = ''
     # CTRL_ADD = '_tr'
-    SYS = 'quadrotor_2D_attitude'
-    # SYS = 'quadrotor_3D_attitude'
+    # SYS = 'quadrotor_2D_attitude'
+    SYS = 'quadrotor_3D_attitude'
     TASK = 'tracking'
+    # ADDITIONAL = '_10' 
+    # ADDITIONAL = '_delay'
+    ADDITIONAL = ''
+    CTRL_ADD = ADDITIONAL
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
@@ -296,7 +300,9 @@ def plot_quad_eval(res, env, save_path=None):
     if env.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         x_idx, z_idx = 0, 2
     # elif env.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-    elif env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10]:
+    elif env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+                           QuadType.THREE_D_ATTITUDE_10,
+                           QuadType.THREE_D_ATTITUDE_DELAY]:
         x_idx, y_idx, z_idx = 0, 2, 4
 
     stepsize = model.dt
@@ -372,7 +378,9 @@ def plot_quad_eval(res, env, save_path=None):
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'state_xz_path.png'))
         print(f'Plots saved to {save_path}')
-    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10]:
+    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+                         QuadType.THREE_D_ATTITUDE_10,
+                         QuadType.THREE_D_ATTITUDE_DELAY]:
         fig, axs = plt.subplots(1)
         axs.plot(np.array(state_stack).transpose()[x_idx, 0:plot_length], 
                 np.array(state_stack).transpose()[y_idx, 0:plot_length], label='actual')

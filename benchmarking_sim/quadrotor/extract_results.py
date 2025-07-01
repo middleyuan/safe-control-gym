@@ -2,13 +2,10 @@ import numpy as np
 import os
 import sys
 import matplotlib.pyplot as plt
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
 
 notebook_dir = os.path.dirname(os.path.abspath('__file__'))
 print('notebook_dir', notebook_dir)
-# data_folder = 'gpmpc_acados/results'
-# data_folder_path = os.path.join(notebook_dir, data_folder)
-# assert os.path.exists(data_folder_path), 'data_folder_path does not exist'
-# print('data_folder_path', data_folder_path)
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 s = 2 # times of std
@@ -124,9 +121,11 @@ def plot_trajectory(notebook_dir, data_folder, title, ctrl,
 
 
     # Define Colors
-    ref_color = 'black'
-    fmpc_color = 'purple'
-    fmpc_hull_color = 'violet'
+    ref_color = plot_colors['Reference']
+    fmpc_color = plot_colors['F-MPC']
+
+    # Adjust hull colors using transparency
+    hull_alpha = 0.3
 
     # plot the state path x, z [0, 2]
     title_fontsize = 20
@@ -157,10 +156,15 @@ def plot_trajectory(notebook_dir, data_folder, title, ctrl,
     # plot the convex hull of each steps
     k = 1.1 # padding factor
     alpha = 0.2
-
-    plot_xz_trajectory_with_hull(ax, fmpc_traj_data, label=ctrl,
-                                    traj_color=fmpc_color, hull_color=fmpc_hull_color,
-                                    alpha=alpha, padding_factor=k)
+    try:
+        plot_xz_trajectory_with_hull(ax, fmpc_traj_data, label='FMPC',
+                                     traj_color=fmpc_color, hull_color=fmpc_color,
+                                     alpha=hull_alpha, padding_factor=k)
+    except Exception as e:
+        print(f'Error plotting trajectory with hull: {e}')
+        for i in range(fmpc_traj_data.shape[0]):
+            ax.plot(fmpc_traj_data[i, :, 0], fmpc_traj_data[i, :, 2], 
+                    color=fmpc_color, alpha=alpha, linewidth=0.5)
 
     ax.legend(ncol=5, loc='upper center', fontsize=legend_fontsize)
 
@@ -240,14 +244,16 @@ else:
     # ctrl = 'linear_mpc_acados'
     # ctrl = 'mpc_acados'
     ctrl = 'gpmpc_acados_TP'
-gp_model_tag = f'_100_200{tag}'
+    tag = '_handtune'
+gp_model_tag = f'_{tag}'
+# gp_model_tag = tag
 SYS = 'quadrotor_2D_attitude'
 # SYS = 'quadrotor_3D_attitude'
 
-# for additional in ['_9', '_11', '_13', '_15']:
 # for additional in ['_11', '_12', '_13', '_14', '_15']:
 results = {}
 for additional in ['9', '10', '11', '12', '13', '14', '15']:
+# for additional in ['9',]:
     additional = '_' + additional
     data_folder = f'results_rollout_{SYS}{additional}/temp'
     if ctrl in ['gpmpc_acados_TP']:
@@ -295,3 +301,28 @@ if ctrl in ['gpmpc_acados_TP']:
         GPMPC_option = gp_model_tag
         data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
 plot_trajectory(notebook_dir, data_folder, 'Generalization (faster)', ctrl, SYS, additional)
+# additional = '_safety'
+# ctrl = 'mpc_acados'
+# data_folder = f'results_rollout_{SYS}{additional}/temp'
+# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
+
+# additional = '_safety_noiseless'
+# ctrl = 'mpc_acados'
+# data_folder = f'results_rollout_{SYS}{additional}/temp'
+# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
+
+# additional = '_safety_noiseless'
+# ctrl = 'gpmpc_acados_TP'
+# GPMPC_option = f'_handtune_safety_noiseless'
+# # results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless
+# data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+# # data_folder = f'results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless'
+# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
+
+# additional = '_safety'
+# ctrl = 'gpmpc_acados_TP'
+# GPMPC_option = f'_handtune_safety'
+# # results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless
+# data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+# # data_folder = f'results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless'
+# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)

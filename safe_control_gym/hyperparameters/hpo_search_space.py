@@ -202,7 +202,7 @@ iLQR_dict = {
     'lamb_factor': {'values': [5, 10, 15, 20, 25], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     'lamb_max': {'values': [1000, 1500, 2000, 2500, 3000], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     'epsilon': {'values': [0.0001, 0.0005, 0.001, 0.005, 0.01], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
-    'q_lqr': {'values': [0.0001, 30], 'scale': 'uniform', 'type': list, 'cat': 'float'},
+    'q_lqr': {'values': [0.0001, 20], 'scale': 'uniform', 'type': list, 'cat': 'float'},
     'r_lqr': {'values': [0.0001, 5], 'scale': 'uniform', 'type': list, 'cat': 'float'},
 }
 

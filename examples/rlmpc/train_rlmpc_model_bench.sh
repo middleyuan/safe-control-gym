@@ -24,6 +24,8 @@ fi
 TRAIN_LIST=('nominal' 'generalization' 'robustness_ob5' 'robustness_ps3' 'robustness_combo' 'robustness_dw' 'robustness_pm')
 # shellcheck disable=SC2054
 Q=(10.0,0.1,10.0,0.1,0.1,0.001)
+# shellcheck disable=SC2054
+R=(0.1,0.1)
 NS=1
 T=11
 H=0
@@ -66,20 +68,20 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
             --output_dir ./Results/${EXP_NAME}/${TRAIN} \
             --tag ${SYS}_${ALGO}_data \
             --seed "${SEED}" \
-            --use_gpu \
             --kv_overrides \
                 task_config.randomized_init=True \
                 task_config.normalized_rl_action_space=False\
-                task_config.rew_state_weight=${Q}
+                task_config.rew_state_weight=${Q} \
+                task_config.rew_act_weight=${R}
     done
     # wait
 
     # RL Experiment
     for EVAL in "${EVAL_LIST[@]}"; do
         if [ "${EVAL}" == 'robustness_ob' ]; then
-            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100)
+            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200)
         elif [ "${EVAL}" == 'robustness_ps' ]; then
-            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100)
+            EXTERNAL_PARAM=(0 1 2 3 4 5 6 7 8 9 10 12 14 16 18 20 25 30 35 40 45 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200)
         elif [ "${EVAL}" == 'robustness_pm' ]; then
             EXTERNAL_PARAM=(0 0.01 0.02 0.05 0.1 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 3.5 4.0 4.5 5.0)
         elif [ "${EVAL}" == 'robustness_dw' ]; then
@@ -92,7 +94,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
 
         for EP in "${EXTERNAL_PARAM[@]}"; do
             for SEED in {0..4}; do
-                python3 ./rl_experiment.py \
+                python3 ./rlmpc_experiment.py \
                     --task ${SYS_NAME} \
                     --algo ${ALGO} \
                     --use_gpu \

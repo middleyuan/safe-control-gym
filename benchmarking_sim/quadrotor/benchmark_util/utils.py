@@ -1,12 +1,60 @@
 import numpy as np
-import os
-import sys
-import matplotlib.pyplot as plt
+from pathlib import Path
 
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
 
 from benchmarking_sim.quadrotor.mb_experiment_rollout import run
+
+plot_colors = {
+    'GP-MPC': 'royalblue',
+    'PPO': 'darkorange',
+    'SAC': 'red',
+    'DPPO': 'pink',
+    'Geometric Control': 'darkgray',
+    'Linear MPC': 'green',
+    'Nonlinear MPC': 'cadetblue',
+    'F-MPC': 'darkblue',
+    'iLQR': 'slateblue',
+    'LQR': 'blueviolet',
+    'PPO-MPC': 'tan',
+    'MAX': 'none',
+    'MIN': 'none',
+    'Reference': 'black',
+    # 'Geometric Control': 'tab:gray',
+}
+
+tag_ctrl_list = {
+    'iLQR': 'ilqr',
+    'LQR': 'lqr',
+    'Geometric Control': 'pid',
+    'Linear MPC': 'linear_mpc_acados',
+    'Nonlinear MPC': 'mpc_acados',
+    'F-MPC': 'fmpc',
+    'GP-MPC': 'gpmpc_acados_TP',
+    'PPO': 'ppo',
+    'SAC': 'sac',
+    'DPPO': 'dppo',
+    'PPO-MPC': 'ppo_mpc',
+    'PPO-ID': 'ppo_id',
+    'SAC-ID': 'sac_id',
+    'DPPO-ID': 'dppo_id',
+}
+
+def load_metric(script_dir, transfer_metric, method, tag=''):
+    episode_len_list = [9, 10, 11, 12, 13, 14, 15]
+    ctrl = tag_ctrl_list[method]
+    res = np.load(
+        f'{script_dir}/../data/{ctrl}{tag}_gen_results.npy', allow_pickle=True).item()
+    transfer_metric[method] = {'rmse': [], 'rmse_std': [], 'inference_time': []}
+    for T in episode_len_list:
+        T = '_'+str(T)
+        transfer_metric[method]['rmse'].append(res[T]['mean_rmse'])
+        transfer_metric[method]['rmse_std'].append(res[T]['std_rmse'])
+    transfer_metric[method]['rmse'] = np.array(transfer_metric[method]['rmse'])
+    transfer_metric[method]['rmse_std'] = np.array(transfer_metric[method]['rmse_std'])
+    transfer_metric[method]['inference_time'] = np.mean(res['inference_time'])
+    return transfer_metric
 
 def load_gym_data(data_dir):
     traj_data = np.load(data_dir, allow_pickle=True)
@@ -33,20 +81,20 @@ def load_gym_data(data_dir):
 
 def extract_rollouts(notebook_dir, data_folder, controller_name, additional=''):
     # print('notebook_dir', notebook_dir)
-    data_folder_path = os.path.join(notebook_dir, controller_name, data_folder)
+    data_folder_path = Path(notebook_dir) / controller_name / data_folder
     # print('data_folder_path', data_folder_path)
-    assert os.path.exists(data_folder_path), 'data_folder_path does not exist'
+    assert data_folder_path.exists(), 'data_folder_path does not exist'
 
     # find all the subfolders in the data_folder_path
-    subfolders = [f.path for f in os.scandir(data_folder_path) if f.is_dir()]
+    subfolders = [f for f in data_folder_path.iterdir() if f.is_dir()]
     # print('subfolders', subfolders)
     # load the row 'rmse in the metrics.txt
     metrics = []
     traj_resutls = []
     timing_data = []
     for subfolder in subfolders:
-        file_path = os.path.join(subfolder, 'metrics.txt')
-        with open(file_path, 'r') as file:
+        file_path = subfolder / 'metrics.txt'
+        with file_path.open('r') as file:
             lines = file.readlines()
             for line in lines:
                 if not line.startswith('rmse_std') and line.startswith('rmse'):
@@ -58,16 +106,13 @@ def extract_rollouts(notebook_dir, data_folder, controller_name, additional=''):
                     timing_data.append(eval(line))
 
         # find the file ends with pickle and get the data
-        for file in os.listdir(subfolder):
-            if file.endswith('.pkl'):
-                file_path = os.path.join(subfolder, file)
-                # print('file_path', file_path)
-                results = np.load(file_path, allow_pickle=True)
+        for file in subfolder.iterdir():
+            if file.suffix == '.pkl':
+                results = np.load(file, allow_pickle=True)
                 traj_data = results['trajs_data']['obs'][0]
                 traj_resutls.append(traj_data)
 
-    traj_resutls = np.array(traj_resutls)
-    traj_file_name = f'traj_results_{controller_name}{additional}.npy'
+    traj_file_name = Path(f'traj_results_{controller_name}{additional}.npy')
     np.save(traj_file_name, traj_resutls)
     print('traj_results.shape', traj_resutls.shape)
     # print('metrics', metrics)
@@ -147,108 +192,3 @@ def plot_xz_trajectory_with_hull(ax, traj_data, label=None,
                                   facecolor=hull_color,
                                   alpha=alpha)
         ax.add_patch(poly_connecting)
-
-def plot_trajectory(notebook_dir, data_folder, title):
-    from safe_control_gym.utils.configuration import ConfigFactory
-    from functools import partial
-    from safe_control_gym.utils.registration import make
-    #########################################################################
-    # launch SCG to get reference trajectory X_GOAL
-    ALGO = 'pid'
-    SYS = 'quadrotor_2D_attitude'
-    TASK = 'tracking'
-    # PRIOR = '200_hpo'
-    PRIOR = '100'
-    agent = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' else SYS
-    SAFETY_FILTER = None
-
-    # check if the config file exists
-    assert os.path.exists(f'./config_overrides/{SYS}_{TASK}.yaml'), f'../config_overrides/{SYS}_{TASK}.yaml does not exist'
-    assert os.path.exists(f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'), f'../config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
-    if SAFETY_FILTER is None:
-        sys.argv[1:] = ['--algo', ALGO,
-                        '--task', agent,
-                        '--overrides',
-                            f'./config_overrides/{SYS}_{TASK}.yaml',
-                            f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
-                        '--seed', '2',
-                        '--use_gpu', 'True',
-                        '--output_dir', f'./{ALGO}/results',
-                            ]
-    fac = ConfigFactory()
-    fac.add_argument('--func', type=str, default='train', help='main function to run.')
-    fac.add_argument('--n_episodes', type=int, default=1, help='number of episodes to run.')
-    # merge config and create output directory
-    config = fac.merge()
-    # Create an environment
-    env_func = partial(make,
-                        config.task,
-                        seed=config.seed,
-                        **config.task_config
-                        )
-    random_env = env_func(gui=False)
-    X_GOAL = random_env.X_GOAL
-    ##########################################################################
-    # load trajectory pkl files, load from folder
-    controller_name = 'pid'
-    fmpc_data_path = os.path.join(notebook_dir, controller_name, data_folder)
-    assert os.path.exists(fmpc_data_path), 'data_folder_path does not exist'
-    # fmpc_data_path = '/home/tobias/Studium/masterarbeit/code/safe-control-gym/benchmarking_sim/quadrotor/fmpc/results_rollout/temp'
-    fmpc_data_dirs = [d for d in os.listdir(fmpc_data_path) if os.path.isdir(os.path.join(fmpc_data_path, d))]
-    fmpc_traj_data_name = f'{controller_name}_data_quadrotor_traj_tracking.pkl'
-    fmpc_traj_data_name = [os.path.join(d, fmpc_traj_data_name) for d in fmpc_data_dirs]
-
-    fmpc_data = []
-    for d in fmpc_traj_data_name:
-        fmpc_data.append(np.load(os.path.join(fmpc_data_path, d), allow_pickle=True))
-    fmpc_traj_data = [d['trajs_data']['obs'][0] for d in fmpc_data]
-    fmpc_traj_data = np.array(fmpc_traj_data)
-    print(fmpc_traj_data.shape) # seed, time_step, obs
-    # take average of all seeds
-    mpc_mean_traj_data = np.mean(fmpc_traj_data, axis=0)
-    print(mpc_mean_traj_data.shape) # (mean_541, 6)
-
-
-    # Define Colors
-    ref_color = 'black'
-    fmpc_color = 'purple'
-    fmpc_hull_color = 'violet'
-
-    # plot the state path x, z [0, 2]
-    title_fontsize = 20
-    legend_fontsize = 14
-    axis_label_fontsize = 14
-    axis_tick_fontsize = 12
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    # adjust the distance between title and the plot
-    fig.subplots_adjust(top=0.2)
-    ax.plot(X_GOAL[:, 0], X_GOAL[:, 2], color=ref_color, linestyle='-.', label='Reference')
-    # ax.plot()
-    ax.set_xlabel('$x$ [m]', fontsize=axis_label_fontsize)
-    ax.set_ylabel('$z$ [m]', fontsize=axis_label_fontsize)
-    ax.tick_params(axis='both', which='major', labelsize=axis_tick_fontsize)
-    # ax.set_title('State path in $x$-$z$ plane')
-    # set the super title
-    # if not generalization:
-    #     fig.suptitle(f'Evaluation ({plot_name})', fontsize=title_fontsize)
-    # else:
-    #     fig.suptitle(f'Generalization ({plot_name})', fontsize=title_fontsize)
-    fig.suptitle(title, fontsize=title_fontsize)
-    ax.set_ylim(0.35, 1.85)
-    ax.set_xlim(-1.6, 1.6)
-    fig.tight_layout()
-
-
-    # plot the convex hull of each steps
-    k = 1.1 # padding factor
-    alpha = 0.2
-
-    plot_xz_trajectory_with_hull(ax, fmpc_traj_data, label='FMPC',
-                                    traj_color=fmpc_color, hull_color=fmpc_hull_color,
-                                    alpha=alpha, padding_factor=k)
-
-    ax.legend(ncol=5, loc='upper center', fontsize=legend_fontsize)
-
-    fig.savefig(os.path.join(fmpc_data_path, 'xz_path_performance.png'), dpi=300, bbox_inches='tight')
-

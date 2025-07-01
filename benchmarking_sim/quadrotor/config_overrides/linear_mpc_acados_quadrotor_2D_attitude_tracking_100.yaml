@@ -1,16 +1,16 @@
 algo: linear_mpc_acados
 algo_config:
-  horizon: 50
+  horizon: 15
   q_mpc:
-  - 11.902573972698155
+  - 20.0
+  - 9.850362332853596
+  - 20.0
   - 0.0001
-  - 20.0
-  - 20.0
   - 0.0001
   - 0.0001
   r_mpc:
-  - 5.0
-  - 0.6266401395970063
+  - 2.832778836355402
+  - 2.6629474047182358
   
   warmstart: True
   output_dir: ./linear_mpc_acados/results

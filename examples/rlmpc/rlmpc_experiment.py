@@ -6,6 +6,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FormatStrFormatter
+import pickle
 
 from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.experiments.base_experiment import BaseExperiment
@@ -125,8 +126,10 @@ def run(gui=False, plot=True, n_episodes=5, n_steps=None, curr_path='.'):
             data['timestamp'] = np.concatenate((data['timestamp'], np.array(results['timestamp'])), axis=0)
         np.save(temp, data, allow_pickle=True)
     print(metrics)
+    # with open(f'./ppo_mpc_safety_config_results.pkl', 'wb') as f:
+    #     pickle.dump(results, f)
 
-    if plot is True:
+    if plot is False:
         if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3

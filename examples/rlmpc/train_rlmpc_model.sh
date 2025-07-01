@@ -10,8 +10,8 @@ TASK='track'
 
 # ALGO='q_mpc'
 # ALGO='td3_mpc'
-ALGO='ppo_mpc'
-# ALGO='ppo_vmpc'
+# ALGO='ppo_mpc'
+ALGO='ppo_vmpc'
 # ALGO='appo_mpc'
 # ALGO='sac_mpc'
 
@@ -31,7 +31,7 @@ do
         --task ${SYS_NAME} \
         --overrides \
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+            ./config_overrides/${SYS}/${SYS}_${TASK}_mpc.yaml \
         --output_dir ./Results/${EXP_NAME} \
         --tag ${SYS}_${ALGO}_data \
         --seed ${SEED} \

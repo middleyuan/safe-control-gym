@@ -1,4 +1,4 @@
-"""Proximal Policy Optimization (PPO) with MPC
+""" Soft Actor Critic (SAC) with MPC
 """
 
 import os
@@ -9,19 +9,19 @@ import numpy as np
 import torch
 
 from safe_control_gym.controllers.base_controller import BaseController
-from safe_control_gym.controllers.rlmpc.ppo_vmpc_utils import (PPO_VMPC_Agent, PPOBuffer,
-                                                               compute_returns_and_advantages)
+from safe_control_gym.controllers.rlmpc.sac_mpc_utils import SAC_MPC_Agent, SACBuffer
 from safe_control_gym.envs.env_wrappers.record_episode_statistics import (RecordEpisodeStatistics,
                                                                           VecRecordEpisodeStatistics)
 from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
+from safe_control_gym.envs.env_wrappers.vectorized_env.vec_env_utils import _flatten_obs, _unflatten_obs
 from safe_control_gym.math_and_models.normalization import (BaseNormalizer, MeanStdNormalizer,
                                                             RewardStdNormalizer)
 from safe_control_gym.utils.logging import ExperimentLogger
 from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
 
 
-class PPO_VMPC(BaseController):
-    """Proximal policy optimization with VMPC"""
+class SAC_MPC(BaseController):
+    """Soft Actor Critic with MPC"""
 
     def __init__(self,
                  env_func,
@@ -49,25 +49,23 @@ class PPO_VMPC(BaseController):
 
         # Agent.
         model = self.get_prior(self.env)
-        self.agent = PPO_VMPC_Agent(
+        self.agent = SAC_MPC_Agent(
             self.env,
             self.env.observation_space,
             self.env.action_space,
             self.gamma,
             model,
             hidden_dim=self.hidden_dim,
-            activation=self.activation,
             actor_config=self.actor_config,
-            use_clipped_value=self.use_clipped_value,
-            clip_param=self.clip_param,
-            target_kl=self.target_kl,
-            entropy_coef=self.entropy_coef,
+            tau=self.tau,
+            init_temperature=self.init_temperature,
+            use_entropy_tuning=self.use_entropy_tuning,
+            target_entropy=self.target_entropy,
             exploration_init=self.exploration_init,
-            value_loss_coef=self.value_loss_coef,
             actor_lr=self.actor_lr,
             critic_lr=self.critic_lr,
-            opt_epochs=self.opt_epochs,
-            mini_batch_size=self.mini_batch_size,
+            entropy_lr=self.entropy_lr,
+            activation=self.activation,
         )
         self.agent.to(self.device)
 
@@ -103,6 +101,11 @@ class PPO_VMPC(BaseController):
             self.total_steps = 0
             obs, _ = self.venv.reset()
             self.obs = self.obs_normalizer(obs)
+            self.agent_info = []
+            for env in self.venv.envs:
+                self.agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
+            self.buffer = SACBuffer(self.env.observation_space, self.env.action_space, self.max_buffer_size,
+                                    self.train_batch_size)
         else:
             # Add episodic stats to be tracked.
             self.env.add_tracker('constraint_violation', 0, mode='queue')
@@ -127,7 +130,7 @@ class PPO_VMPC(BaseController):
             self.eval_venv.close()
         self.logger.close()
 
-    def save(self, path):
+    def save(self, path, save_buffer=False):
         """Saves model params and experiment state to checkpoint path."""
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
@@ -143,6 +146,8 @@ class PPO_VMPC(BaseController):
                 'random_state': get_random_state(),
                 'env_random_state': self.venv.get_env_random_state()
             }
+            if save_buffer:
+                exp_state['buffer'] = self.buffer.state_dict()
             state_dict.update(exp_state)
         torch.save(state_dict, path)
 
@@ -159,6 +164,11 @@ class PPO_VMPC(BaseController):
             self.obs = state['obs']
             set_random_state(state['random_state'])
             self.venv.set_env_random_state(state['env_random_state'])
+            if 'buffer' in state:
+                self.buffer = SACBuffer(self.env.observation_space, self.env.action_space, self.max_buffer_size,
+                                        self.train_batch_size)
+                self.buffer.load_state_dict(state['buffer'])
+
             self.logger.load(self.total_steps)
 
     def learn(self, env=None, **kwargs):
@@ -239,61 +249,64 @@ class PPO_VMPC(BaseController):
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(self.venv.observation_space, self.venv.action_space, self.rollout_steps,
-                             self.rollout_batch_size)
+
         obs = self.obs
         start = time.time()
-        agent_info = []
-        for env in self.venv.envs:
-            agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
-        for _ in range(self.rollout_steps):
-            with torch.no_grad():
-                act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(
-                    torch.FloatTensor(obs).to(self.device), info=agent_info)
-            next_obs, rew, done, info = self.venv.step(act)
-            next_obs = self.obs_normalizer(next_obs)
-            rew = self.reward_normalizer(rew, done)
-            mask = 1 - done.astype(float)
-            # Time truncation is not the same as true termination.
-            terminal_v = np.zeros_like(v)
-            for idx, inf in enumerate(info['n']):
-                agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
-                if 'terminal_info' not in inf:
-                    continue
-                inff = inf['terminal_info']
-                if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
-                    # terminal_obs = inf['terminal_observation']
-                    # terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
-                    # terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_val = self.agent.ac.value(soln_info[idx])[:, None]  #.detach().cpu().numpy()[:, None]
-                    terminal_v[idx] = terminal_val
-                    # self.agent.reset()
-            rollouts.push(
-                {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
-                 'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
+        with torch.no_grad():
+            action, logp, soln_info, results_dict, optimal = self.agent.ac.step(
+                torch.FloatTensor(obs).to(self.device), info=self.agent_info
             )
-            obs = next_obs
-        self.obs = obs
+        next_obs, rew, done, info = self.venv.step(action)
+        next_obs = self.obs_normalizer(next_obs)
+        rew = self.reward_normalizer(rew, done)
+        mask = 1 - np.asarray(done)
 
-        self.total_steps += self.rollout_batch_size * self.rollout_steps
-        # Learn from rollout batch.
-        last_val = self.agent.ac.value(soln_info)[:, None]  #.detach().cpu().numpy()[:, None]
-        ret, adv = compute_returns_and_advantages(rollouts.rew,
-                                                  rollouts.v,
-                                                  rollouts.mask,
-                                                  rollouts.terminal_v,
-                                                  last_val,
-                                                  gamma=self.gamma,
-                                                  use_gae=self.use_gae,
-                                                  gae_lambda=self.gae_lambda)
-        rollouts.ret = ret
-        # Prevent divide-by-0 for repetitive tasks.
-        rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
+        # time truncation is not true termination
+        terminal_idx, terminal_obs = [], []
+        for idx, inf in enumerate(info['n']):
+            self.agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
+            if 'terminal_info' not in inf:
+                continue
+            inff = inf['terminal_info']
+            if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
+                terminal_idx.append(idx)
+                terminal_obs.append(inf['terminal_observation'])
+            elif inff['out_of_bounds']:
+                terminal_idx.append(idx)
+                terminal_obs.append(inf['terminal_observation'])
+        if len(terminal_obs) > 0:
+            terminal_obs = _unflatten_obs(self.obs_normalizer(_flatten_obs(terminal_obs)))
+
+        # collect the true next states and masks (accounting for time truncation and out of bounds)
+        true_next_obs = _unflatten_obs(next_obs)
+        true_mask = mask.copy()
+        for idx, term_ob in zip(terminal_idx, terminal_obs):
+            true_next_obs[idx] = term_ob
+            true_mask[idx] = 1.0
+        true_next_obs = _flatten_obs(true_next_obs)
+
+        self.buffer.push({
+            'obs': obs, 'act': action, 'rew': rew, 'next_obs': true_next_obs,
+            'mask': true_mask, 'info': soln_info, 'results_dict': results_dict, 'optimal': optimal
+        })
+        obs = next_obs
+
+        self.obs = obs
+        self.total_steps += self.rollout_batch_size
+
+        # learn
         results = defaultdict(list)
-        results['train'] = self.agent.update(rollouts, self.device)
-        results['step'] = self.total_steps
-        results['elapsed_time'] = time.time() - start
-        # results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
+        if self.total_steps > self.warm_up_steps and not self.total_steps % self.train_interval:
+            # Regardless of how long you wait between updates,
+            # the ratio of env steps to gradient steps is locked to 1.
+            # alternatively, can update once each step
+            for _ in range(self.train_interval):
+                batch, batch_th = self.buffer.sample(self.train_batch_size, self.device)
+                res = self.agent.update(batch, batch_th)
+                for k, v in res.items():
+                    results[k].append(v)
+        results = {k: sum(v) / len(v) for k, v in results.items()}
+        results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
     def run(self, env=None, render=False, n_episodes=1, verbose=False):
@@ -304,15 +317,14 @@ class PPO_VMPC(BaseController):
         if env is None:
             env = self.venv
         else:
-            # if not is_wrapped(env, RecordEpisodeStatistics) or is_wrapped(env, VecRecordEpisodeStatistics):
-            #     env = RecordEpisodeStatistics(env, n_episodes)
-            #     # Add episodic stats to be tracked.
-            #     env.add_tracker('constraint_violation', 0, mode='queue')
-            #     env.add_tracker('constraint_values', 0, mode='queue')
-            #     env.add_tracker('mse', 0, mode='queue')
-            pass
+            if not is_wrapped(env, RecordEpisodeStatistics) or is_wrapped(env, VecRecordEpisodeStatistics):
+                env = RecordEpisodeStatistics(env, n_episodes)
+                # Add episodic stats to be tracked.
+                env.add_tracker('constraint_violation', 0, mode='queue')
+                env.add_tracker('constraint_values', 0, mode='queue')
+                env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = env.reset()
+        obs, env_info = env.reset()
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
@@ -333,9 +345,9 @@ class PPO_VMPC(BaseController):
                 mse = []
                 ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
-                obs, _ = env.reset()
+                obs, env_info = env.reset()
                 info['current_step'] = 0
-                # self.agent.reset()
+                self.agent.reset()
             obs = self.obs_normalizer(obs)
             agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.
@@ -369,8 +381,7 @@ class PPO_VMPC(BaseController):
             self.logger.add_scalars(
                 {
                     k: results['train'][k]
-                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl',
-                              'theta_loss', 'ref_loss', 'v_theta_loss']
+                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss', 'ref_loss']
                 },
                 step,
                 prefix='loss')
@@ -413,5 +424,3 @@ class PPO_VMPC(BaseController):
         self.logger.dump_scalars()
         print(self.agent.ac.actor.mpc_param.detach().numpy())
         print(self.agent.ac.actor.logstd.detach().numpy())
-        # print(self.agent.ac.critic_param.detach().numpy())
-        print(self.agent.ac.critic_param.numpy())

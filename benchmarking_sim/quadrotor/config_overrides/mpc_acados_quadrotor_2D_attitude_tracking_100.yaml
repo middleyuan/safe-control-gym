@@ -1,20 +1,21 @@
 algo: mpc_acados
 algo_config:
-  horizon: 30
+  horizon: 45
   q_mpc:
-  - 11.902573972698155
-  - 0.0001
   - 20.0
+  - 1.8700330688034628
   - 20.0
+  - 2.5198062551137372
   - 0.0001
   - 0.0001
   r_mpc:
-  - 5.0
-  - 0.6266401395970063
+  - 4.562295474416492
+  - 1.1669720843270919
 # constraint_tol: 0.05
 # soft_constraints: True
 
-warmstart: True
-output_dir: ./mpc_acados/results
+  warmstart: True
+  soft_constraints: True
+  output_dir: ./mpc_acados/results
 
 

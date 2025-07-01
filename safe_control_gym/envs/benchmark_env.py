@@ -666,7 +666,7 @@ class BenchmarkEnv(gym.Env, ABC):
             polys = generate_trajectory(
                 waypoints,
                 degree=6,  # Polynomial degree
-                idx_minimized_orders=4,  # Minimize derivatives in these orders (>= 2)
+                idx_minimized_orders=5,  # Minimize derivatives in these orders (>= 2)
                 num_continuous_orders=3,  # Constrain continuity of derivatives up to order (>= 3)
                 algorithm='closed-form'  # "closed-form" Or "constrained"
             )
@@ -677,7 +677,7 @@ class BenchmarkEnv(gym.Env, ABC):
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
             # print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f"Max velocity: {np.max(speed_traj)}")
+            print(f"Max speed: {np.max(speed_traj)}")
             print()
 
 
@@ -696,9 +696,9 @@ class BenchmarkEnv(gym.Env, ABC):
         #
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
         #       ptherwise flying on the floor with z=0.0 
-        # # if 'z' not in traj_plane:
-        # #     pos_ref_traj[:, 2] = 1.0
-        # #     vel_ref_traj[:, 2] = 0.0
+        if 'z' not in traj_plane and traj_type not in ['snap_custom', 'snap_figure8']:
+            pos_ref_traj[:, 2] = position_offset[2]
+            vel_ref_traj[:, 2] = 0.0
 
         # # calculate the maximul acceleration and velocity
         # max_vel = np.max(speed_traj)
@@ -979,5 +979,8 @@ class BenchmarkEnv(gym.Env, ABC):
 
 ## Miscellaneous functions for randomization and sampling
 def sample_truncated(mu, sigma, low, high, size=None):
+    if np.isclose(sigma, 0.0):
+        # If sigma is zero, return a constant value
+        return np.full(size, mu) if size is not None else mu
     a, b = (low - mu) / sigma, (high - mu) / sigma
     return truncnorm.rvs(a, b, loc=mu, scale=sigma, size=size)

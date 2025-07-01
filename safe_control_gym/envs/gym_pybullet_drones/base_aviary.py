@@ -447,7 +447,7 @@ class BaseAviary(BenchmarkEnv):
         state = np.hstack([
             self.pos[nth_drone, :], self.quat[nth_drone, :],
             self.rpy[nth_drone, :], self.vel[nth_drone, :],
-            self.ang_v[nth_drone, :], self.rpy_rates[nth_drone, :], self.last_clipped_action[nth_drone, :]
+            self.ang_v[nth_drone, :], self.rpy_rates[nth_drone, :], self.motor_forces[nth_drone, :]
         ])
         # state.reshape(20, )
         return state.copy()
@@ -1159,6 +1159,8 @@ class BaseAviary(BenchmarkEnv):
         ang_v = self.ang_v[nth_drone, :]
         rpy_rates = self.rpy_rates[nth_drone, :]
         motor_forces = self.motor_forces[nth_drone, :]
+        # print(f"Action before dynamics: {action}")
+        # print(f"Motor forces before dynamics: {motor_forces}")
 
         # Compute forces and torques.
         # Update state with discrete time dynamics.
@@ -1184,14 +1186,17 @@ class BaseAviary(BenchmarkEnv):
         pos = np.array([next_state[0], next_state[2], next_state[4]])
         vel = np.array([next_state[1], next_state[3], next_state[5]])
         rpy = np.array([next_state[6], next_state[7], next_state[8]])
-        ang_v = np.array([next_state[9], next_state[10], next_state[11]])
-        motor_forces = np.array([next_state[12:16]])
+        rpy_rates = np.array([next_state[9], next_state[10], next_state[11]])
+        motor_forces = np.array([next_state[12]])
+        motor_forces = np.clip(motor_forces, 0.08, 0.45)
+        # print(f"Motor forces after dynamics: {motor_forces}")
         
         self.pos[nth_drone, :] = pos.copy()
         self.rpy[nth_drone, :] = rpy.copy()
         self.vel[nth_drone, :] = vel.copy()
-        self.ang_v[nth_drone, :] = ang_v.copy()
+        self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         self.motor_forces[nth_drone, :] = motor_forces.copy()
+        self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
         
     def setup_dynamics_si_3d_delay_expression(self):
         # Casadi states
@@ -1228,7 +1233,7 @@ class BaseAviary(BenchmarkEnv):
         
         force_motor_dot = 1 / params_acc[2] * (T - forces_motor)
         thrust = forces_motor 
-        forces_motor_z = 32.221212 * (params_acc[0] * thrust + params_acc[1])  # [N]
+        forces_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
         X_dot = cs.vertcat(x_dot, 
                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
                            y_dot,
