@@ -152,6 +152,12 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
             graph3_1 = 0
             graph3_2 = 2
             graph3_3 = 4
+        elif system == 'quadrotor_9D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
 
         _, ax3 = plt.subplots()
         ax3.plot(results['obs'][0][:, graph3_1], results['obs'][0][:, graph3_2], 'r--', label='RL Trajectory')

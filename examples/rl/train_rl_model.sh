@@ -9,9 +9,9 @@ SYS='quadrotor_3D_attitude'
 # TASK='stab'
 TASK='track'
 
-# ALGO='ppo'
+ALGO='ppo'
 # ALGO='sac'
-ALGO='dppo'
+# ALGO='dppo'
 # ALGO='safe_explorer_ppo'
 
 EXP_NAME='test'
@@ -46,7 +46,7 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-SEEDS=(7 11 30)
+SEEDS=(30)
 
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do

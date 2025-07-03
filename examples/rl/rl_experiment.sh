@@ -20,7 +20,7 @@ else
     SYS_NAME='quadrotor'
 fi
 EXP_DATA='test'
-SEED=7
+SEED=31
 EVAL='performance'
 # RL Experiment
 python3 ./rl_experiment.py \
@@ -36,4 +36,4 @@ python3 ./rl_experiment.py \
                 algo_config.training=False \
                 task_config.normalized_rl_action_space=False \
                 task_config.randomized_init=True \
-            --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data_seed7/seed${SEED}_*/
+            --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data_seed30/seed${SEED}_*/

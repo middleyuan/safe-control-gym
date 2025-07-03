@@ -621,6 +621,7 @@ class BenchmarkEnv(gym.Env, ABC):
         times = np.arange(0, traj_length + sample_time, sample_time)
         pos_ref_traj = np.zeros((len(times), 3))
         vel_ref_traj = np.zeros((len(times), 3))
+        acc_ref_traj = np.zeros((len(times), 3))
         speed_traj = np.zeros((len(times), 1))
         # Initial trajectory for snap trajectory
         if traj_type == 'snap_figure8':

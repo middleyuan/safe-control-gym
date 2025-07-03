@@ -525,18 +525,11 @@ class Quadrotor(BaseAviary):
                     _plot_trajectory(POS_REF, 
                                      waypoints=waypoints, 
                                      strings=strings, 
-<<<<<<< HEAD
                                      save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                     _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
                                      waypoints=waypoints, 
                                      strings=strings, 
                                      save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-=======
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data'))
-
-                
-                
->>>>>>> 772f479bc52a83f60f09ca5f095147f0c94b6083
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
@@ -1481,9 +1474,9 @@ class Quadrotor(BaseAviary):
 
     def _set_observation_space(self):
         """Sets the observation space of the environment."""
-        self.x_threshold = 6
-        self.y_threshold = 6
-        self.z_threshold = 6
+        self.x_threshold = 3
+        self.y_threshold = 2
+        self.z_threshold = 2.5
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
         self.psi_threshold_radians = 180 * math.pi / 180  # Do not bound yaw.
