@@ -78,7 +78,8 @@ class SACAgent:
         '''Puts agent to device.'''
         self.ac.to(device)
         self.ac_targ.to(device)
-        self.log_alpha = self.log_alpha.to(device)
+        # self.log_alpha = self.log_alpha.to(device)
+        self.log_alpha.to(device)
 
     def train(self):
         '''Sets training mode.'''
