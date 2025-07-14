@@ -5,6 +5,7 @@ import pickle
 from functools import partial
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pybullet as p
 
@@ -16,7 +17,7 @@ from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import set_dir_from_config
 
 
-def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
+def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, model_src_dir=None):
     '''The main function running PID experiments.
 
     Args:
@@ -31,6 +32,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
     config = CONFIG_FACTORY.merge()
 
     config.task_config['gui'] = gui
+    if curr_path is None:
+        algo_name = config.algo
+        ep_len_sec = getattr(config.task_config, "episode_len_sec", "unknown")
+        curr_path = f'./experiment_results/{algo_name}/{ep_len_sec}'
 
     custom_trajectory = False
     if config.task_config.task == 'traj_tracking' and config.task_config.task_info.trajectory_type == 'custom':
@@ -109,11 +114,11 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
     experiment.close()
 
     if save_data:
-        results = {'trajs_data': trajs_data, 'metrics': metrics}
+        trajs_data = {'trajs_data': trajs_data, 'metrics': metrics}
         path_dir = os.path.dirname('./temp-data/')
         os.makedirs(path_dir, exist_ok=True)
         with open(f'./temp-data/{config.algo}_data_{config.task_config.task}.pkl', 'wb') as file:
-            pickle.dump(results, file)
+            pickle.dump(trajs_data, file)
 
     iterations = len(trajs_data['action'][0])
     for i in range(iterations):
@@ -155,7 +160,13 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
             graph1_2 = 9
             graph3_1 = 0
             graph3_2 = 4
-
+        elif system == 'quadrotor_9D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
+        
         _, ax = plt.subplots()
         # ax.plot(trajs_data['obs'][0][:, graph1_1], trajs_data['obs'][0][:, graph1_2], 'r--', label='Agent Trajectory')
         # ax.scatter(trajs_data['obs'][0][0, graph1_1], trajs_data['obs'][0][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
@@ -187,21 +198,114 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
         #     plt.savefig(os.path.join(config.output_dir, 'trajectory_x_dot_z_dot.png'))
 
         _, ax3 = plt.subplots()
-        ax3.plot(trajs_data['obs'][0][:, graph3_1], trajs_data['obs'][0][:, graph3_2], 'r--', label='Agent Trajectory')
+        ax3.plot(trajs_data['obs'][0][:, graph3_1], trajs_data['obs'][0][:, graph3_2], 'r--', label='PID Trajectory')
         if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.QUADROTOR:
             ax3.plot(ctrl.env.X_GOAL[:, graph3_1], ctrl.env.X_GOAL[:, graph3_2], 'g--', label='Reference')
-        ax3.scatter(trajs_data['obs'][0][0, graph3_1], trajs_data['obs'][0][0, graph3_2], color='g', marker='o', s=100, label='Initial State')
+        ax3.scatter(trajs_data['obs'][0][0, graph3_1], trajs_data['obs'][0][0, graph3_2], color='g', marker='o', s=100,
+                    label='Initial State')
         ax3.set_xlabel(r'X')
         if config.task == Environment.CARTPOLE:
             ax3.set_ylabel(r'Vel')
         elif config.task == Environment.QUADROTOR:
-            ax3.set_ylabel(r'Z')
+            ax3.set_ylabel(r'Y')
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
+        os.makedirs(curr_path, exist_ok=True)
+        plt.savefig(f"{curr_path}/trajectory_xy.png")  # Save the figure
+        actual_traj = trajs_data['obs'][0][:, [graph3_1, graph3_2]]
+        ref_traj = ctrl.env.X_GOAL[:, [graph3_1, graph3_2]]
+        # Ensure they have the same number of time steps
+        print(len(actual_traj), len(ref_traj))
+        # min_len = min(len(actual_traj), len(ref_traj))
+        # actual_traj = actual_traj[:min_len]
+        # ref_traj = ref_traj[:min_len]
+        # ref_traj = ref_traj[1:]
+        # Calculate RMSE
+        rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
+        print(f"Trajectory RMSE: {rmse:.4f}")
+        print((actual_traj - ref_traj))
+        
+        diff = actual_traj - ref_traj
+        time_steps = range(len(diff))
 
+        plt.figure(figsize=(10, 5))
+        plt.plot(time_steps, diff[:, 0], label='X difference')
+        plt.plot(time_steps, diff[:, 1], label='Y difference')
+        plt.xlabel('Time step')
+        plt.ylabel('Difference')
+        plt.title('Trajectory Differences Over Time')
+        plt.legend()
+        plt.grid(True)
+        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
+        # plt.show()
+        plt.savefig(f"{curr_path}/trajectory_diff.png")  # Save instead of show        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
+        rmse = np.sqrt(np.mean(errors**2))
+        print(f"2ndTrajectory RMSE: {rmse:.4f}")
+        
+        
+        plt.figure(figsize=(10, 4))
+        plt.plot(range(len(trajs_data['obs'][0])), trajs_data['obs'][0][:, graph3_3], label='Z trajectory', color='blue')
+        if config.task == Environment.QUADROTOR:
+            plt.plot(range(len(ctrl.env.X_GOAL)), ctrl.env.X_GOAL[:, graph3_3], label='Z reference', color='green', linestyle='--')
+        plt.xlabel('Time step')
+        plt.ylabel('Z position')
+        plt.title('Z Position Over Time')
+        plt.legend()
+        plt.grid(True)
         plt.tight_layout()
-        # save the plot
-        plt.savefig(os.path.join(config.output_dir, 'trajectory_x.png'))
+        # plt.show()
+        plt.savefig(f"{curr_path}/z_position.png")  # Save instead of show
+        
+
+        post_analysis(trajs_data['obs'][0], trajs_data['action'][0], ctrl.env, curr_path)
+
+    return ctrl.env.X_GOAL, trajs_data, metrics
+
+
+def post_analysis(state_stack, input_stack, env, curr_path):
+    '''Plots the input and states to determine iLQR's success.
+
+    Args:
+        state_stack (ndarray): The list of observations of iLQR in the latest run.
+        input_stack (ndarray): The list of inputs of iLQR in the latest run.
+    '''
+    model = env.symbolic
+    stepsize = model.dt
+
+    plot_length = np.min([np.shape(input_stack)[0], np.shape(state_stack)[0]])
+    times = np.linspace(0, stepsize * plot_length, plot_length)
+
+    reference = env.X_GOAL
+    if env.TASK == Task.STABILIZATION:
+        reference = np.tile(reference.reshape(1, model.nx), (plot_length, 1))
+
+    # Plot states
+    fig, axs = plt.subplots(model.nx)
+    for k in range(model.nx):
+        axs[k].plot(times, np.array(state_stack).transpose()[k, 0:plot_length], label='actual')
+        axs[k].plot(times, reference.transpose()[k, 0:plot_length], color='r', label='desired')
+        axs[k].set(ylabel=env.STATE_LABELS[k] + f'\n[{env.STATE_UNITS[k]}]')
+        axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        if k != model.nx - 1:
+            axs[k].set_xticks([])
+    axs[0].set_title('State Trajectories')
+    axs[-1].legend(ncol=3, bbox_transform=fig.transFigure, bbox_to_anchor=(1, 0), loc='lower right')
+    axs[-1].set(xlabel='time (sec)')
+    plt.savefig(f"{curr_path}/state_stats.png")
+    # Plot inputs
+    _, axs = plt.subplots(model.nu)
+    if model.nu == 1:
+        axs = [axs]
+    for k in range(model.nu):
+        axs[k].plot(times, np.array(input_stack).transpose()[k, 0:plot_length])
+        axs[k].set(ylabel=f'input {k}')
+        axs[k].set(ylabel=env.ACTION_LABELS[k] + f'\n[{env.ACTION_UNITS[k]}]')
+        axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    axs[0].set_title('Input Trajectories')
+    axs[-1].set(xlabel='time (sec)')
+
+    # plt.show()
+    plt.savefig(f"{curr_path}/input_stats.png")
 
 
 if __name__ == '__main__':
