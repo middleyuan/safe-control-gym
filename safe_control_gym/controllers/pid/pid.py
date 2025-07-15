@@ -221,7 +221,7 @@ class PID(BaseController):
                 self.last_action = action
                 time_after = time.perf_counter()
                 self.results_dict['inference_time'].append(time_after - time_before)
-                print(f'Action: {action}, ')
+                # print(f'Action: {action}, ')
                 return action
             
             rpm = self._dslPIDAttitudeControl(thrust,

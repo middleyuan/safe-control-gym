@@ -802,7 +802,8 @@ class TrajectoryPlanner:
                     d = _distance_to_point(point, X[:3, i])
                     h.append(0.1 - d - Sigma[j * k, i]) 
                     h.append(-Sigma[j * k, i])
-            cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds 
+            cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds 
+            # cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds 
             # cost += 3 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 30 seconds
             # cost += 1 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 40 seconds
         for wp in self.waypoint_list[1:-1]:  # skip start and end
