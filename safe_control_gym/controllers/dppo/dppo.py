@@ -67,6 +67,7 @@ class DPPO(BaseController):
                                opt_epochs=self.opt_epochs,
                                mini_batch_size=self.mini_batch_size,
                                activation=self.activation,
+                               quantile_count=self.quantile_count,
                                gae_lambda=self.gae_lambda,
                                value_loss=self.value_loss,
                                risk_measure=self.risk_measure,
@@ -235,7 +236,7 @@ class DPPO(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = DPPOBuffer(self.env.observation_space, self.env.action_space,
-                              self.rollout_steps, self.rollout_batch_size)
+                              self.rollout_steps, self.rollout_batch_size, self.quantile_count)
         obs = self.obs
         start = time.time()
         for _ in range(self.rollout_steps):
@@ -276,7 +277,8 @@ class DPPO(BaseController):
                                                                        last_val_quant,
                                                                        gamma=self.gamma,
                                                                        use_gae=self.use_gae,
-                                                                       gae_lambda=self.gae_lambda)
+                                                                       gae_lambda=self.gae_lambda,
+                                                                       quantile_count=self.quantile_count)
         rollouts.ret = ret
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
