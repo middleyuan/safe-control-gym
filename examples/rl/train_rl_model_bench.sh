@@ -17,22 +17,30 @@ TASK='track'
 
 ALGO='ppo'
 # ALGO='dppo'
-ALGO='sac'
+# ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
-EXP_NAME='final6'
-
-# TRAIN_LIST=('nominal' 'generalization' 'robustness_pm')
-# TRAIN_LIST=('robustness_ob5' 'robustness_ps3' 'robustness_combo')
-# TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3')
+EXP_NAME='Final'
 TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
-# shellcheck disable=SC2054
-Q=(5.0,0.1,5.0,0.1,0.1,0.001)
-# Q=(10.0,0.1,1.0,0.1,0.1,0.001)
+EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
 NS=1
 T=11
 H=0
-EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
+
+# ENV parameters for each algorithm
+if [ "${ALGO}" == 'ppo' ]; then
+    # PPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'dppo' ]; then
+    # DPPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'sac' ]; then
+    # SAC env parameters
+    # shellcheck disable=SC2054
+    Q=(10.0,0.1,10.0,0.1,0.1,0.001)
+fi
 
 # Train the unsafe controller/agent.
 for TRAIN in "${TRAIN_LIST[@]}"; do
@@ -43,7 +51,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}.yaml"
     elif [ "${TRAIN}" == 'generalization' ]; then
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_gen.yaml"
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_gen.yaml"
     elif [ "${TRAIN}" == 'robustness_ob5' ]; then
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
@@ -79,7 +87,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
                 "${CONFIG1}" \
                 "${CONFIG2}" \
             --output_dir ./Results/${EXP_NAME}/${TRAIN} \
-            --tag ${SYS}_${ALGO}_data21 \
+            --tag ${SYS}_${ALGO}_data \
             --seed "${SEED}" \
             --use_gpu \
             --kv_overrides \
