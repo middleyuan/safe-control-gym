@@ -13,7 +13,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
+def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path=None, model_src_dir=None):
     """Main function to run RL experiments.
 
     Args:
@@ -22,6 +22,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         n_episodes (int): The number of episodes to execute.
         n_steps (int): How many steps to run the experiment.
         curr_path (str): The current relative path to the experiment folder.
+        model_src_dir (str): Directory containing model_best.pt and config file to copy.
 
     Returns:
         X_GOAL (np.ndarray): The goal (stabilization or reference trajectory) of the experiment.
@@ -34,6 +35,26 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     config = fac.merge()
     config.seed += 150
 
+    if curr_path is None:
+        algo_name = config.algo
+        ep_len_sec = getattr(config.task_config, "episode_len_sec", "unknown")
+        curr_path = f'./experiment_results/{algo_name}/{ep_len_sec}'
+    # Create directory if it doesn't exist
+    import os
+    os.makedirs(curr_path, exist_ok=True)
+    # --- Copy model_best.pt and config file if model_src_dir is provided ---
+    if model_src_dir is None and 'pretrain_path' in config.keys():
+        model_src_dir = config.pretrain_path
+        src_model = os.path.join(model_src_dir, "model_best.pt")
+        src_config = os.path.join(model_src_dir, "config.yaml")
+        dst_model = os.path.join(curr_path, "model_best.pt")
+        dst_config = os.path.join(curr_path, "config.yaml")
+        if os.path.isfile(src_model):
+            shutil.copy2(src_model, dst_model)
+            print("Copied model")
+        if os.path.isfile(src_config):
+            shutil.copy2(src_config, dst_config)
+            print("Copied config")
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
         system = f'quadrotor_{str(config.task_config.quad_type)}D'
@@ -172,7 +193,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
             ax3.set_ylabel(r'Y')
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
-
+        plt.savefig(f"{curr_path}/trajectory_xy.png")  # Save the figure
         actual_traj = results['obs'][0][:, [graph3_1, graph3_2]]
         ref_traj = env.X_GOAL[:, [graph3_1, graph3_2]]
         # Ensure they have the same number of time steps
@@ -180,7 +201,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         # min_len = min(len(actual_traj), len(ref_traj))
         # actual_traj = actual_traj[:min_len]
         # ref_traj = ref_traj[:min_len]
-        # ref_traj = ref_traj[1:]
+        ref_traj = ref_traj[1:]
         # Calculate RMSE
         rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
         print(f"Trajectory RMSE: {rmse:.4f}")
@@ -197,8 +218,9 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         plt.title('Trajectory Differences Over Time')
         plt.legend()
         plt.grid(True)
-        plt.show()
         errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
+        # plt.show()
+        plt.savefig(f"{curr_path}/trajectory_diff.png")  # Save instead of show        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
         rmse = np.sqrt(np.mean(errors**2))
         print(f"2ndTrajectory RMSE: {rmse:.4f}")
         
@@ -213,16 +235,16 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+        # plt.show()
+        plt.savefig(f"{curr_path}/z_position.png")  # Save instead of show
         
 
-        post_analysis(results['obs'][0], results['action'][0], env)
-        plt.savefig(f"{curr_path}/perf.png")
+        post_analysis(results['obs'][0], results['action'][0], env, curr_path)
 
     return env.X_GOAL, results, metrics
 
 
-def post_analysis(state_stack, input_stack, env):
+def post_analysis(state_stack, input_stack, env, curr_path):
     '''Plots the input and states to determine iLQR's success.
 
     Args:
@@ -251,7 +273,7 @@ def post_analysis(state_stack, input_stack, env):
     axs[0].set_title('State Trajectories')
     axs[-1].legend(ncol=3, bbox_transform=fig.transFigure, bbox_to_anchor=(1, 0), loc='lower right')
     axs[-1].set(xlabel='time (sec)')
-
+    plt.savefig(f"{curr_path}/state_stats.png")
     # Plot inputs
     _, axs = plt.subplots(model.nu)
     if model.nu == 1:
@@ -264,7 +286,8 @@ def post_analysis(state_stack, input_stack, env):
     axs[0].set_title('Input Trajectories')
     axs[-1].set(xlabel='time (sec)')
 
-    plt.show()
+    # plt.show()
+    plt.savefig(f"{curr_path}/input_stats.png")
 
 
 if __name__ == '__main__':

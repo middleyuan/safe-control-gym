@@ -320,7 +320,8 @@ class DPPOBuffer(object):
                  obs_space,
                  act_space,
                  max_length,
-                 batch_size
+                 batch_size,
+                 quantile_count
                  ):
         super().__init__()
         self.max_length = max_length
@@ -349,7 +350,7 @@ class DPPOBuffer(object):
                 'vshape': (T, N, 1)
             },
             'v_quant': {
-                'vshape': (T, N, 200)
+                'vshape': (T, N, quantile_count)
             },
             'logp': {
                 'vshape': (T, N, 1)
@@ -361,13 +362,13 @@ class DPPOBuffer(object):
                 'vshape': (T, N, 1)
             },
             'value_target_quants': {
-                'vshape': (T, N, 200)
+                'vshape': (T, N, quantile_count)
             },
             'terminal_v': {
                 'vshape': (T, N, 1)
             },
             'terminal_v_quant': {
-                'vshape': (T, N, 200)
+                'vshape': (T, N, quantile_count)
             }
         }
         self.keys = list(self.scheme.keys())
@@ -462,11 +463,12 @@ def compute_returns_and_advantages(rews,
                                    last_quant=0,
                                    gamma=0.99,
                                    use_gae=False,
-                                   gae_lambda=0.95
+                                   gae_lambda=0.95,
+                                   quantile_count=200
                                    ):
     '''Useful for policy-gradient algorithms.'''
     T, N = rews.shape[:2]
-    rets, advs, next_value_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, 200))
+    rets, advs, next_value_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, quantile_count))
 
     ret, ret_quant, adv = last_val, last_quant, np.zeros((N, 1))
     vals = np.concatenate([vals, last_val[np.newaxis, ...]], 0)

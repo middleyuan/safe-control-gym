@@ -46,7 +46,7 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-SEEDS=(30)
+SEEDS=(11)
 
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do
@@ -63,8 +63,8 @@ for SEED in "${SEEDS[@]}"; do
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
-            task_config.normalized_rl_action_space=False \
-            task_config.episode_len_sec=${SEED}
+            task_config.normalized_rl_action_space=False 
+            # task_config.episode_len_sec=${SEED}
 done
 
 # Move the newly trained unsafe model.
