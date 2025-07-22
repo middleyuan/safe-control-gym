@@ -539,7 +539,7 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
         print(f"Trajectory plot saved to {save_path}")
     except:
         pass
-    plt.show()
+    # # plt.show()
     plt.close(fig)
 
 def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, waypoints=None, strings=None, save_path=None):
@@ -576,7 +576,7 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
             except Exception as e:
                 print(f"Failed to save plot {save_axis_path}: {e}")
 
-        plt.show()
+        # plt.show()
         plt.close(fig)
 
     # Plot X vs Y
@@ -597,7 +597,7 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
         except Exception as e:
             print(f"Failed to save plot {save_xy_path}: {e}")
 
-    plt.show()
+    # plt.show()
     plt.close(fig)
 
     # Plot X vs Z
@@ -618,7 +618,7 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
         except Exception as e:
             print(f"Failed to save plot {save_xz_path}: {e}")
 
-    plt.show()
+    # plt.show()
     plt.close(fig)
 
     # Plot speed magnitude on separate plot
@@ -640,7 +640,7 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
             except Exception as e:
                 print(f"Failed to save plot {save_speed_path}: {e}")
 
-        plt.show()
+        # plt.show()
         plt.close(fig)
     
 
