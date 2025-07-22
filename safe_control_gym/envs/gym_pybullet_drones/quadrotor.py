@@ -718,6 +718,11 @@ class Quadrotor(BaseAviary):
                 self.alpha_9 = prop_values['alpha_9']
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            if self.PHYSICS == Physics.DYN_SI_3D_DELAY:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_delay_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -747,6 +752,7 @@ class Quadrotor(BaseAviary):
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             INIT_TAU = init_values.get('init_tau', self.MASS * self.GRAVITY_ACC)
             self.init_tau = INIT_TAU
+            self.motor_forces = INIT_TAU * np.ones((self.NUM_DRONES, 1)) 
         p.resetBasePositionAndOrientation(self.DRONE_IDS[0], INIT_XYZ,
                                           p.getQuaternionFromEuler(INIT_RPY),
                                           physicsClientId=self.PYB_CLIENT)
@@ -1300,6 +1306,7 @@ class Quadrotor(BaseAviary):
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-192.9, -22.22, 323.5])
             thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
+            print('in quad', self.MASS)
             thrust = force_motor
             force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
             # force_motor_z = 32.221212 * thrust_scaled
