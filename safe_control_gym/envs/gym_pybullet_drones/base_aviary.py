@@ -1224,15 +1224,15 @@ class BaseAviary(BenchmarkEnv):
         rpy = np.array([next_state[6], next_state[7], next_state[8]])
         rpy_rates = np.array([next_state[9], next_state[10], next_state[11]])
         
-        # normalize motor forces
-        normal_motor_forces = 2 * (motor_forces - f_min) / (f_max - f_min) - 1
-        # apply delta to normalized motor forces
-        next_normal_motor_forces = normal_motor_forces + delta_state[12]
-        # denominate motor forces to raw force space
-        next_motor_forces = (next_normal_motor_forces + 1) * (f_max - f_min) / 2 + f_min
-        motor_forces = next_motor_forces.copy()
+        # # normalize motor forces
+        # normal_motor_forces = 2 * (motor_forces - f_min) / (f_max - f_min) - 1
+        # # apply delta to normalized motor forces
+        # next_normal_motor_forces = normal_motor_forces + delta_state[12]
+        # # denominate motor forces to raw force space
+        # next_motor_forces = (next_normal_motor_forces + 1) * (f_max - f_min) / 2 + f_min
+        # motor_forces = next_motor_forces.copy()
         
-        # motor_forces = np.array([next_state[12]])
+        motor_forces = np.array([next_state[12]])
         motor_forces = np.clip(motor_forces, 0.08, 0.45)
         # print(f"Motor forces after dynamics: {motor_forces}")
         
@@ -1270,11 +1270,11 @@ class BaseAviary(BenchmarkEnv):
         g = self.GRAVITY_ACC
         d = cs.MX.sym('d', 3, 1)  # disturbance force
         # Define inputs.
-        T = cs.MX.sym('T')  # normalized thrust [N]
-        R = cs.MX.sym('R')  # desired roll angle [rad]
-        P = cs.MX.sym('P')  # desired pitch angle [rad]
-        Y = cs.MX.sym('Y')  # desired yaw angle [rad]
-        U = cs.vertcat(T, R, P, Y)      
+        T_c = cs.MX.sym('T')  # normalized thrust [N]
+        R_c = cs.MX.sym('R')  # desired roll angle [rad]
+        P_c = cs.MX.sym('P')  # desired pitch angle [rad]
+        Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
+        U = cs.vertcat(T_c, R_c, P_c, Y_c)      
         
         # Transformation parameters from sys_id with mode 3 
         cmd_min = self.transform_params['cmd_min']
@@ -1286,25 +1286,28 @@ class BaseAviary(BenchmarkEnv):
         
         # Transform input command T from raw to normalized space (mode 3)
         # T is expected to be in raw force units, normalize to [-1, 1]
-        dT = 2 * (T - cmd_min) / (cmd_max - cmd_min) - 1
+        dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
         
         # normalized forces_motor
         df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
         
         # Delay dynamics parameters (from MATLAB sys_id results)
         # Based on estimated parameters: [bias, scale, tau]
-        bias = -0.04 # Update this with actual estimated bias from MATLAB
-        scale = 0.776  # Update this with actual estimated scale from MATLAB  
-        tau = 0.092  # Update this with actual estimated tau from MATLAB
-        
+        # bias = -0.04 # Update this with actual estimated bias from MATLAB
+        # scale = 0.776  # Update this with actual estimated scale from MATLAB  
+        # tau = 0.092  # Update this with actual estimated tau from MATLAB
+        params_acc = [-0.04, 0.776, 0.092]  # [bias, scale, tau]
         # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
         # force_motor_dot is the derivative in normalized space
-        df_dot = (scale * (dT + bias) - df) / tau
+        # df_dot = (scale * (dT + bias) - df) / tau
+        df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+        
+        # by definition, motor_forces_dot = 1/2 * df_dot
         
         # Transform normalized forces_motor to raw force for physics calculations
-        self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
+        # self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
         
-        print(f"Using mass: {overridden_mass}")
+        # print(f"Using mass: {overridden_mass}")
         # params_acc = [0.5210, 0.1704, 0.0923]
         # params_roll_rate = [-286.2, -23.03, 225.6]
         # params_pitch_rate = [-286.2, -23.03, 225.6]
@@ -1327,10 +1330,10 @@ class BaseAviary(BenchmarkEnv):
                            phi_dot,
                            theta_dot,
                            psi_dot,
-                           params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R,
-                           params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P,
-                           params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y,
-                           df_dot)
+                           params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                           params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                           params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                           1/2*df_dot)
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
 
         
