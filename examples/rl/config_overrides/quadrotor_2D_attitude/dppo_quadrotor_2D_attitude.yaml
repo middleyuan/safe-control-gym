@@ -6,14 +6,14 @@ algo_config:
   # loss args
   gamma: 0.98
   use_gae: True
-  gae_lambda: 0.92
+  gae_lambda: 0.95
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.002
+  entropy_coef: 0.001
   quantile_count: 200
   value_loss: 'sample_energy'
   risk_measure: 'wang'
-  beta: 0.1
+  beta: 0.2
 
   # optim args
   opt_epochs: 20

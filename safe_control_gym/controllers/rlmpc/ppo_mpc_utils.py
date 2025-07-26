@@ -23,26 +23,27 @@ from safe_control_gym.math_and_models.neural_networks import MLP
 class PPO_MPC_Agent:
     '''A PPO class that encapsulates models, optimizers and update functions.'''
 
-    def __init__(self,
-                 env_fun,
-                 obs_space,
-                 act_space,
-                 gamma,
-                 model,
-                 hidden_dim=64,
-                 activation='tanh',
-                 actor_config=None,
-                 use_clipped_value=False,
-                 clip_param=0.2,
-                 target_kl=0.02,
-                 entropy_coef=0.002,
-                 exploration_init=-1.0,
-                 actor_lr=0.001,
-                 critic_lr=0.001,
-                 opt_epochs=10,
-                 mini_batch_size=64,
-                 **kwargs
-                 ):
+    def __init__(
+            self,
+            env_fun,
+            obs_space,
+            act_space,
+            gamma,
+            model,
+            hidden_dim=64,
+            activation='tanh',
+            actor_config=None,
+            use_clipped_value=False,
+            clip_param=0.2,
+            target_kl=0.02,
+            entropy_coef=0.002,
+            exploration_init=-1.0,
+            actor_lr=0.001,
+            critic_lr=0.001,
+            opt_epochs=10,
+            mini_batch_size=64,
+            **kwargs
+    ):
 
         # Parameters.
         self.env = env_fun
@@ -193,17 +194,18 @@ class MLPActorCritic(nn.Module):
         critic (MLPCritic): value network.
     '''
 
-    def __init__(self,
-                 env,
-                 obs_space,
-                 act_space,
-                 gamma,
-                 model,
-                 hidden_dims=(64, 64),
-                 exploration_init=-1.0,
-                 activation='tanh',
-                 actor_config=None
-                 ):
+    def __init__(
+            self,
+            env,
+            obs_space,
+            act_space,
+            gamma,
+            model,
+            hidden_dims=(64, 64),
+            exploration_init=-1.0,
+            activation='tanh',
+            actor_config=None
+    ):
         super().__init__()
         obs_dim = obs_space.shape[0]
         if isinstance(act_space, Box):
@@ -319,7 +321,7 @@ class MPCActor(nn.Module):
             theta = self.mpc_param.repeat(obs.shape[0], 1) + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
         else:
             theta = self.mpc_param + 0.0 * self.param_net.forward(torch.FloatTensor(obs))
-        theta += torch.rand_like(theta) * 1e-5
+        theta += torch.rand_like(theta) * 1e-6
         return theta
 
     def get_references(self, info_batch):
@@ -365,18 +367,19 @@ class MPCActor(nn.Module):
 
 
 class MPCPolicyFunction:
-    def __init__(self,
-                 env_fun,
-                 gamma,
-                 model,
-                 horizon: int = 5,
-                 warmstart: bool = True,
-                 soft_constraints: bool = True,
-                 constraint_tol: float = 1e-6,
-                 additional_constraints: list = None,
-                 n_parallel_solver: int = 1,
-                 n_train_solver: int = 1,
-                 ):
+    def __init__(
+            self,
+            env_fun,
+            gamma,
+            model,
+            horizon: int = 5,
+            warmstart: bool = True,
+            soft_constraints: bool = True,
+            constraint_tol: float = 1e-6,
+            additional_constraints: list = None,
+            n_parallel_solver: int = 1,
+            n_train_solver: int = 1,
+    ):
         self.env = env_fun
         self.model = model
         self.dt = self.model.dt
@@ -1070,11 +1073,7 @@ class PPOBuffer(object):
                 batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]
         return batch
 
-    def sampler(self,
-                mini_batch_size,
-                device='cpu',
-                drop_last=True
-                ):
+    def sampler(self, mini_batch_size, device='cpu', drop_last=True):
         '''Makes sampler to loop through all data.'''
         total_steps = self.max_length * self.batch_size
         sampler = random_sample(np.arange(total_steps), mini_batch_size, drop_last)
@@ -1136,15 +1135,16 @@ def random_sample(indices, batch_size, drop_last=True):
             yield indices[-r:]
 
 
-def compute_returns_and_advantages(rews,
-                                   vals,
-                                   masks,
-                                   terminal_vals=0,
-                                   last_val=0,
-                                   gamma=0.99,
-                                   use_gae=False,
-                                   gae_lambda=0.95
-                                   ):
+def compute_returns_and_advantages(
+        rews,
+        vals,
+        masks,
+        terminal_vals=0,
+        last_val=0,
+        gamma=0.99,
+        use_gae=False,
+        gae_lambda=0.95
+):
     '''Useful for policy-gradient algorithms.'''
     T, N = rews.shape[:2]
     rets, advs = np.zeros((T, N, 1)), np.zeros((T, N, 1))
