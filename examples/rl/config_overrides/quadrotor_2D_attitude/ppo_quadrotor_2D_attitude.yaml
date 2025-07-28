@@ -4,16 +4,16 @@ algo_config:
   activation: "relu"
 
   # loss args
-  gamma: 0.98
+  gamma: 0.99
   use_gae: True
-  gae_lambda: 0.92
+  gae_lambda: 0.95
   clip_param: 0.2
   target_kl: 0.01
   entropy_coef: 0.001  # 0.008
   exploration_init: -0.5
 
   # optim args
-  opt_epochs: 25
+  opt_epochs: 20
   mini_batch_size: 256
   actor_lr: 0.0003
   critic_lr: 0.0003
