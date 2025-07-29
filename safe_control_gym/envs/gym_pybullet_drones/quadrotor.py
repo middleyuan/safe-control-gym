@@ -309,6 +309,7 @@ class Quadrotor(BaseAviary):
             QuadType.THREE_D_ATTITUDE_DELAY: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
                                               'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau']
         }
+        print(init_state)
         if init_state is None:
             for init_name in self.INIT_STATE_RAND_INFO:  # Default zero state.
                 self.__dict__[init_name.upper()] = 0.
@@ -1474,8 +1475,8 @@ class Quadrotor(BaseAviary):
 
     def _set_observation_space(self):
         """Sets the observation space of the environment."""
-        self.x_threshold = 3
-        self.y_threshold = 2
+        self.x_threshold = 4
+        self.y_threshold = 3
         self.z_threshold = 2.5
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
@@ -1491,8 +1492,8 @@ class Quadrotor(BaseAviary):
         
         if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
             # space for obstacle course
-            self.x_threshold = 3
-            self.y_threshold = 2
+            self.x_threshold = 4
+            self.y_threshold = 3
             self.z_threshold = 2.5
 
         # Define obs/state bounds, labels and units.
