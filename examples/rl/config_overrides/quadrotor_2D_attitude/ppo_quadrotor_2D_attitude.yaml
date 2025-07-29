@@ -1,15 +1,15 @@
 algo_config:
   # model args
-  hidden_dim: 128
+  hidden_dim: 256
   activation: "relu"
 
   # loss args
-  gamma: 0.98
+  gamma: 0.99
   use_gae: True
-  gae_lambda: 0.92
+  gae_lambda: 0.95
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.002  # 0.008
+  entropy_coef: 0.001  # 0.008
   exploration_init: -0.5
 
   # optim args
@@ -30,4 +30,4 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True

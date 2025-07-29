@@ -244,7 +244,7 @@ class iLQR(BaseController):
         fig, ax = plt.subplots(figsize=(10, 6))
         # self.ite_counter 
         ax.plot(np.arange(self.ite_counter),
-                [self.optimization_log[repr(k)] for k in np.arange(self.ite_counter)],
+                [self.optimization_log[str(k)] for k in np.arange(self.ite_counter)],
                 label='Cost', color='b')
         # check if warm start return is available
         if 'warmstart_return' in self.optimization_log:

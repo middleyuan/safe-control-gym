@@ -1,19 +1,19 @@
 algo_config:
   # model args
-  hidden_dim: 128
+  hidden_dim: 256
   activation: "relu"
 
   # loss args
   gamma: 0.98
   use_gae: True
-  gae_lambda: 0.92
+  gae_lambda: 0.95
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.002
-  quantile_count: 256
+  entropy_coef: 0.001
+  quantile_count: 200
   value_loss: 'sample_energy'
   risk_measure: 'wang'
-  beta: 0.0
+  beta: 0.2
 
   # optim args
   opt_epochs: 20
@@ -33,4 +33,4 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True

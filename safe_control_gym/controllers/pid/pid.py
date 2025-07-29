@@ -202,19 +202,22 @@ class PID(BaseController):
                                                                         )
             if self.env.QUAD_TYPE in [4, 6, 8, 9]:
                 if self.env.QUAD_TYPE == 4:  # 2D quadrotor with attitude control
-                    action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4, computed_target_rpy[1]])
-                
+                    # action = np.array([self.env.attitude_control.pwm2thrust(thrust), computed_target_rpy[1]])
+                    action = np.array([thrust, computed_target_rpy[1]])
                 elif self.env.QUAD_TYPE == 6:  # 3D quadrotor with attitude control
-                    action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    action = np.array([thrust,
                                     computed_target_rpy[0],
                                     computed_target_rpy[1],
                                     computed_target_rpy[2]])
                 elif self.env.QUAD_TYPE == 8:  # 3D quadrotor with attitude control
-                    action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    action = np.array([thrust,               
                                     computed_target_rpy[0],
                                     computed_target_rpy[1],])
                 elif self.env.QUAD_TYPE == 9:
-                    action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
+                    action = np.array([thrust,                
                                     computed_target_rpy[0],
                                     computed_target_rpy[1],
                                     computed_target_rpy[2]])
@@ -273,14 +276,24 @@ class PID(BaseController):
         vel_e = target_vel - cur_vel
         self.integral_pos_e = self.integral_pos_e + pos_e * self.control_timestep
         self.integral_pos_e = np.clip(self.integral_pos_e, -2., 2.)
-        self.integral_pos_e[2] = np.clip(self.integral_pos_e[2], -0.15, .15)
+        self.integral_pos_e[2] = np.clip(self.integral_pos_e[2], -0.4, 0.4)
 
         # PID target thrust.
         target_thrust = np.multiply(self.P_COEFF_FOR, pos_e) \
             + np.multiply(self.I_COEFF_FOR, self.integral_pos_e) \
             + np.multiply(self.D_COEFF_FOR, vel_e) + np.array([0, 0, self.GRAVITY])
         scalar_thrust = max(0., np.dot(target_thrust, cur_rotation[:, 2]))
-        thrust = (math.sqrt(scalar_thrust / (4 * self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
+                
+        if self.env.QUAD_TYPE in [4, 6, 8, 9]: # attitude interface
+            # similar to hardware implementation
+            n_mot = 4
+            a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
+            a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            thrust = np.clip(scalar_thrust, a_low, a_high)
+        else:
+            # scg implementation
+            thrust = (math.sqrt(scalar_thrust / (4 * self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
+            
         target_z_ax = target_thrust / np.linalg.norm(target_thrust)
         target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
         target_y_ax = cross_3d(target_z_ax, target_x_c) / np.linalg.norm(cross_3d(target_z_ax, target_x_c))

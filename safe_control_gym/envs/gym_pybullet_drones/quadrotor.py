@@ -719,6 +719,11 @@ class Quadrotor(BaseAviary):
                 self.alpha_9 = prop_values['alpha_9']
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            if self.PHYSICS == Physics.DYN_SI_3D_DELAY:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_delay_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -748,6 +753,7 @@ class Quadrotor(BaseAviary):
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             INIT_TAU = init_values.get('init_tau', self.MASS * self.GRAVITY_ACC)
             self.init_tau = INIT_TAU
+            self.motor_forces = INIT_TAU * np.ones((self.NUM_DRONES, 1)) 
         p.resetBasePositionAndOrientation(self.DRONE_IDS[0], INIT_XYZ,
                                           p.getQuaternionFromEuler(INIT_RPY),
                                           physicsClientId=self.PYB_CLIENT)
@@ -1295,31 +1301,39 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            params_acc = prior_prop.get('param_acc', [1.0591, 0, 0.1108])
-            params_roll_rate = prior_prop.get('params_roll_rate', [-286.2, -23.03, 225.6])
-            params_pitch_rate = prior_prop.get('params_pitch_rate', [-286.2, -23.03, 225.6])
-            params_yaw_rate = prior_prop.get('params_yaw_rate', [-192.9, -22.22, 323.5])
-            thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+            params_acc = prior_prop.get('param_acc', [-0.04, 0.776, 0.092])
+            params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+            params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280] )
+            # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+            cmd_min = self.transform_params['cmd_min']
+            cmd_max = self.transform_params['cmd_max']
+            f_min = self.transform_params['f_min']
+            f_max = self.transform_params['f_max'] 
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) + 1
+            df = 2 * (force_motor - f_min) / (f_max - f_min) + 1
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
-            thrust = force_motor
-            force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
+            # print('in quad', self.MASS)
+            # thrust = force_motor
+            # force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
             # force_motor_z = 32.221212 * thrust_scaled
             # Define dynamics equations.
             X_dot = cs.vertcat(x_dot,
-                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                               1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                              (force_motor_z) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                               1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                              (force_motor_z) * cs.cos(phi) * cs.cos(theta) - g,
+                               1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                               thrust_dot)
+                               1/2*df_dot)
             # Define observation.
-            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust)
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             
         # Set the equilibrium values for linearizations.
         X_EQ = np.zeros(self.state_dim)
