@@ -1,0 +1,143 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  init_state:
+    init_x: 2.5
+    init_x_dot: 0
+    init_y: 1.5
+    init_y_dot: 0
+    init_z: 1.00
+    init_z_dot: 0
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 1
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [ 0., 0.]
+    trajectory_scale: 1.
+    strings:
+      # === Randomized String Obstacles ===
+      - start: [2.5, 1.0, 0.0]      # vertical
+        end:   [2.5, 1.0, 2.0]
+      - start: [2.0, 0.0, 1.0]      # horizontal (y direction, z fixed)
+        end:   [3.0, 0.0, 1.0]
+      - start: [2.0, -1.0, 0.0]      # diagonal (y and z change)
+        end:   [3.0, -1.0, 2.0]
+      # === Fixed String Obstacles (vertical) ===
+      - start: [1.0, -1.125, 0.0]
+        end:   [1.0, -1.125, 2.0]
+      - start: [1.0, -0.375, 0.0]
+        end:   [1.0, -0.375, 2.0]
+      - start: [1.0, 0.375, 0.0]
+        end:   [1.0, 0.375, 2.0]
+      - start: [1.0, 1.125, 0.0]
+        end:   [1.0, 1.125, 2.0]
+      # # === Fixed String Obstacles (horizontal) ===
+      # - start: [0.5, -1.125, 1.0]
+      #   end:   [1.5, -1.125, 1.0]
+      # - start: [0.5, -0.375, 1.0]
+      #   end:   [1.5, -0.375, 1.0]
+      # - start: [0.5, 0.375, 1.0]
+      #   end:   [1.5, 0.375, 1.0]
+      # - start: [0.5, 1.125, 1.0]
+      #   end:   [1.5, 1.125, 2.0]
+      # === Disturbance Test Obstacles ===
+      - start: [-0.25, -1.25, 0.0]
+        end:   [-0.25, -1.25, 2.0]
+    waypoints:
+      # === Fast Tracking Waypoints ===   
+      # === Randomized String Waypoints ===
+      # - time: 1
+      #   position: [2.5, 1.5, 1.00]
+      # - time: 3
+      #   position: [2.5, -1.5, 1.00]
+      # === Fixed String Waypoints ===
+      # - time: 5
+      #   position: [1.0, -1.5, 1.00]
+      # - time: 7
+      #   position: [1.0, -0.75, 1.00]
+      # - time: 9
+      #   position: [1.0, 0.0, 1.00]
+      # - time: 11
+      #   position: [1.0, 0.75, 1.00]
+      # - time: 13
+      #   position: [1.0, 1.5, 1.00]
+      # === Disturbance Test Waypoints ===
+      # - time: 15
+      #   position: [0.5, 1.5, 1.00]
+      # - time: 17
+      #   position: [0.0, -1.5, 1.00]
+      # === Speed Test Waypoints ===
+      # - time: 19
+      #   position: [0.0, -1.5, 1.00]
+      # - time: 21
+      #   position: [-1.0, -1.0, 1.00]
+      # - time: 23
+      #   position: [-1.5, 0.0, 1.00]
+      # - time: 25
+      #   position: [-1.0, 1.0, 1.00]
+      # - time: 27
+      #   position: [0.0, 1.5, 1.00]
+      # - time: 29
+      #   position: [1.25, 1.5, 1.00]
+      # - time: 31
+      #   position: [2.5, 1.5, 1.00]
+      # === Slow Tracking Waypoints ===
+      # === Randomized String Waypoints ===
+      - time: 2
+        position: [2.5, 1.5, 1.00]
+      - time: 8
+        position: [2.5, -1.5, 1.00]
+      # === Fixed String Waypoints ===
+      - time: 11
+        position: [1.0, -1.5, 1.00]
+      - time: 14
+        position: [1.0, -0.75, 1.00]
+      - time: 18
+        position: [1.0, 0.0, 1.00]
+      - time: 22
+        position: [1.0, 0.75, 1.00]
+      - time: 26
+        position: [1.0, 1.5, 1.00]
+      # === Disturbance Test Waypoints ===
+      - time: 30
+        position: [0.5, 1.5, 1.00]
+      - time: 34
+        position: [0.0, -1.5, 1.00]
+      # === Speed Test Waypoints ===
+      - time: 38
+        position: [0.0, -1.5, 1.00]
+      - time: 42
+        position: [-1.0, -1.0, 1.00]
+      - time: 46
+        position: [-1.5, 0.0, 1.00]
+      - time: 50
+        position: [-1.0, 1.0, 1.00]
+      - time: 54
+        position: [0.0, 1.5, 1.00]
+      - time: 58
+        position: [1.25, 1.5, 1.00]
+      - time: 62
+        position: [2.5, 1.5, 1.00]
+  inertial_prop:
+    M: 0.033
+  # episode_len_sec: 15
+  # episode_len_sec: 20
+  # episode_len_sec: 30
+  episode_len_sec: 62
+  
+  # cost: rl_reward
+  cost: quadratic
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+  done_on_violation: False

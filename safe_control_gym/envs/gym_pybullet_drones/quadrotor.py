@@ -1316,7 +1316,7 @@ class Quadrotor(BaseAviary):
             df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
             # df_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
-            print('in quad', self.MASS)
+            # print('in quad', self.MASS)
             # thrust = force_motor
             # force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
             # force_motor_z = 32.221212 * thrust_scaled
