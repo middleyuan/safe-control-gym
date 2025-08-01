@@ -198,10 +198,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path=None, model
         ref_traj = env.X_GOAL[:, [graph3_1, graph3_2]]
         # Ensure they have the same number of time steps
         print(len(actual_traj), len(ref_traj))
-        # min_len = min(len(actual_traj), len(ref_traj))
-        # actual_traj = actual_traj[:min_len]
-        # ref_traj = ref_traj[:min_len]
-        ref_traj = ref_traj[1:]
+        ref_traj = ref_traj[:len(actual_traj)] 
         # Calculate RMSE
         rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
         print(f"Trajectory RMSE: {rmse:.4f}")
