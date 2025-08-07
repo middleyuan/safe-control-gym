@@ -19,6 +19,7 @@ import pybullet as p
 import pybullet_data
 from gymnasium import spaces
 
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.envs.benchmark_env import BenchmarkEnv, Cost, Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, SymmetricStateConstraint
 from safe_control_gym.math_and_models.normalization import normalize_angle
@@ -151,6 +152,8 @@ class CartPole(BenchmarkEnv):
         self.obs_wrap_angle = obs_wrap_angle
         self.rew_state_weight = np.array(rew_state_weight, ndmin=1, dtype=float)
         self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
+        self.Q = get_cost_weight_matrix(self.rew_state_weight, 4)
+        self.R = get_cost_weight_matrix(self.rew_act_weight, 1)
         self.rew_exponential = rew_exponential
         self.done_on_out_of_bound = done_on_out_of_bound
         # BenchmarkEnv constructor, called after defining the custom args,
@@ -445,10 +448,10 @@ class CartPole(BenchmarkEnv):
         self.x_dot_threshold = 10
         self.theta_dot_threshold = 10
         # Limit set to 2x: i.e. a failing observation is still within bounds.
-        obs_bound = np.array([self.x_threshold * 2, 
-                              self.x_dot_threshold, #np.finfo(np.float32).max, 
-                              self.theta_threshold_radians * 2, 
-                              self.theta_dot_threshold]) # np.finfo(np.float32).max
+        obs_bound = np.array([self.x_threshold * 2,
+                              self.x_dot_threshold,  # np.finfo(np.float32).max,
+                              self.theta_threshold_radians * 2,
+                              self.theta_dot_threshold])  # np.finfo(np.float32).max
         self.state_space = spaces.Box(low=-obs_bound, high=obs_bound, dtype=np.float32)
 
         # Concatenate goal info for RL

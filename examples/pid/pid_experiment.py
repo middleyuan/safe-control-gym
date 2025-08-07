@@ -5,23 +5,23 @@ import pickle
 from functools import partial
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pybullet as p
+from matplotlib.ticker import FormatStrFormatter
 
 from safe_control_gym.envs.benchmark_env import Environment, Task
-
 from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import set_dir_from_config
 
 
-def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, model_src_dir=None):
+def run(gui=False, plot=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, model_src_dir=None):
     '''The main function running PID experiments.
 
     Args:
         gui (bool): Whether to display the gui and plot graphs.
+        plot (bool): Whether to plot the results.
         n_episodes (int): The number of episodes to execute.
         n_steps (int): The total number of steps to execute.
         save_data (bool): Whether to save the collected experiment data.
@@ -34,7 +34,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
     config.task_config['gui'] = gui
     if curr_path is None:
         algo_name = config.algo
-        ep_len_sec = getattr(config.task_config, "episode_len_sec", "unknown")
+        ep_len_sec = getattr(config.task_config, 'episode_len_sec', 'unknown')
         curr_path = f'./experiment_results/{algo_name}/{ep_len_sec}'
 
     custom_trajectory = False
@@ -144,7 +144,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
     else:
         system = config.task
 
-    if True:
+    if plot:
         if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3
@@ -166,7 +166,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
             graph3_1 = 0
             graph3_2 = 2
             graph3_3 = 4
-        
+
         _, ax = plt.subplots()
         # ax.plot(trajs_data['obs'][0][:, graph1_1], trajs_data['obs'][0][:, graph1_2], 'r--', label='Agent Trajectory')
         # ax.scatter(trajs_data['obs'][0][0, graph1_1], trajs_data['obs'][0][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
@@ -211,17 +211,17 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
         os.makedirs(curr_path, exist_ok=True)
-        plt.savefig(f"{curr_path}/trajectory_xy.png")  # Save the figure
+        plt.savefig(f'{curr_path}/trajectory_xy.png')  # Save the figure
         actual_traj = trajs_data['obs'][0][:, [graph3_1, graph3_2]]
         ref_traj = ctrl.env.X_GOAL[:, [graph3_1, graph3_2]]
         # Ensure they have the same number of time steps
         print(len(actual_traj), len(ref_traj))
-        ref_traj = ref_traj[:len(actual_traj)] 
+        ref_traj = ref_traj[:len(actual_traj)]
         # Calculate RMSE
         rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
-        print(f"Trajectory RMSE: {rmse:.4f}")
+        print(f'Trajectory RMSE: {rmse:.4f}')
         print((actual_traj - ref_traj))
-        
+
         diff = actual_traj - ref_traj
         time_steps = range(len(diff))
 
@@ -235,11 +235,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
         plt.grid(True)
         errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
         # plt.show()
-        plt.savefig(f"{curr_path}/trajectory_diff.png")  # Save instead of show        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
+        plt.savefig(f'{curr_path}/trajectory_diff.png')  # Save instead of show        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
         rmse = np.sqrt(np.mean(errors**2))
-        print(f"2ndTrajectory RMSE: {rmse:.4f}")
-        
-        
+        print(f'2ndTrajectory RMSE: {rmse:.4f}')
+
         plt.figure(figsize=(10, 4))
         plt.plot(range(len(trajs_data['obs'][0])), trajs_data['obs'][0][:, graph3_3], label='Z trajectory', color='blue')
         if config.task == Environment.QUADROTOR:
@@ -251,8 +250,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
         plt.grid(True)
         plt.tight_layout()
         # plt.show()
-        plt.savefig(f"{curr_path}/z_position.png")  # Save instead of show
-        
+        plt.savefig(f'{curr_path}/z_position.png')  # Save instead of show
 
         post_analysis(trajs_data['obs'][0], trajs_data['action'][0], ctrl.env, curr_path)
 
@@ -288,7 +286,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
     axs[0].set_title('State Trajectories')
     axs[-1].legend(ncol=3, bbox_transform=fig.transFigure, bbox_to_anchor=(1, 0), loc='lower right')
     axs[-1].set(xlabel='time (sec)')
-    plt.savefig(f"{curr_path}/state_stats.png")
+    plt.savefig(f'{curr_path}/state_stats.png')
     # Plot inputs
     _, axs = plt.subplots(model.nu)
     if model.nu == 1:
@@ -302,7 +300,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
     axs[-1].set(xlabel='time (sec)')
 
     # plt.show()
-    plt.savefig(f"{curr_path}/input_stats.png")
+    plt.savefig(f'{curr_path}/input_stats.png')
 
 
 if __name__ == '__main__':

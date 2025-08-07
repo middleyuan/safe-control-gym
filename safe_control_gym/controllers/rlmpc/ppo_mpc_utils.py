@@ -2,7 +2,6 @@
 
 from collections import defaultdict, deque
 from copy import deepcopy
-from multiprocessing import Pool
 
 import casadi as cs
 import numpy as np
@@ -10,13 +9,11 @@ import torch
 import torch.nn as nn
 from gymnasium.spaces import Box
 
-from safe_control_gym.controllers.mpc.mpc_utils import (compute_discrete_lqr_gain_from_cont_linear_system,
-                                                        compute_state_rmse, get_cost_weight_matrix,
-                                                        reset_constraints)
-from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, euler_discrete, rk_discrete
+from safe_control_gym.controllers.mpc.mpc_utils import reset_constraints
+from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, rk_discrete
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, create_constraint_list
-from safe_control_gym.math_and_models.distributions import Categorical, Normal
+from safe_control_gym.math_and_models.distributions import Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
 
 
@@ -540,7 +537,7 @@ class MPCPolicyFunction:
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
-        back_off_param = cs.MX.sym("back_off_param", nx)
+        back_off_param = cs.MX.sym('back_off_param', nx)
         # Model
         model_param = cs.MX.sym('f_param', npl)
 
@@ -639,8 +636,8 @@ class MPCPolicyFunction:
         mult, lamb, mu = cs.vcat(mult), cs.vcat(lamb), cs.vcat(mu)
         con_lbg, con_ubg = cs.vcat(con_lbg), cs.vcat(con_ubg)
         lang_mult_fn = cs.Function('lang_mult_fn', [mult], [lamb, mu])
-        lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, "thread")
-        lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, "thread")
+        lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, 'thread')
+        lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, 'thread')
 
         # Create solver (IPOPT solver in this version)
         opts_setting = {
@@ -666,14 +663,14 @@ class MPCPolicyFunction:
             'g': con_list,
         }
         vsolver = cs.nlpsol('vsolver', 'fatrop', vnlp_prob, opts_setting)
-        vsolver_parallel = vsolver.map(self.n_parallel_solver, "thread")
-        vsolver_parallel_train = vsolver.map(self.n_train_solver, "thread")
+        vsolver_parallel = vsolver.map(self.n_parallel_solver, 'thread')
+        vsolver_parallel_train = vsolver.map(self.n_train_solver, 'thread')
 
         # Build Lagrangian
         lagrangian = (
-                cost
-                + cs.transpose(lamb) @ H_eq
-                + cs.transpose(mu) @ H_ieq
+            cost
+            + cs.transpose(lamb) @ H_eq
+            + cs.transpose(mu) @ H_ieq
         )
         dlag_dw = cs.jacobian(lagrangian, opt_vars)
         # Build KKT matrix
@@ -688,8 +685,8 @@ class MPCPolicyFunction:
 
         # Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function('rkkt_fn', [z, fixed_param, ref_param, theta], [R_kkt])
-        rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, "thread")
-        rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, "thread")
+        rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, 'thread')
+        rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, 'thread')
         dR_sensfunc = rkkt_fn.factory('dR', ['i0', 'i1', 'i2', 'i3'], ['jac:o0:i0', 'jac:o0:i2', 'jac:o0:i3'])
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
         # dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
@@ -703,7 +700,7 @@ class MPCPolicyFunction:
         f_true = cs.Function('f_true', [z, fixed_param, ref_param, theta], [dPi])
         f_false = cs.Function('f_false', [z, fixed_param, ref_param, theta], [dPi_zeros])
         dPi_fn = cs.Function.if_else('dPi_fn', f_true, f_false)
-        dPi_train = dPi_fn.map(self.n_train_solver, "thread")
+        dPi_train = dPi_fn.map(self.n_train_solver, 'thread')
 
         self.solver_dict = {
             'x_var': x_var,
