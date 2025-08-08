@@ -22,7 +22,6 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import warnings
 from typing import NamedTuple
-import time
 
 import numpy as np
 import casadi as cs
@@ -745,12 +744,7 @@ class TrajectoryPlanner:
                              pos_init.reshape(-1, 1),
                              np.zeros(((self.N + 1) * len(self.string_list) * self.string_discrete_point, 1))), axis=0)
         print(x0.shape, self.lbg.shape, self.ubg.shape)
-        #Timer Start
-        start_time = time.time()
         soln = self.traj_solver(x0=x0, p=[], lbg=self.lbg, ubg=self.ubg)
-        elapsed_time = time.time() - start_time
-        print(f"Trajectory optimization completed in {elapsed_time:.2f} seconds")
-        
         ref = soln['x'].full()
         if not self.traj_solver.stats()['success']:
             print('Trajectory planner failed')
@@ -782,7 +776,6 @@ class TrajectoryPlanner:
     def traj_optimizer(self):
         X = cs.MX.sym('X', 6, self.N + 1)
         U = cs.MX.sym('U', 3, self.N)
-        weights = np.array([0.5, 20.0, 100.0])  # weights for the cost function
         Sigma = cs.MX.sym('Sigma', len(self.string_list) * self.string_discrete_point, self.N + 1)
         opt_vars = cs.vertcat(
             cs.reshape(U, -1, 1),
@@ -799,7 +792,7 @@ class TrajectoryPlanner:
         g.append(X[:3, -1] - np.array(self.end_loc))
         g.append(X[3:, -1])
         for i in range(self.N):
-            cost += weights[0]*U[:, i].T @ U[:, i]
+            cost += U[:, i].T @ U[:, i]
             h.append(U[:, i] - ub)
             h.append(lb - U[:, i])
             x_next = self.dyn(X[:, i], U[:, i])
@@ -807,18 +800,17 @@ class TrajectoryPlanner:
             for j, string in enumerate(self.string_list):
                 for k, point in enumerate(np.linspace(string['start'], string['end'], self.string_discrete_point)):
                     d = _distance_to_point(point, X[:3, i])
-                    h.append(0.25 - d - Sigma[j * k, i]) 
+                    h.append(0.1 - d - Sigma[j * k, i]) 
                     h.append(-Sigma[j * k, i])
-            # cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds 
+            cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds 
             # cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds 
             # cost += 3 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 30 seconds
             # cost += 1 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 40 seconds
-            cost += weights[1] * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 40 seconds
         for wp in self.waypoint_list[1:-1]:  # skip start and end
             t_idx = int(wp['time'] / self.dt)  # convert time to index
             pos = X[:3, t_idx]  # predicted position at that time
             desired = cs.vertcat(*wp['position'])  # desired waypoint
-            cost += weights[2] * cs.sumsqr(pos - desired)  # soft penalty
+            cost += 100 * cs.sumsqr(pos - desired)  # soft penalty
 
         G = cs.vertcat(*g)
         H = cs.vertcat(*h)
@@ -830,7 +822,7 @@ class TrajectoryPlanner:
             'expand': True,
             'fatrop.max_iter': 200,
             'fatrop.print_level': 0,
-            'fatrop.acceptable_tol': 1e-4,
+            'fatrop.acceptable_tol': 1e-5,
         }
         nlp_prob = {
             'f': cost,

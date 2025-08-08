@@ -18,12 +18,10 @@ TASK='track'
 ALGO='ppo_mpc'
 
 EXP_NAME='Final'
-#TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
-#EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
-TRAIN_LIST=('nominal')
-EVAL_LIST=('traj_data')
+TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
 NS=1
-T=15
+T=11
 H=0
 # shellcheck disable=SC2054
 Q=(15.0,0.1,15.0,0.1,0.1,0.001)
@@ -66,19 +64,19 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
     echo ${CONFIG2}
 
     for SEED in {0..9}; do
-#        python3 ../../safe_control_gym/experiments/train_rl_controller.py \
-#            --algo ${ALGO} \
-#            --task ${SYS_NAME} \
-#            --overrides \
-#                "${CONFIG1}" \
-#                "${CONFIG2}" \
-#            --output_dir ./Results/${EXP_NAME}/${TRAIN} \
-#            --tag ${SYS}_${ALGO}_data \
-#            --seed "${SEED}" \
-#            --kv_overrides \
-#                task_config.randomized_init=True \
-#                task_config.normalized_rl_action_space=False\
-#                task_config.rew_state_weight=${Q}
+        python3 ../../safe_control_gym/experiments/train_rl_controller.py \
+            --algo ${ALGO} \
+            --task ${SYS_NAME} \
+            --overrides \
+                "${CONFIG1}" \
+                "${CONFIG2}" \
+            --output_dir ./Results/${EXP_NAME}/${TRAIN} \
+            --tag ${SYS}_${ALGO}_data \
+            --seed "${SEED}" \
+            --kv_overrides \
+                task_config.randomized_init=True \
+                task_config.normalized_rl_action_space=False\
+                task_config.rew_state_weight=${Q}
 
         # Evaluate the trained controller/agent.
         # RL Experiment
@@ -117,8 +115,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
                         task_config.noise_scale=${NS} \
                         task_config.downwash_height=${H} \
                         task_config.external_param=${EP} \
-                    --pretrain_path /home/savvyfox/Projects/Data/Benchmark_August/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/
-#                    --pretrain_path ./Results/${EXP_NAME}/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/
+                    --pretrain_path ./Results/${EXP_NAME}/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/
             done
             wait
         done

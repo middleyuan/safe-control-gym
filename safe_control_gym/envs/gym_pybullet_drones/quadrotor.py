@@ -309,7 +309,6 @@ class Quadrotor(BaseAviary):
             QuadType.THREE_D_ATTITUDE_DELAY: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
                                               'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau']
         }
-        print(init_state)
         if init_state is None:
             for init_name in self.INIT_STATE_RAND_INFO:  # Default zero state.
                 self.__dict__[init_name.upper()] = 0.
@@ -1301,8 +1300,7 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
-            # params_acc = prior_prop.get('params_acc', [-0.2039, 0.8, 0.076])
+            params_acc = prior_prop.get('param_acc', [-0.04, 0.776, 0.092])
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280] )
@@ -1311,10 +1309,9 @@ class Quadrotor(BaseAviary):
             cmd_max = self.transform_params['cmd_max']
             f_min = self.transform_params['f_min']
             f_max = self.transform_params['f_max'] 
-            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-            df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) + 1
+            df = 2 * (force_motor - f_min) / (f_max - f_min) + 1
             df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-            # df_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
             # print('in quad', self.MASS)
             # thrust = force_motor
@@ -1333,7 +1330,7 @@ class Quadrotor(BaseAviary):
                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                               (f_max - f_min)/2 * df_dot)
+                               1/2*df_dot)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             
@@ -1445,12 +1442,6 @@ class Quadrotor(BaseAviary):
             # a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
             a_low = 0.08 # [N] measured from hardware data
             a_high = 0.45 # [N]
-            max_roll_deg = 60
-            max_pitch_deg = 60
-            max_yaw_deg = 25
-            max_roll_rad = max_roll_deg * math.pi / 180
-            max_pitch_rad = max_pitch_deg * math.pi / 180
-            max_yaw_rad = max_yaw_deg * math.pi / 180
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
                                                      np.full(1, -max_roll_rad, np.float32),
                                                      np.full(1, -max_pitch_rad, np.float32),
@@ -1497,8 +1488,8 @@ class Quadrotor(BaseAviary):
 
     def _set_observation_space(self):
         """Sets the observation space of the environment."""
-        self.x_threshold = 4
-        self.y_threshold = 3
+        self.x_threshold = 3
+        self.y_threshold = 2
         self.z_threshold = 2.5
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
@@ -1514,8 +1505,8 @@ class Quadrotor(BaseAviary):
         
         if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
             # space for obstacle course
-            self.x_threshold = 4
-            self.y_threshold = 3
+            self.x_threshold = 3
+            self.y_threshold = 2
             self.z_threshold = 2.5
 
         # Define obs/state bounds, labels and units.

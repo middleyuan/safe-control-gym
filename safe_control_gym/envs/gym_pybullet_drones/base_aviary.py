@@ -211,15 +211,10 @@ class BaseAviary(BenchmarkEnv):
         thrust to RPM and vice versa.
         '''
         self.transform_params = {
-            'f_min': -1,
-            'f_max': 1,
-            'cmd_min': -1,
-            'cmd_max': 1,
-            # 0.2012 0.4553 0.2389 0.4750
-            # 'f_min': 0.2389,
-            # 'f_max': 0.4750,
-            # 'cmd_min': 0.2012,
-            # 'cmd_max': 0.4553,
+            'f_min': 0.2890,
+            'f_max': 0.4236,
+            'cmd_min': 0.2523,
+            'cmd_max': 0.4530,
             'f_hover': self.MASS * self.GRAVITY_ACC,
             'cmd_hover': self.MASS * self.GRAVITY_ACC,
             'transformation_mode': 3  # 1: no transform, 2: subtract hover, 3: normalize
@@ -1301,12 +1296,11 @@ class BaseAviary(BenchmarkEnv):
         # bias = -0.04 # Update this with actual estimated bias from MATLAB
         # scale = 0.776  # Update this with actual estimated scale from MATLAB  
         # tau = 0.092  # Update this with actual estimated tau from MATLAB
-        # params_acc = [-0.2039, 0.8, 0.076]  # [bias, scale, tau]
-        params_acc = [0.0905, 0.8, 0.0814]
+        params_acc = [-0.04, 0.776, 0.092]  # [bias, scale, tau]
         # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
         # force_motor_dot is the derivative in normalized space
+        # df_dot = (scale * (dT + bias) - df) / tau
         df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-        # df_dot = (params_acc[1] * (T_c + params_acc[0]) - forces_motor) / params_acc[2]
         
         # by definition, motor_forces_dot = 1/2 * df_dot
         
@@ -1339,7 +1333,7 @@ class BaseAviary(BenchmarkEnv):
                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                           (f_max - f_min)/2 * df_dot)
+                           1/2*df_dot)
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
 
         

@@ -198,18 +198,6 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.', model_
         ax3.set_box_aspect(0.5)
         ax3.legend(loc='upper right')
         plt.savefig(f"{curr_path}/trajectory_xy.png")  # Save the figure
-        actual_traj = results['obs'][0][:, [graph3_1, graph3_2]]
-        ref_traj = env.X_GOAL[:, [graph3_1, graph3_2]]
-        # Ensure they have the same number of time steps
-        print(len(actual_traj), len(ref_traj))
-        ref_traj = ref_traj[:len(actual_traj)] 
-        # Calculate RMSE
-        rmse = np.sqrt(np.mean((actual_traj - ref_traj) ** 2))
-        print(f"Trajectory RMSE: {rmse:.4f}")
-        print((actual_traj - ref_traj))
-        
-        diff = actual_traj - ref_traj
-        time_steps = range(len(diff))
 
         # actual_traj = results['obs'][0][:, [graph3_1, graph3_2]]
         # ref_traj = env.X_GOAL[:, [graph3_1, graph3_2]]
