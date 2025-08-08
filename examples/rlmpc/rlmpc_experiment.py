@@ -14,7 +14,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(gui=False, plot=True, n_episodes=5, n_steps=None, curr_path='.'):
+def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     """Main function to run RL experiments.
 
     Args:
