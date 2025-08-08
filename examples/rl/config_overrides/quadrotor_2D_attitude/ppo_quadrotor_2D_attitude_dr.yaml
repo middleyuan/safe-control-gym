@@ -4,9 +4,9 @@ algo_config:
   activation: "relu"
 
   # loss args
-  gamma: 0.9
+  gamma: 0.99
   use_gae: True
-  gae_lambda: 0.9
+  gae_lambda: 0.95
   clip_param: 0.1
   target_kl: 0.005
   entropy_coef: 0.01  # 0.008
