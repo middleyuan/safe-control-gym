@@ -21,13 +21,8 @@ ALGO='ppo'
 # ALGO='safe_explorer_ppo'
 
 EXP_NAME='Final'
-#TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
-#EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
-TRAIN_LIST=('generalization')
-EVAL_LIST=('traj_data')
-NS=1
-T=9
-H=0
+TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
 
 # ENV parameters for each algorithm
 if [ "${ALGO}" == 'ppo' ]; then
@@ -82,20 +77,20 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
     echo ${CONFIG2}
 
     for SEED in {0..9}; do
-#        python3 ../../safe_control_gym/experiments/train_rl_controller.py \
-#            --algo ${ALGO} \
-#            --task ${SYS_NAME} \
-#            --overrides \
-#                "${CONFIG1}" \
-#                "${CONFIG2}" \
-#            --output_dir ./Results/${EXP_NAME}/${TRAIN} \
-#            --tag ${SYS}_${ALGO}_data \
-#            --seed "${SEED}" \
-#            --use_gpu \
-#            --kv_overrides \
-#                task_config.randomized_init=True \
-#                task_config.normalized_rl_action_space=False\
-#                task_config.rew_state_weight=${Q}
+        python3 ../../safe_control_gym/experiments/train_rl_controller.py \
+            --algo ${ALGO} \
+            --task ${SYS_NAME} \
+            --overrides \
+                "${CONFIG1}" \
+                "${CONFIG2}" \
+            --output_dir ./Results/${EXP_NAME}/${TRAIN} \
+            --tag ${SYS}_${ALGO}_data \
+            --seed "${SEED}" \
+            --use_gpu \
+            --kv_overrides \
+                task_config.randomized_init=True \
+                task_config.normalized_rl_action_space=False\
+                task_config.rew_state_weight=${Q}
 
         # Evaluate the trained controller/agent.
         # RL Experiment
@@ -130,12 +125,8 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
                         algo_config.training=False \
                         task_config.normalized_rl_action_space=False \
                         task_config.randomized_init=True \
-                        task_config.episode_len_sec=${T} \
-                        task_config.noise_scale=${NS} \
-                        task_config.downwash_height=${H} \
                         task_config.external_param=${EP} \
-                    --pretrain_path /home/savvyfox/Projects/Data/Benchmark_August/${TRAIN}/${SYS}_${ALGO}_data2/seed${SEED}_*/
-#                    --pretrain_path ./Results/${EXP_NAME}/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/
+                    --pretrain_path ./Results/${EXP_NAME}/${TRAIN}/${SYS}_${ALGO}_data/seed${SEED}_*/
             done
             wait
         done
