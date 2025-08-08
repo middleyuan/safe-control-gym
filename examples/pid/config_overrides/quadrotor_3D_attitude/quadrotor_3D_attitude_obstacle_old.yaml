@@ -1,0 +1,153 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  # quad_type: 9
+  # normalized_rl_action_space: False
+  init_state:
+    init_x: 0
+    init_x_dot: 0
+    init_z: 0.75
+    init_z_dot: 0
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  task: traj_tracking
+  task_info:
+    trajectory_type: figure8
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0, 0, 1]
+    trajectory_scale: 1.0
+  # task: traj_tracking
+  # task_info:
+  #   trajectory_type: snap_custom
+  #   num_cycles: 2
+  #   trajectory_plane: 'xy'
+  #   trajectory_position_offset: [ 0., 0.]
+  #   trajectory_scale: 1.
+  #   strings:
+  #     - start: [1.0, 1.75, 0.75]
+  #       end: [1.0, 1.25, 0.75]
+  #     - start: [0.0, 1.75, 0.75]
+  #       end: [0.0, 1.25, 0.75]
+  #     - start: [-1.0, 1.75, 0.75]
+  #       end: [-1.0, 1.25, 0.75]
+  #     - start: [-1.25, 1.25, 1.00]
+  #       end: [-1.25, 1.25, 0.5]
+      
+  #     # - start: [1.0, 1.5, 1.00]
+  #     #   end: [1.0, 1.5, 0.5]
+  #     # - start: [0.0, 1.5, 1.00]
+  #     #   end: [0.0, 1.5, 0.5]
+  #     # - start: [-1.0, 1.5, 1.00]
+  #     #   end: [-1.0, 1.5, 0.5]
+  #     # - start: [-1.25, 1.25, 1.00]
+  #     #   end: [-1.25, 1.25, 0.5]
+  #   waypoints:
+  #     # # === 1.5s difference ===
+  #     # - time: 1
+  #     #   position: [0.0, 0.00, 0.75]
+  #     # - time: 3.5
+  #     #   position: [0.75, -1.0, 0.75]
+  #     # - time: 5
+  #     #   position: [1.5, 1.5, 0.75]
+  #     # - time: 6.5
+  #     #   position: [0.5, 1.5, 0.75]
+  #     # - time: 8
+  #     #   position: [-0.5, 1.5, 0.75]
+  #     # - time: 9.5
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 11
+  #     #   position: [-1.0, 1.0, 0.75]
+  #     # - time: 12.5
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 14
+  #     #   position: [-1.25, -1.5, 0.75]
+  #     # - time: 15
+  #     #   position: [0.0, 0.0, 0.75]
+
+  #     # === 2s difference ===
+  #     # - time: 2
+  #     #   position: [0.0, 0.00, 0.75]
+  #     # - time: 4
+  #     #   position: [0.75, -1.0, 0.75]
+  #     # - time: 6
+  #     #   position: [1.5, 1.5, 0.75]
+  #     # - time: 8
+  #     #   position: [0.5, 1.5, 0.75]
+  #     # - time: 10
+  #     #   position: [-0.5, 1.5, 0.75]
+  #     # - time: 12
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 14
+  #     #   position: [-1.0, 1.0, 0.75]
+  #     # - time: 16
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 18
+  #     #   position: [-1.25, -1.5, 0.75]
+  #     # - time: 20
+  #     #   position: [0.0, 0.0, 0.75]
+
+  #     # === 3s difference ===
+  #     # - time: 2
+  #     #   position: [0.0, 0.00, 0.75]
+  #     # - time: 5
+  #     #   position: [0.75, -1.0, 0.75]
+  #     # - time: 8
+  #     #   position: [1.5, 1.5, 0.75]
+  #     # - time: 11
+  #     #   position: [0.5, 1.5, 0.75]
+  #     # - time: 14
+  #     #   position: [-0.5, 1.5, 0.75]
+  #     # - time: 17
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 20
+  #     #   position: [-1.0, 1.0, 0.75]
+  #     # - time: 23
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 26
+  #     #   position: [-1.25, -1.5, 0.75]
+  #     # - time: 29
+  #     #   position: [0.0, 0.0, 0.75]
+
+  #     # === 4s difference ===
+  #     # - time: 2
+  #     #   position: [0.0, 0.00, 0.75]
+  #     # - time: 6
+  #     #   position: [0.75, -1.0, 0.75]
+  #     # - time: 10
+  #     #   position: [1.5, 1.5, 0.75]
+  #     # - time: 14
+  #     #   position: [0.5, 1.5, 0.75]
+  #     # - time: 18
+  #     #   position: [-0.5, 1.5, 0.75]
+  #     # - time: 22
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 26
+  #     #   position: [-1.0, 1.0, 0.75]
+  #     # - time: 30
+  #     #   position: [-1.5, 1.5, 0.75]
+  #     # - time: 34
+  #     #   position: [-1.25, -1.5, 0.75]
+  #     # - time: 38
+  #     #   position: [0.0, 0.0, 0.75]
+
+  inertial_prop:
+    M: 0.033
+  episode_len_sec: 11
+  # episode_len_sec: 20
+  # episode_len_sec: 30
+  # episode_len_sec: 40
+  
+  # cost: rl_reward
+  cost: quadratic
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+  done_on_violation: False

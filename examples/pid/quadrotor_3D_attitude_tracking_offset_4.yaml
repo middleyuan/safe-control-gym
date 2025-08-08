@@ -1,0 +1,92 @@
+task_config:
+  info_in_reset: true
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  init_state:
+    init_x: 1.5
+    init_x_dot: 0
+    init_y: 1.5
+    init_y_dot: 0
+    init_z: 1.0
+    init_z_dot: 0
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 1
+    trajectory_plane: xy
+    trajectory_position_offset: [-1.0, 0.0, 0.0]
+    trajectory_scale: 1.0
+    strings:
+      # === Section 1: Randomized String ===
+      - start: [2.5, 1.0, 0.0]
+        end: [2.5, 1.0, 2.0]
+      - start: [2.0, 0.0, 1.0]
+        end: [3.0, 0.0, 1.0]
+      - start: [2.0, -1.0, 0.0]
+        end: [3.0, -1.0, 2.0]
+      # === Section 2: Fixed Strings ===
+      - start: [1.0, -1.125, 0.5]
+        end: [1.0, -1.125, 1.5]
+      - start: [1.0, -0.375, 0.5]
+        end: [1.0, -0.375, 1.5]
+      - start: [1.0, 0.375, 0.5]
+        end: [1.0, 0.375, 1.5]
+      - start: [1.0, 1.125, 0.5]
+        end: [1.0, 1.125, 1.5]
+      # === Section 3: Disturbance Obstacles ===
+      - start: [-0.25, -1.25, 0.0]
+        end: [-0.25, -1.25, 2.0]
+    waypoints:
+      # === Section 1: Randomized String ===
+      - time: 0.0
+        position: [2.5, 1.5, 1.0]
+      - time: 6.0
+        position: [2.5, -1.5, 1.0]
+      # === Section 2: Fixed Strings ===
+      - time: 7.0
+        position: [1.0, -1.5, 1.0]
+      - time: 9.0
+        position: [0.75, -1.125, 1.0]
+      - time: 11.0
+        position: [1.0, -0.75, 1.0]
+      - time: 13.0
+        position: [1.25, -0.375, 1.0]
+      - time: 15.0
+        position: [1.0, 0.0, 1.0]
+      - time: 17.0
+        position: [0.75, 0.375, 1.0]
+      - time: 19.0
+        position: [1.0, 0.75, 1.0]
+      - time: 21.0
+        position: [1.25, 1.125, 1.0]
+      - time: 23.0
+        position: [1.0, 1.5, 1.0]
+      # === Section 3: Disturbance Obstacles ===
+      - time: 24.0
+        position: [0.5, 1.5, 1.0]
+      - time: 28.0
+        position: [0.0, -1.5, 1.0]
+      - time: 30.0
+        position: [-1.0, -0.75, 1.0]
+      - time: 32.0
+        position: [-1.25, -0.0, 1.0]
+      - time: 34.0
+        position: [-1.0, 0.75, 1.0]
+      - time: 36.0
+        position: [0, 1.5, 1.0]
+      - time: 38.0
+        position: [1.25, 1.5, 1.0]
+      - time: 40.0
+        position: [2.5, 1.5, 1.0]
+  inertial_prop:
+    M: 0.033
+  episode_len_sec: 40
+  cost: quadratic
+  constraints:
+  - constraint_form: default_constraint
+    constrained_variable: state
+  - constraint_form: default_constraint
+    constrained_variable: input
+  done_on_violation: false

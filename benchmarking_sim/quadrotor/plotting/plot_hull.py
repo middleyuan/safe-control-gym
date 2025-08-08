@@ -311,13 +311,13 @@ if plot_name == 'RL':
     plot_xz_trajectory_with_hull(ax, sac_traj_data, label='SAC', 
                                 traj_color=sac_color, hull_color=sac_hull_color, 
                                 alpha=alpha, padding_factor=k)
-# plot_xz_trajectory_with_hull(ax, ilqr_traj_data, label='iLQR',
-#                                 traj_color=ilqr_color, hull_color=ilqr_hull_color,
-#                                     alpha=alpha, padding_factor=k)
     plot_xz_trajectory_with_hull(ax, ppo_traj_data, label='PPO',
                                     traj_color=ppo_color, hull_color=ppo_hull_color,
                                         alpha=alpha, padding_factor=k)
 elif plot_name == 'Model-based':
+    # plot_xz_trajectory_with_hull(ax, ilqr_traj_data, label='iLQR',
+    #                                 traj_color=ilqr_color, hull_color=ilqr_hull_color,
+    #                                     alpha=alpha, padding_factor=k)
     plot_xz_trajectory_with_hull(ax, lmpc_traj_data, label='Linear-MPC',
                                     traj_color=lmpc_color, hull_color=lmpc_hull_color,
                                     alpha=alpha, padding_factor=k)
