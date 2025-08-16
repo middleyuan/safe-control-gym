@@ -12,7 +12,7 @@ from gymnasium.spaces import Box
 
 from safe_control_gym.math_and_models.distributions import Categorical, Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
-from safe_control_gym.math_and_models.quantile_network import QuantileNetwork
+from safe_control_gym.math_and_models.quantile_network import QuantileNetwork, QuantileDistribution
 
 
 class DPPOAgent:
@@ -61,6 +61,10 @@ class DPPOAgent:
                  ):
         if value_loss_kwargs is None:
             value_loss_kwargs = {}
+        if value_loss == self.value_loss_energy:
+            value_loss_kwargs["sample_count"] = (
+                value_loss_kwargs["sample_count"] if "sample_count" in value_loss_kwargs else 100
+            )
         if risk_measure_config is None:
             risk_measure_config = {}
 
@@ -101,9 +105,7 @@ class DPPOAgent:
         self.actor_opt = torch.optim.Adam(self.ac.actor.parameters(), actor_lr)
         self.critic_opt = torch.optim.Adam(self.ac.critic.parameters(), critic_lr)
 
-    def to(self,
-           device
-           ):
+    def to(self, device):
         '''Puts agent to device.'''
         self.ac.to(device)
 
@@ -123,17 +125,21 @@ class DPPOAgent:
             'critic_opt': self.critic_opt.state_dict()
         }
 
-    def load_state_dict(self,
-                        state_dict
-                        ):
+    def load_state_dict(self, state_dict):
         '''Restores agent state.'''
         self.ac.load_state_dict(state_dict['ac'])
         self.actor_opt.load_state_dict(state_dict['actor_opt'])
         self.critic_opt.load_state_dict(state_dict['critic_opt'])
 
-    def compute_policy_loss(self,
-                            batch
-                            ):
+    def process_quants(self, x):
+        if self.value_loss_name == self.value_loss_energy:
+            quants, idx = QuantileDistribution(x).sample(self.value_loss_kwargs["sample_count"])
+        else:
+            quants, idx = x, None
+
+        return quants, idx
+
+    def compute_policy_loss(self, batch):
         '''Returns policy loss(es) given batch of data.'''
         obs, act, logp_old, adv = batch['obs'], batch['act'], batch['logp'], batch['adv']
         dist, logp = self.ac.actor(obs, act)
@@ -147,19 +153,15 @@ class DPPOAgent:
         approx_kl = (logp_old - logp).mean()
         return policy_loss, entropy_loss, approx_kl
 
-    def compute_value_loss(self,
-                           batch
-                           ):
+    def compute_value_loss(self, batch):
         '''Returns value loss(es) given batch of data.'''
         obs, _, _ = batch['obs'], batch['ret'], batch['v']
         v_cur_quant = self.ac.critic.forward(obs, distribution=True).squeeze()
+        v_cur_quant, _ = self.process_quants(v_cur_quant)
         value_loss = self.value_loss(v_cur_quant, batch['value_target_quants'])
         return value_loss
 
-    def update(self,
-               rollouts,
-               device='cpu'
-               ):
+    def update(self, rollouts, device='cpu'):
         '''Updates model parameters based on current training batch.'''
         results = defaultdict(list)
         num_mini_batch = rollouts.max_length * rollouts.batch_size // self.mini_batch_size
@@ -230,19 +232,15 @@ class MLPActorCritic(nn.Module):
             obs_dim, hidden_dims, activation, quantile_count, risk_measure, risk_measure_config, device
         )
 
-    def step(self,
-             obs
-             ):
+    def step(self, obs):
         dist, _ = self.actor(obs)
         a = dist.sample()
         logp_a = dist.log_prob(a)
         v = self.critic.v_net(obs)
         v_quant = self.critic.v_net.last_quantiles.detach()
-        return a.cpu().numpy(), v.cpu().numpy(), v_quant.cpu().numpy(), logp_a.cpu().numpy()
+        return a.cpu().numpy(), v.cpu().numpy(), v_quant.cpu(), logp_a.cpu().numpy()
 
-    def act(self,
-            obs
-            ):
+    def act(self, obs):
         dist, _ = self.actor(obs)
         a = dist.mode()
         return a.cpu().numpy()
@@ -269,10 +267,7 @@ class MLPActor(nn.Module):
             self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
-    def forward(self,
-                obs,
-                act=None
-                ):
+    def forward(self, obs, act=None):
         dist = self.dist_fn(self.pi_net(obs))
         logp_a = None
         if act is not None:
@@ -321,7 +316,7 @@ class DPPOBuffer(object):
                  act_space,
                  max_length,
                  batch_size,
-                 quantile_count
+                 sample_count,
                  ):
         super().__init__()
         self.max_length = max_length
@@ -350,7 +345,7 @@ class DPPOBuffer(object):
                 'vshape': (T, N, 1)
             },
             'v_quant': {
-                'vshape': (T, N, quantile_count)
+                'vshape': (T, N, sample_count)
             },
             'logp': {
                 'vshape': (T, N, 1)
@@ -362,13 +357,13 @@ class DPPOBuffer(object):
                 'vshape': (T, N, 1)
             },
             'value_target_quants': {
-                'vshape': (T, N, quantile_count)
+                'vshape': (T, N, sample_count)
             },
             'terminal_v': {
                 'vshape': (T, N, 1)
             },
             'terminal_v_quant': {
-                'vshape': (T, N, quantile_count)
+                'vshape': (T, N, sample_count)
             }
         }
         self.keys = list(self.scheme.keys())
@@ -384,26 +379,17 @@ class DPPOBuffer(object):
             self.__dict__[k] = init(vshape, dtype=dtype)
         self.t = 0
 
-    def push(self,
-             batch
-             ):
+    def push(self, batch):
         '''Inserts transition step data (as dict) to storage.'''
         for k, v in batch.items():
             assert k in self.keys
             shape = self.scheme[k]['vshape'][1:]
             dtype = self.scheme[k].get('dtype', np.float32)
-            # try:
             v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
-            # except:
-            #     print(shape)
-            #     print(v_)
-            #     p()
             self.__dict__[k][self.t] = v_
         self.t = (self.t + 1) % self.max_length
 
-    def get(self,
-            device='cpu'
-            ):
+    def get(self, device='cpu'):
         '''Returns all data.'''
         batch = {}
         for k, info in self.scheme.items():
@@ -412,9 +398,7 @@ class DPPOBuffer(object):
             batch[k] = torch.as_tensor(data, device=device)
         return batch
 
-    def sample(self,
-               indices
-               ):
+    def sample(self, indices):
         '''Returns partial data.'''
         batch = {}
         for k, info in self.scheme.items():
@@ -422,11 +406,7 @@ class DPPOBuffer(object):
             batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]
         return batch
 
-    def sampler(self,
-                mini_batch_size,
-                device='cpu',
-                drop_last=True
-                ):
+    def sampler(self, mini_batch_size, device='cpu', drop_last=True):
         '''Makes sampler to loop through all data.'''
         total_steps = self.max_length * self.batch_size
         sampler = random_sample(np.arange(total_steps), mini_batch_size, drop_last)
@@ -438,10 +418,7 @@ class DPPOBuffer(object):
             yield batch
 
 
-def random_sample(indices,
-                  batch_size,
-                  drop_last=True
-                  ):
+def random_sample(indices, batch_size, drop_last=True):
     '''Returns index batches to iterate over.'''
     indices = np.asarray(np.random.permutation(indices))
     batches = indices[:len(indices) // batch_size * batch_size].reshape(
@@ -461,14 +438,15 @@ def compute_returns_and_advantages(rews,
                                    terminal_vals=0,
                                    last_val=0,
                                    last_quant=0,
+                                   process_quants=None,
                                    gamma=0.99,
                                    use_gae=False,
                                    gae_lambda=0.95,
-                                   quantile_count=200
+                                   sample_count=100
                                    ):
     '''Useful for policy-gradient algorithms.'''
     T, N = rews.shape[:2]
-    rets, advs, next_value_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, quantile_count))
+    rets, advs, next_value_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, sample_count))
 
     ret, ret_quant, adv = last_val, last_quant, np.zeros((N, 1))
     vals = np.concatenate([vals, last_val[np.newaxis, ...]], 0)
@@ -480,7 +458,7 @@ def compute_returns_and_advantages(rews,
     for i in reversed(range(T)):
         ret = rews[i] + gamma * masks[i] * ret
         ret_quant = rews[i] + gamma * masks[i] * ret_quant
-        preserved_value_quants = masks[i].astype(bool) * (np.random.rand(*ret_quant.shape) < 0.95)
+        preserved_value_quants = masks[i].astype(bool) * (np.random.rand(*ret_quant.shape) < 1.0)
         ret_quant_ = np.where(preserved_value_quants, ret_quant, val_quants[i])
         if not use_gae:
             adv = ret - vals[i]

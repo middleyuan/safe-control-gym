@@ -117,9 +117,7 @@ class DPPO(BaseController):
             self.eval_env.close()
         self.logger.close()
 
-    def save(self,
-             path
-             ):
+    def save(self, path):
         """Saves model params and experiment state to checkpoint path."""
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
@@ -138,9 +136,7 @@ class DPPO(BaseController):
             state_dict.update(exp_state)
         torch.save(state_dict, path)
 
-    def load(self,
-             path
-             ):
+    def load(self, path):
         """Restores model and experiment given checkpoint path."""
         state = torch.load(path, weights_only=False)
         # Restore policy.
@@ -159,10 +155,7 @@ class DPPO(BaseController):
         '''Setup the results dictionary to store run information.'''
         self.results_dict = {'inference_time': []}
 
-    def learn(self,
-              env=None,
-              **kwargs
-              ):
+    def learn(self, env=None, **kwargs):
         """Performs learning (pre-training, training, fine-tuning, etc.)."""
         # Initial Evaluation.
         eval_results = self.run(env=self.eval_env, n_episodes=self.eval_batch_size)
@@ -236,7 +229,7 @@ class DPPO(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = DPPOBuffer(self.env.observation_space, self.env.action_space,
-                              self.rollout_steps, self.rollout_batch_size, self.quantile_count)
+                              self.rollout_steps, self.rollout_batch_size, 100)
         obs = self.obs
         start = time.time()
         for _ in range(self.rollout_steps):
@@ -246,6 +239,7 @@ class DPPO(BaseController):
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
+            v_quant, _ = self.agent.process_quants(v_quant)
             # Time truncation is not the same as true termination.
             terminal_v, terminal_v_quant = np.zeros_like(v), np.zeros_like(v_quant)
             for idx, inf in enumerate(info['n']):
@@ -256,29 +250,30 @@ class DPPO(BaseController):
                     terminal_obs = inf['terminal_observation']
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_val_quant = self.agent.ac.critic.v_net.last_quantiles.detach().cpu().numpy()
+                    terminal_val_quant = self.agent.ac.critic.v_net.last_quantiles.detach().cpu()
                     terminal_v[idx] = terminal_val
-                    terminal_v_quant[idx] = terminal_val_quant
+                    terminal_val_quant, _ = self.agent.process_quants(terminal_val_quant)
+                    terminal_v_quant[idx] = terminal_val_quant.numpy()
             rollouts.push({'obs': obs, 'act': act, 'rew': rew, 'mask': mask,
-                           'v': v, 'v_quant': v_quant, 'logp': logp,
+                           'v': v, 'v_quant': v_quant.numpy(), 'logp': logp,
                            'terminal_v': terminal_v, 'terminal_v_quant': terminal_v_quant})
             obs = next_obs
         self.obs = obs
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
         last_val = self.agent.ac.critic(torch.FloatTensor(obs).to(self.device)).detach().cpu().numpy()
-        last_val_quant = self.agent.ac.critic.v_net.last_quantiles.detach().cpu().numpy()
+        last_val_quant = self.agent.ac.critic.v_net.last_quantiles.detach().cpu()
+        last_val_quant, _ = self.agent.process_quants(last_val_quant)
         ret, adv, value_target_quants = compute_returns_and_advantages(rollouts.rew,
                                                                        rollouts.v,
                                                                        rollouts.v_quant,
                                                                        rollouts.mask,
                                                                        rollouts.terminal_v,
                                                                        last_val,
-                                                                       last_val_quant,
+                                                                       last_val_quant.numpy(),
                                                                        gamma=self.gamma,
                                                                        use_gae=self.use_gae,
-                                                                       gae_lambda=self.gae_lambda,
-                                                                       quantile_count=self.quantile_count)
+                                                                       gae_lambda=self.gae_lambda)
         rollouts.ret = ret
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
@@ -343,9 +338,7 @@ class DPPO(BaseController):
             eval_results.update(queued_stats)
         return eval_results
 
-    def log_step(self,
-                 results
-                 ):
+    def log_step(self, results):
         """Does logging after a training step."""
         step = results['step']
         # runner stats

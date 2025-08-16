@@ -5,18 +5,18 @@ algo_config:
 
   # loss args
   gamma: 0.9
-  use_gae: True
+  use_gae: False
   gae_lambda: 0.9
   clip_param: 0.1
-  target_kl: 0.005
+  target_kl: 0.001
   entropy_coef: 0.01  # 0.008
   exploration_init: -0.5
 
   # optim args
   opt_epochs: 3
   mini_batch_size: 256
-  actor_lr: 0.0003
-  critic_lr: 0.0003
+  actor_lr: 0.0001
+  critic_lr: 0.0001
 
   # runner args
   max_env_steps: 3300000

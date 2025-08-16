@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Callable, Tuple, Union
 
 import torch
@@ -173,6 +174,19 @@ def squeeze_preserve_batch(tensor):
         squeezed_tensor = squeezed_tensor.unsqueeze(0)
 
     return squeezed_tensor
+
+
+class QuantileDistribution(ABC):
+    def __init__(self, params: torch.Tensor) -> None:
+        self._params = params
+
+    def sample(self, sample_count: int = 1) -> torch.Tensor:
+        idx = torch.randint(
+            self._params.shape[-1], (*self._params.shape[:-1], sample_count), device=self._params.device
+        )
+        samples = torch.take_along_dim(self._params, idx, -1)
+
+        return samples, idx
 
 
 class QuantileNetwork(MLP):
