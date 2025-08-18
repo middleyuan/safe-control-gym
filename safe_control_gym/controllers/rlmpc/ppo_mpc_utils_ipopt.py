@@ -2,7 +2,6 @@
 
 from collections import defaultdict, deque
 from copy import deepcopy
-from multiprocessing import Pool
 
 import casadi as cs
 import numpy as np
@@ -10,13 +9,11 @@ import torch
 import torch.nn as nn
 from gymnasium.spaces import Box
 
-from safe_control_gym.controllers.mpc.mpc_utils import (compute_discrete_lqr_gain_from_cont_linear_system,
-                                                        compute_state_rmse, get_cost_weight_matrix,
-                                                        reset_constraints, rk_discrete)
+from safe_control_gym.controllers.mpc.mpc_utils import reset_constraints
 from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, euler_discrete
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, create_constraint_list
-from safe_control_gym.math_and_models.distributions import Categorical, Normal
+from safe_control_gym.math_and_models.distributions import Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
 
 
@@ -596,8 +593,8 @@ class MPCPolicyFunction:
         dPi = cs.Function('dPi', [z, fixed_param, ref_param, cost_param, model_param], [dzdP[: nu, :]])
         dzdP_ref = -cs.inv(dRdz) @ dRdP_ref
         dPi_ref = cs.Function('dPi_ref',
-                               [z, fixed_param, ref_param, cost_param, model_param],
-                               [dzdP_ref[: nu, :]])
+                              [z, fixed_param, ref_param, cost_param, model_param],
+                              [dzdP_ref[: nu, :]])
         dzdP_cost = -cs.inv(dRdz) @ dRdP_cost
         dPi_cost = cs.Function('dPi_cost',
                                [z, fixed_param, ref_param, cost_param, model_param],
@@ -1041,8 +1038,8 @@ def _select_action_train(eval_data):
         z = np.concatenate((opt_vars, mult), axis=0)
         nabla_pi = dpi(z, fixed_param, ref_param, cost_param, model_param).full()
         nabla_pi_ref = nabla_pi[:, :ref_param.shape[0]]
-        nabla_pi_cost = nabla_pi[:, ref_param.shape[0]:ref_param.shape[0]+cost_param.shape[0]]
-        nabla_pi_model = nabla_pi[:, ref_param.shape[0]+cost_param.shape[0]:]
+        nabla_pi_cost = nabla_pi[:, ref_param.shape[0]:ref_param.shape[0] + cost_param.shape[0]]
+        nabla_pi_model = nabla_pi[:, ref_param.shape[0] + cost_param.shape[0]:]
         # nabla_pi_cost = dpi_cost(z, fixed_param, cost_param, model_param).full()
         # nabla_pi_model = dpi_model(z, fixed_param, cost_param, model_param).full()
     else:

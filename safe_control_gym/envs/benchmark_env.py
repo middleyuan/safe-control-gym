@@ -18,9 +18,10 @@ from scipy.stats import truncnorm
 from safe_control_gym.envs.constraints import create_constraint_list
 from safe_control_gym.envs.disturbances import create_disturbance_list
 from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import (TrajectoryPlanner, Waypoint,
+                                                                        _plot_trajectory,
+                                                                        _plot_xyz_kinematics,
                                                                         compute_trajectory_derivatives,
-                                                                        generate_trajectory,
-                                                                        _plot_trajectory, _plot_xyz_kinematics)
+                                                                        generate_trajectory)
 
 
 class Cost(str, Enum):
@@ -188,10 +189,6 @@ class BenchmarkEnv(gym.Env, ABC):
             self.state_dim = self.state_space.shape[0]
         else:
             self.state_dim = self.obs_dim
-        # Default Q and R matrices for quadratic cost.
-        if self.COST == Cost.QUADRATIC:
-            self.Q = np.eye(self.observation_space.shape[0])
-            self.R = np.eye(self.action_space.shape[0])
         # Set constraint info.
         self.CONSTRAINTS = constraints
         self.DONE_ON_VIOLATION = done_on_violation
@@ -232,22 +229,6 @@ class BenchmarkEnv(gym.Env, ABC):
         for _, disturbs in self.disturbances.items():
             disturbs.seed(self)
         return [seed]
-
-    def set_cost_function_param(self, Q, R):
-        """Set the cost function parameters.
-
-        Args:
-            Q (ndarray): State weight matrix (nx by nx).
-            R (ndarray): Input weight matrix (nu by nu).
-        """
-
-        if not self.initial_reset:
-            self.Q = Q
-            self.R = R
-        else:
-            raise RuntimeError(
-                '[ERROR] env.set_cost_function_param() cannot be called after the first reset of the environment.'
-            )
 
     def set_adversary_control(self, action):
         """Sets disturbance by an adversary controller, called before (each) step().
@@ -310,7 +291,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 if dist_type is not None and scale is not None:
                     if dist_type == 'normal':
                         # noise = np.clip(noise, -2 * scale, 2 * scale)
-                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0*scale, high=2.0*scale)
+                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0 * scale, high=2.0 * scale)
                 randomized_values[key] += noise
         return randomized_values
 
@@ -644,9 +625,9 @@ class BenchmarkEnv(gym.Env, ABC):
             acc_ref_traj = pva[2, :, :]
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
-            print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f"Acc bound is: {0.3 * 9.81} to {1.8 * 9.81}")
-            print(f"Max velocity: {np.max(speed_traj)}")
+            print(f'Max acceleration: {np.max(acc_mag)}')
+            print(f'Acc bound is: {0.3 * 9.81} to {1.8 * 9.81}')
+            print(f'Max velocity: {np.max(speed_traj)}')
             print()
 
         elif traj_type == 'snap_custom':
@@ -678,9 +659,8 @@ class BenchmarkEnv(gym.Env, ABC):
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
             # print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f"Max speed: {np.max(speed_traj)}")
+            print(f'Max speed: {np.max(speed_traj)}')
             print()
-
 
         else:
             # Compute trajectory points.
@@ -696,7 +676,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 speed_traj[t[0]] = np.linalg.norm(vel_ref_traj[t[0]])
         #
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
-        #       ptherwise flying on the floor with z=0.0 
+        #       ptherwise flying on the floor with z=0.0
         if 'z' not in traj_plane and traj_type not in ['snap_custom', 'snap_figure8']:
             pos_ref_traj[:, 2] = position_offset[2]
             vel_ref_traj[:, 2] = 0.0
@@ -709,7 +689,7 @@ class BenchmarkEnv(gym.Env, ABC):
         #     raise ValueError(f"Max acceleration is not in the range of 0.3g to 1.8g")
 
         return pos_ref_traj, vel_ref_traj, acc_ref_traj, speed_traj
-    
+
     def _get_coordinates(self,
                          t,
                          traj_type,
@@ -978,7 +958,7 @@ class BenchmarkEnv(gym.Env, ABC):
         plt.show()
 
 
-## Miscellaneous functions for randomization and sampling
+# Miscellaneous functions for randomization and sampling
 def sample_truncated(mu, sigma, low, high, size=None):
     if np.isclose(sigma, 0.0):
         # If sigma is zero, return a constant value
