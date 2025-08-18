@@ -51,12 +51,18 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_gen.yaml"
     elif [ "${TRAIN}" == 'robustness_ob5' ]; then
+        # shellcheck disable=SC2054
+        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ob5.yaml"
     elif [ "${TRAIN}" == 'robustness_ps3' ]; then
+        # shellcheck disable=SC2054
+        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ps3.yaml"
     elif [ "${TRAIN}" == 'robustness_ob5ps3' ]; then
+        # shellcheck disable=SC2054
+        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ob5ps3.yaml"
     elif [ "${TRAIN}" == 'robustness_pm' ]; then

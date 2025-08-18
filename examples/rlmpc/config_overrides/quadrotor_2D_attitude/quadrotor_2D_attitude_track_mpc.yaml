@@ -77,9 +77,10 @@ task_config:
   # episode_len_sec: [9, 11, 15]  # for generalization learning
   cost: quadratic
   obs_goal_horizon: 0
+  use_rl_reward_weights: True
 
   # RL Reward
-  rew_state_weight: [10., .1, 10., .1, .1, 0.001]
+  rew_state_weight: [15., .1, 15., .1, .1, 0.001]
   rew_act_weight: [.1, .1]
   rew_exponential: False
 
