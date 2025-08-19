@@ -1304,14 +1304,7 @@ class Quadrotor(BaseAviary):
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280] )
             # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
-            cmd_min = self.transform_params['cmd_min']
-            cmd_max = self.transform_params['cmd_max']
-            f_min = self.transform_params['f_min']
-            f_max = self.transform_params['f_max']
-            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-            df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
-            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-            # df_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
+            f_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
             # print('in quad', self.MASS)
             # thrust = force_motor
@@ -1330,7 +1323,7 @@ class Quadrotor(BaseAviary):
                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                               (f_max - f_min)/2 * df_dot)
+                               f_dot)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
 

@@ -22,8 +22,6 @@ from termcolor import colored
 
 from safe_control_gym.envs.benchmark_env import BenchmarkEnv
 from safe_control_gym.math_and_models.transformations import csRotXYZ, get_angularvelocity_rpy
-from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import ThrustTransformer
-
 egl = pkgutil.get_loader('eglRenderer')
 
 
@@ -201,31 +199,8 @@ class BaseAviary(BenchmarkEnv):
         elif physics == Physics.DYN_SI_3D_10:
             self.setup_dynamics_si_3d_10_expression()
         elif physics == Physics.DYN_SI_3D_DELAY:
-            self.setup_thrust_transformation()
             self.setup_dynamics_si_3d_delay_expression()
-            
-    def setup_thrust_transformation(self):
-        '''Set up the thrust transformation parameters.
-
-        This method sets up the transformation parameters for converting
-        thrust to RPM and vice versa.
-        '''
-        self.transform_params = {
-            'f_min': -1,
-            'f_max': 1,
-            'cmd_min': -1,
-            'cmd_max': 1,
-            # 0.2012 0.4553 0.2389 0.4750
-            # 'f_min': 0.2389,
-            # 'f_max': 0.4750,
-            # 'cmd_min': 0.2012,
-            # 'cmd_max': 0.4553,
-            'f_hover': self.MASS * self.GRAVITY_ACC,
-            'cmd_hover': self.MASS * self.GRAVITY_ACC,
-            'transformation_mode': 3  # 1: no transform, 2: subtract hover, 3: normalize
-        }
-        self.thrust_transform = ThrustTransformer(transform_params=self.transform_params)
-
+        
     def close(self):
         '''Terminates the environment.'''
         if self.RECORD and self.GUI:
@@ -1188,15 +1163,6 @@ class BaseAviary(BenchmarkEnv):
         ang_v = self.ang_v[nth_drone, :]
         rpy_rates = self.rpy_rates[nth_drone, :]
         motor_forces = self.motor_forces[nth_drone, :]
-        # # normalize motor_forces
-        cmd_min = self.transform_params['cmd_min']
-        cmd_max = self.transform_params['cmd_max']
-        f_min = self.transform_params['f_min']
-        f_max = self.transform_params['f_max']
-        # motor_forces_normalized = 2 * (motor_forces - f_min) / (f_max - f_min) - 1
-        # print(f"Action before dynamics: {action}")
-        # print(f"Motor forces before dynamics: {motor_forces}")
-
         # Compute forces and torques.
         # Update state with discrete time dynamics.
         # state = np.hstack([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2],
@@ -1280,78 +1246,41 @@ class BaseAviary(BenchmarkEnv):
         P_c = cs.MX.sym('P')  # desired pitch angle [rad]
         Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
         U = cs.vertcat(T_c, R_c, P_c, Y_c)      
-        
-        # Transformation parameters from sys_id with mode 3 
-        cmd_min = self.transform_params['cmd_min']
-        cmd_max = self.transform_params['cmd_max']
-        f_min = self.transform_params['f_min']
-        f_max = self.transform_params['f_max'] 
-        # f_hover = self.transform_params['f_hover']
-        # cmd_hover = self.transform_params['cmd_hover']
-        
-        # Transform input command T from raw to normalized space (mode 3)
-        # T is expected to be in raw force units, normalize to [-1, 1]
-        dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-        
-        # normalized forces_motor
-        df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
-        
-        # Delay dynamics parameters (from MATLAB sys_id results)
-        # Based on estimated parameters: [bias, scale, tau]
-        # bias = -0.04 # Update this with actual estimated bias from MATLAB
-        # scale = 0.776  # Update this with actual estimated scale from MATLAB  
-        # tau = 0.092  # Update this with actual estimated tau from MATLAB
-        # params_acc = [-0.2039, 0.8, 0.076]  # [bias, scale, tau]
+    
         params_acc = [0.0905, 0.8, 0.0814]
-        # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
-        # force_motor_dot is the derivative in normalized space
-        df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-        # df_dot = (params_acc[1] * (T_c + params_acc[0]) - forces_motor) / params_acc[2]
-        
-        # by definition, motor_forces_dot = 1/2 * df_dot
-        
-        # Transform normalized forces_motor to raw force for physics calculations
-        # self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
-        
-        # print(f"Using mass: {overridden_mass}")
-        # params_acc = [0.5210, 0.1704, 0.0923]
-        # params_roll_rate = [-286.2, -23.03, 225.6]
-        # params_pitch_rate = [-286.2, -23.03, 225.6]
-        # params_yaw_rate = [-192.9, -22.22, 323.5]
-        # params_roll_rate = [-1.18e05, -1.0104e-4, 1667]
-        # params_pitch_rate = [-255, -17.52, 3.262]
-        # params_roll_rate = [-621.8, -55.84, 80.537]
-        # params_pitch_rate = [-621.8, -55.84, 80.537]
-        # update rpy parameters
-        params_roll_rate = [-238.1, -21.35, 179.65]
-        params_pitch_rate = [-238.1, -21.35, 179.65]
-        params_yaw_rate = [-170.4, -22.22, 280] 
-        
+        f_dot = (params_acc[1] *(T_c + params_acc[0]) - forces_motor) / params_acc[2]
+        # update rpy parameters (initial version)
+        params_roll_rate = [-286.2, -23.03, 225.6]
+        params_pitch_rate = [-286.2, -23.03, 225.6]
+        params_yaw_rate = [-192.9, -22.22, 323.5]        
         X_dot = cs.vertcat(x_dot, 
-                           1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
+                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
                            y_dot,
-                           1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
+                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
                            z_dot,
-                           1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
+                            1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
                            phi_dot,
                            theta_dot,
                            psi_dot,
                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                           (f_max - f_min)/2 * df_dot)
+                           f_dot)
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
-
-        
-        # # MASS = 0.033
+  
+        # MASS = overridden_mass
         # # params_acc = [1.0591, 0, 0.1108]  # [N/rad, N]
-        # MASS = 0.037
+        # params_acc = [0.99, 0, 0.1039]  # [N/rad, N]
+        # # MASS = 0.037
         # # params_acc = [0.5210, 0.1704, 0.0923]
         # params_roll_rate = [-286.2, -23.03, 225.6]
         # params_pitch_rate = [-286.2, -23.03, 225.6]
         # params_yaw_rate = [-192.9, -22.22, 323.5]
+        # # params_roll_rate = [-295, -31, 230]
+        # # params_pitch_rate = [-295, -31, 230]
+        # # params_yaw_rate = [-158, -15, 275]
         
-        # force_motor_dot = 1 / params_acc[2] * (T - forces_motor)
+        # force_motor_dot = 1 / params_acc[2] * (T_c - forces_motor)
         # forces_motor_z =1/MASS * (params_acc[0] * forces_motor + params_acc[1])  # [N]
         # X_dot = cs.vertcat(x_dot, 
         #                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
@@ -1362,9 +1291,9 @@ class BaseAviary(BenchmarkEnv):
         #                    phi_dot,
         #                    theta_dot,
         #                    psi_dot,
-        #                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R,
-        #                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P,
-        #                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y,
+        #                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+        #                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+        #                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
         #                    force_motor_dot)
         # self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
 
