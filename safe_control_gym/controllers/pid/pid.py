@@ -30,19 +30,9 @@ def cross_3d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
                                 [-a[1], a[0], 0]])
     return np.dot(skew_symmetric, b)
 
-def wrap2pi_vec(angle_vec: np.ndarray) -> np.ndarray:
-    '''Wraps a vector of angles between (-pi, pi].
-
-    Args:
-        angle_vec (ndarray): A vector of angles.
-    '''
-    for k, angle in enumerate(angle_vec):
-        while angle > np.pi:
-            angle -= 2*np.pi
-        while angle <= -np.pi:
-            angle += 2*np.pi
-        angle_vec[k] = angle
-    return angle_vec
+def normalize_angle(x):
+    '''Wraps input angle to [-pi, pi).'''
+    return ((x + np.pi) % (2 * np.pi)) - np.pi
 
 # @profile
 def rot2eul(R: np.ndarray) -> np.ndarray:
@@ -304,11 +294,11 @@ class PID(BaseController):
         # Target rotation.
         # NOTE: intrinsic rotation (around the body frame)
         # target_euler = (Rotation.from_matrix(target_rotation)).as_euler('XYZ', degrees=False)
-        target_euler = wrap2pi_vec(rot2eul(target_rotation))
+        target_euler = normalize_angle(rot2eul(target_rotation))
 
-        # wrap angles to (-pi, pi]
-        # eul = wrap2pi_vec(eul)
-        # target_euler = wrap2pi_vec(target_euler)
+        # wrap angles to [-pi, pi)
+        # eul = normalize_angle(eul)
+        # target_euler = normalize_angle(target_euler)
 
         # assert np.isclose(eul, target_euler).all(), \
         #     'target rotation and target euler angles are not the same'
