@@ -7,6 +7,8 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
 
+import seaborn as sns
+sns.set_theme(style="whitegrid")
 script_path = pathlib.Path(__file__).parent.resolve()
 #############################################
 if len(sys.argv) > 1:
@@ -89,40 +91,39 @@ gpmpc_data_path = script_path / f'../data/traj_results_gpmpc_acados_TP_{SYS}_{ad
 gpmpc_traj_data = np.load(gpmpc_data_path, allow_pickle=True)
 print(gpmpc_traj_data.shape)
 
-ppo_data_path = script_path / f'../data/traj_results_ppo_{additional}.npy'
+ppo_data_path = script_path / f'../data/trajectory/nominal/traj_results_ppo_{additional}.npy'
 ppo_data = np.load(ppo_data_path, allow_pickle=True).item()
 ppo_traj_data = np.array(ppo_data['obs'])
 print(ppo_traj_data.shape)
 
-sac_data_path = script_path / f'../data/traj_results_sac_{additional}.npy'
+sac_data_path = script_path / f'../data/trajectory/nominal/traj_results_sac_{additional}.npy'
 sac_data = np.load(sac_data_path, allow_pickle=True).item()
 sac_traj_data = np.array(sac_data['obs'])
 print(sac_traj_data.shape)
 
-dppo_data_path = script_path / f'../data/traj_results_dppo_{additional}.npy'
+dppo_data_path = script_path / f'../data/trajectory/nominal/traj_results_dppo_{additional}.npy'
 dppo_data = np.load(dppo_data_path, allow_pickle=True).item()
 dppo_traj_data = np.array(dppo_data['obs'])
 print(dppo_traj_data.shape)
 
-def compute_rmse_and_mean(traj_data, ref, idx='xz', ctrl=None):
+ppo_mpc_data_path = script_path / f'../data/trajectory/nominal/traj_results_ppo_mpc_{additional}.npy'
+ppo_mpc_data = np.load(ppo_mpc_data_path, allow_pickle=True).item()
+ppo_mpc_traj_data = np.array(ppo_mpc_data['obs'])
+print(ppo_mpc_traj_data.shape)
+
+def compute_rmse_and_mean(traj_data, ref,  ctrl=None):
     """
     Compute RMSE and mean RMSE for trajectory data.
 
     Args:
         traj_data (np.ndarray): Trajectory data of shape (num_seeds, num_steps, state_dim).
         ref (np.ndarray): Reference trajectory of shape (num_steps, state_dim).
-        idx (str): Index type ('xyz', 'xy', 'xz') to select state dimensions.
         ctrl (str): Controller name for printing RMSE.
 
     Returns:
         tuple: mean_rmse, std_rmse, mean_error, std_error
     """
-    if idx == 'xyz':
-        state_idx = [0, 2, 4]
-    elif idx == 'xy':
-        state_idx = [0, 2]
-    elif idx == 'xz':
-        state_idx = [0, 2]
+    state_idx = [0, 2]
 
     min_length = min(traj_data.shape[1], ref.shape[0])
     traj_data = traj_data[:, :min_length]
@@ -140,16 +141,17 @@ def compute_rmse_and_mean(traj_data, ref, idx='xz', ctrl=None):
     return mean_rmse, std_rmse, mean_error, std_error
 
 # Update calls to the merged function
-mean_rmse_pid, std_rmse_pid, mean_error_pid, std_error_pid = compute_rmse_and_mean(pid_traj_data, X_GOAL, 'xz', 'Geometric Control')
-mean_rmse_lqr, std_rmse_lqr, mean_error_lqr, std_error_lqr = compute_rmse_and_mean(lqr_traj_data, X_GOAL, 'xz', 'LQR')
-mean_rmse_ilqr, std_rmse_ilqr, mean_error_ilqr, std_error_ilqr = compute_rmse_and_mean(ilqr_traj_data, X_GOAL, 'xz', 'iLQR')
-mean_rmse_gpmpc, std_rmse_gpmpc, mean_error_gpmpc, std_error_gpmpc = compute_rmse_and_mean(gpmpc_traj_data, X_GOAL, 'xz', 'GP-MPC')
-mean_rmse_lmpc, std_rmse_lmpc, mean_error_lmpc, std_error_lmpc = compute_rmse_and_mean(lmpc_traj_data, X_GOAL, 'xz', 'Linear MPC')
-mean_rmse_mpc, std_rmse_mpc, mean_error_mpc, std_error_mpc = compute_rmse_and_mean(mpc_traj_data, X_GOAL, 'xz', 'MPC')
-mean_rmse_fmpc, std_rmse_fmpc, mean_error_fmpc, std_error_fmpc = compute_rmse_and_mean(fmpc_traj_data, X_GOAL, 'xz', 'F-MPC')
-mean_rmse_ppo, std_rmse_ppo, mean_error_ppo, std_error_ppo = compute_rmse_and_mean(ppo_traj_data, X_GOAL, 'xz', 'PPO')
-mean_rmse_sac, std_rmse_sac, mean_error_sac, std_error_sac = compute_rmse_and_mean(sac_traj_data, X_GOAL, 'xz', 'SAC')
-mean_rmse_dppo, std_rmse_dppo, mean_error_dppo, std_error_dppo = compute_rmse_and_mean(dppo_traj_data, X_GOAL, 'xz', 'DPPO')
+mean_rmse_pid, std_rmse_pid, mean_error_pid, std_error_pid = compute_rmse_and_mean(pid_traj_data, X_GOAL, 'Geometric Control')
+mean_rmse_lqr, std_rmse_lqr, mean_error_lqr, std_error_lqr = compute_rmse_and_mean(lqr_traj_data, X_GOAL, 'LQR')
+mean_rmse_ilqr, std_rmse_ilqr, mean_error_ilqr, std_error_ilqr = compute_rmse_and_mean(ilqr_traj_data, X_GOAL, 'iLQR')
+mean_rmse_gpmpc, std_rmse_gpmpc, mean_error_gpmpc, std_error_gpmpc = compute_rmse_and_mean(gpmpc_traj_data, X_GOAL, 'GP-MPC')
+mean_rmse_lmpc, std_rmse_lmpc, mean_error_lmpc, std_error_lmpc = compute_rmse_and_mean(lmpc_traj_data, X_GOAL, 'Linear MPC')
+mean_rmse_mpc, std_rmse_mpc, mean_error_mpc, std_error_mpc = compute_rmse_and_mean(mpc_traj_data, X_GOAL, 'MPC')
+mean_rmse_fmpc, std_rmse_fmpc, mean_error_fmpc, std_error_fmpc = compute_rmse_and_mean(fmpc_traj_data, X_GOAL, 'F-MPC')
+mean_rmse_ppo, std_rmse_ppo, mean_error_ppo, std_error_ppo = compute_rmse_and_mean(ppo_traj_data, X_GOAL, 'PPO')
+mean_rmse_sac, std_rmse_sac, mean_error_sac, std_error_sac = compute_rmse_and_mean(sac_traj_data, X_GOAL, 'SAC')
+mean_rmse_dppo, std_rmse_dppo, mean_error_dppo, std_error_dppo = compute_rmse_and_mean(dppo_traj_data, X_GOAL, 'DPPO')
+mean_rmse_ppo_mpc, std_rmse_ppo_mpc, mean_error_ppo_mpc, std_error_ppo_mpc = compute_rmse_and_mean(ppo_mpc_traj_data, X_GOAL, 'PPO-MPC')
 
 # Adjust hull colors using transparency
 hull_alpha = 0.3
@@ -158,7 +160,7 @@ hull_alpha = 0.3
 plot_std_tracking_error = True
 # plot_std_tracking_error = False
 s = 2
-fig, ax = plt.subplots(figsize=(5, 3))
+fig, ax = plt.subplots(figsize=(6, 4))
 # adjust the distance between title and the plot
 time_axis = np.arange(0, mean_error_pid.shape[0])
 dt = 1/60
@@ -167,10 +169,12 @@ if plot_name == 'RL':
     ax.plot(time_axis, mean_error_ppo, color=plot_colors['PPO'], label='PPO')
     ax.plot(time_axis, mean_error_sac, color=plot_colors['SAC'], label='SAC')
     ax.plot(time_axis, mean_error_dppo, color=plot_colors['DPPO'], label='DPPO')
+    ax.plot(time_axis, mean_error_ppo_mpc, color=plot_colors['PPO-MPC'], label='PPO-MPC')
     if plot_std_tracking_error:
         ax.fill_between(time_axis, mean_error_ppo - s * std_error_ppo, mean_error_ppo + s * std_error_ppo, color=plot_colors['PPO'], alpha=0.2)
         ax.fill_between(time_axis, mean_error_sac - s * std_error_sac, mean_error_sac + s * std_error_sac, color=plot_colors['SAC'], alpha=0.2)
         ax.fill_between(time_axis, mean_error_dppo - s * std_error_dppo, mean_error_dppo + s * std_error_dppo, color=plot_colors['DPPO'], alpha=0.2)
+        ax.fill_between(time_axis, mean_error_ppo_mpc - s * std_error_ppo_mpc, mean_error_ppo_mpc + s * std_error_ppo_mpc, color=plot_colors['PPO-MPC'], alpha=0.2)
     ax.legend(ncol=1)
 elif plot_name == 'Control-oriented':
     ax.plot(time_axis, mean_error_pid, color=plot_colors['Geometric Control'], label='Geometric Control')
@@ -191,7 +195,7 @@ elif plot_name == 'Control-oriented':
 
 ax.set_xlabel('Time [s]')
 ax.set_ylabel('Tracking error [m]')
-ax.set_ylim(-0.05, 0.4)
+ax.set_ylim(-0.04, 0.3)
 
 if additional == '11':
     fig.suptitle(f'Tracking error ({plot_name})',)
@@ -222,18 +226,6 @@ else:
     fig.savefig(error_dir / f'{file_name}.png', bbox_inches='tight')
     print(f'Saved at {error_dir / f"{file_name}.png"}')
 
-# Save path plot
-if additional == '11':
-    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.pdf', bbox_inches='tight')
-    print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.pdf"}')
-    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.png', bbox_inches='tight') 
-    print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.png"}')
-else:
-    fig.savefig(path_dir / f'{plot_name}_xz_path_generalization_{additional}.pdf', bbox_inches='tight')
-    print(f'Saved at {path_dir / f"{plot_name}_xz_path_generalization_{additional}.pdf"}')
-    fig.savefig(path_dir / f'{plot_name}_xz_path_generalization_{additional}.png', bbox_inches='tight')
-    print(f'Saved at {path_dir / f"{plot_name}_xz_path_generalization_{additional}.png"}')
-
 ##################################################
 # plot the state path x, z [0, 2]
 title_fontsize = 20
@@ -247,41 +239,49 @@ fig.subplots_adjust(top=0.2)
 
 # plot the convex hull of each steps
 hull_alpha = 0.3
+plot_second_half = True  # Option to plot only the second half of the trajectory
+max_steps = eval(additional) * 60
+reference_idx = np.arange(0, max_steps, 1)
+if plot_second_half:
+    reference_idx = reference_idx[int(max_steps / 2):]
 
 if plot_name == 'RL':
     plot_xz_trajectory_with_hull(ax, sac_traj_data, label='SAC',
                                  traj_color=plot_colors['SAC'], hull_color=plot_colors['SAC'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, ppo_traj_data, label='PPO',
                                  traj_color=plot_colors['PPO'], hull_color=plot_colors['PPO'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, dppo_traj_data, label='DPPO',
                                  traj_color=plot_colors['DPPO'], hull_color=plot_colors['DPPO'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
+    plot_xz_trajectory_with_hull(ax, ppo_mpc_traj_data, label='PPO-MPC',
+                                 traj_color=plot_colors['PPO-MPC'], hull_color=plot_colors['PPO-MPC'],
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
 elif plot_name == 'Control-oriented':
     plot_xz_trajectory_with_hull(ax, pid_traj_data, label='Geometric Control',
                                  traj_color=plot_colors['Geometric Control'], hull_color=plot_colors['Geometric Control'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, lqr_traj_data, label='LQR',
                                  traj_color=plot_colors['LQR'], hull_color=plot_colors['LQR'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, ilqr_traj_data, label='iLQR',
                                  traj_color=plot_colors['iLQR'], hull_color=plot_colors['iLQR'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, gpmpc_traj_data, label='GP-MPC',
                                  traj_color=plot_colors['GP-MPC'], hull_color=plot_colors['GP-MPC'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, lmpc_traj_data, label='Linear MPC',
                                  traj_color=plot_colors['Linear MPC'], hull_color=plot_colors['Linear MPC'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, mpc_traj_data, label='Nonlinear MPC',
                                  traj_color=plot_colors['Nonlinear MPC'], hull_color=plot_colors['Nonlinear MPC'],
-                                 alpha=hull_alpha)
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, fmpc_traj_data, label='F-MPC',
                                  traj_color=plot_colors['F-MPC'], hull_color=plot_colors['F-MPC'],
-                                 alpha=hull_alpha)   
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)   
 
-ax.plot(X_GOAL[:dummy, 0], X_GOAL[:dummy, 2], color=plot_colors['Reference'], linestyle='-.', linewidth=1., label='Reference')
+ax.plot(X_GOAL[reference_idx, 0], X_GOAL[reference_idx, 2], color=plot_colors['Reference'], linestyle='-.', linewidth=1., label='Reference')
 # ax.plot()
 ax.set_xlabel('$x$ [m]', fontsize=axis_label_fontsize)
 ax.set_ylabel('$z$ [m]', fontsize=axis_label_fontsize)
@@ -309,14 +309,14 @@ order = np.arange(len(labels))
 #add legend to plot
 plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order], ncol=3, loc='upper center', fontsize=legend_fontsize)
 
-# if not generalization:
+# Save path plot
 if additional == '11':
-    fig.savefig(script_path / f'{plot_name}_xz_path_performance_{additional}.pdf', bbox_inches='tight')
-    print(f'Saved at {script_path / f"{plot_name}_xz_path_performance_{additional}.pdf"}')
-    fig.savefig(script_path / f'{plot_name}_xz_path_performance_{additional}.png', bbox_inches='tight') 
-    print(f'Saved at {script_path / f"{plot_name}_xz_path_performance_{additional}.png"}')
+    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.pdf', bbox_inches='tight')
+    print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.pdf"}')
+    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.png', bbox_inches='tight') 
+    print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.png"}')
 else:
-    fig.savefig(script_path / f'{plot_name}_xz_path_generalization_{additional}.pdf', bbox_inches='tight')
-    print(f'Saved at {script_path / f"{plot_name}_xz_path_generalization_{additional}.pdf"}')
-    fig.savefig(script_path / f'{plot_name}_xz_path_generalization_{additional}.png', bbox_inches='tight')
-    print(f'Saved at {script_path / f"{plot_name}_xz_path_generalization_{additional}.png"}')
+    fig.savefig(path_dir / f'{plot_name}_xz_path_generalization_{additional}.pdf', bbox_inches='tight')
+    print(f'Saved at {path_dir / f"{plot_name}_xz_path_generalization_{additional}.pdf"}')
+    fig.savefig(path_dir / f'{plot_name}_xz_path_generalization_{additional}.png', bbox_inches='tight')
+    print(f'Saved at {path_dir / f"{plot_name}_xz_path_generalization_{additional}.png"}')

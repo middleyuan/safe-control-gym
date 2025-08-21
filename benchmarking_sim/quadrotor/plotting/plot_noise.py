@@ -1,32 +1,31 @@
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from benchmarking_sim.quadrotor.benchmark_util.utils \
+    import plot_colors, tag_ctrl_list
+
 # script dir
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir = Path(__file__).parent.resolve()
 print(script_dir)
 # if the output path does not exist, create it
-output_path = os.path.join(script_dir, 'noise')
-if not os.path.exists(output_path):
-    os.makedirs(output_path)
+output_path = script_dir / 'noise'
+output_path.mkdir(exist_ok=True)
+
+def get_key_by_value(d, value):
+    """Return the first key in dict d whose value matches the given value."""
+    for k, v in d.items():
+        if v == value:
+            return k
+    return None
 
 max_seed = 10
 metric_name = 'metrics.txt'
 s = 2 # times std
-
-# get the default color cycle
-colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-plot_color = {'ilqr': 'slateblue', 
-              'lqr': 'blueviolet',
-              'gpmpc_acados_TP': colors[0], 
-              'mpc_acados': colors[-1], 
-              'linear_mpc_acados':"green",
-              'fmpc': "darkblue",
-              'pid': 'tab:gray',
-              } 
 
 
 if len(sys.argv) > 1:
@@ -74,23 +73,17 @@ assert controller in ['mpc_acados', 'linear_mpc_acados', 'fmpc',\
 
 if controller in ['gpmpc_acados_TP']:
     prior = f'_{gp_tag}{id_type}_{noise_type}_quadrotor_2D_attitude'
-    data_folder_dir = f'../{controller}/results/{prior}'
+    data_folder_dir = script_dir.parent / controller / 'results' / prior
 else:
     prior = f'results_{noise_type}_{SYS}'
-    data_folder_dir = f'../{controller}/{prior}'
-
-
+    data_folder_dir = script_dir.parent / controller / prior
 
 # find the folder in the dir
-seed_data_folder = os.listdir(os.path.join(script_dir, data_folder_dir))
+seed_data_folder = [f for f in data_folder_dir.iterdir() if f.is_dir()]
+seed_data_folder = sorted(seed_data_folder, key=lambda x: int(x.name.split('_')[1]))
 # print('seed_data_folder', seed_data_folder)
-seed_data_folder = [f for f in seed_data_folder if os.path.isdir(os.path.join(data_folder_dir, f))]
-seed_data_folder = sorted(seed_data_folder, key=lambda x: int(x.split('_')[1]))
-# print('seed_data_folder', seed_data_folder)
-seed_data_folder = [seed_data_folder[i]+'/temp' for i in range(max_seed)]
+seed_data_folder = [seed_data_folder[i] / 'temp' for i in range(max_seed)]
 # seed_data_folder = seed_data_folder[:9]
-# print('seed_data_folder', seed_data_folder)
-seed_data_folder = [os.path.join(data_folder_dir, f) for f in seed_data_folder]
 # print('seed_data_folder', seed_data_folder)
 # print('max seed', max_seed)
 
@@ -106,14 +99,11 @@ for seed in range(0, max_seed):
     traj_steps_list = []
     # fild runs
     load_seed_dir = seed_data_folder[seed]
-    runs_data_folder = os.listdir(os.path.join(script_dir, load_seed_dir))
-    runs_data_folder = [os.path.join(load_seed_dir, f) for f in runs_data_folder]
-    # sort the runs
-    runs_data_folder = sorted(runs_data_folder)
+    runs_data_folder = sorted(list(load_seed_dir.iterdir()))
     # print('runs_data_folder', runs_data_folder)
     for runs in runs_data_folder:
         # load the metric file in the folder
-        metric_file = os.path.join(runs, metric_name)
+        metric_file = runs / metric_name
         # print('metric_file', metric_file)
         data = pd.read_csv(metric_file, delimiter=':')
         # convert to numpy
@@ -130,7 +120,7 @@ for seed in range(0, max_seed):
         noise_factor_list.append(noise_factor)
 
         # load the traj
-        traj_file = os.path.join(runs, f'{controller}_data_quadrotor_traj_tracking.pkl')
+        traj_file = runs / f'{controller}_data_quadrotor_traj_tracking.pkl'
         traj_data = pd.read_pickle(traj_file)
         traj_data = traj_data['trajs_data']['obs'][0]
         traj_steps = len(traj_data)
@@ -153,7 +143,7 @@ ax.set_xlabel('noise factor')
 ax.set_ylabel('rmse')
 ax.set_title(f'{controller} {noise_type} rmse')
 ax.legend()
-fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse_individual.png')
+fig.savefig(output_path / f'{controller}_{noise_type}_rmse_individual.png')
 
 # early stop
 # merge all the early stop
@@ -203,10 +193,11 @@ rmse_degradation_std = np.std(rmse_degradation, axis=0)
 # max_noise_facc
 ################################## plot rmse ##################################
 fig, ax = plt.subplots(figsize=(6, 2))
+controller_name = get_key_by_value(tag_ctrl_list, controller)
 ax.plot(noise_factor, rmse_mean, 
-        label='mean', color=plot_color[controller])
+        label='mean', color=plot_colors.get(controller_name, 'tab:blue'))
 ax.fill_between(noise_factor, rmse_mean- s*rmse_std, rmse_mean+ s*rmse_std, 
-                alpha=0.2, label=f'{s} std', color=plot_color[controller])
+                alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 
 # plot shaded area for the first early stop
 # ax.axvspan(early_stop_noise_factor, max_noise_factor, color='red', alpha=0.1, label='early stop')
@@ -223,10 +214,10 @@ ax.axhline(y=0.1, color='gray', linestyle='--', label='RMSE = 0.1')
 ax.legend(ncol=2)
 ax.set_xlabel('Noise amplification factor')
 ax.set_ylabel('RMSE')
-ax.set_title(f'RMSE of {controller}{id_type}')
+ax.set_title(f'RMSE of {controller_name}{id_type}')
 
 fig.tight_layout()
-fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse.png')
+fig.savefig(output_path / f'{controller}_{noise_type}_rmse.png')
 # save the plot
 # plot_file_name = f'{notebook_dir}/../data/{id_type}_rmse_{controller}.png'
 # plt.savefig(plot_file_name)
@@ -235,9 +226,9 @@ fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse.png')
 ################################ plot rmse degradation ################################
 fig, ax = plt.subplots(figsize=(6, 2)) 
 ax.plot(noise_factor, rmse_degradation_mean, 
-        label='mean', color=plot_color[controller]) 
+        label='mean', color=plot_colors.get(controller_name, 'tab:blue')) 
 ax.fill_between(noise_factor, rmse_degradation_mean- s*rmse_degradation_std, 
-                rmse_degradation_mean+ s*rmse_degradation_std, alpha=0.2, label=f'{s} std', color=plot_color[controller])
+                rmse_degradation_mean+ s*rmse_degradation_std, alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 # ax.set_xlim([0.0, max_noise_factor]) if noise_type == 'param' else ax.set_xlim([1, max_noise_factor])
 # ax.set_ylim([0, 1000])
 # ax.set_ylim([0, 150])
@@ -252,9 +243,9 @@ ax.fill_between(noise_factor, rmse_degradation_mean- s*rmse_degradation_std,
 ax.legend()
 ax.set_xlabel('Noise amplification factor')
 ax.set_ylabel('RMSE degradation')
-ax.set_title(f'RMSE degradation of {controller}{id_type} with {noise_type}')
+ax.set_title(f'RMSE degradation of {controller_name}{id_type} with {noise_type}')
 fig.tight_layout()
-fig.savefig(f'{script_dir}/noise/{controller}_{noise_type}_rmse_degradation.png')
+fig.savefig(output_path / f'{controller}_{noise_type}_rmse_degradation.png')
 
 
 # results[repr(1)]['traj_steps']
@@ -272,10 +263,9 @@ saved_results = {
     'early_stop': early_stop,
 }
 if controller in ['gpmpc_acados_TP']:
-    results_file_name = f'{script_dir}/../data/{controller}{id_type}_{noise_type}_results.npy'
+    results_file_name = script_dir.parent / 'data' / f'{controller}{id_type}_{noise_type}_results.npy'
 else:
-    results_file_name = f'{script_dir}/../data/{controller}_{noise_type}_results.npy'
+    results_file_name = script_dir.parent / 'data' / f'{controller}_{noise_type}_results.npy'
 # np.save(results_file_name, results)
 np.save(results_file_name, saved_results)
 print(f'saved to {results_file_name}')
-print('')

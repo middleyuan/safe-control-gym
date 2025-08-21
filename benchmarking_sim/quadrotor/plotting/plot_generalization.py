@@ -7,13 +7,19 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 from benchmarking_sim.quadrotor.benchmark_util.utils \
     import plot_colors, tag_ctrl_list, load_metric
+import sys
 
 ################ plot options ################
 
-option = 'all'
-# option = 'control'
-# option = 'rl'
-assert option in ['all', 'control', 'rl', ] 
+# Read option from command line arguments, otherwise use default
+if len(sys.argv) > 1:
+    option = sys.argv[1]
+else:
+    option = 'all'  # default option
+    # option = 'control'
+    # options = 'rl'
+
+assert option in ['all', 'control', 'rl'], f"Invalid option: {option}. Must be one of ['all', 'control', 'rl']"
 ##############################################
 control_list = [
     'Geometric Control', 'Linear MPC', 'Nonlinear MPC',
@@ -47,16 +53,10 @@ episode_period_list =  [episode_len_list[i]/2 for i in range(len(episode_len_lis
 
 # Initialize the transfer_metric dictionary
 transfer_metric = {}
-transfer_metric = {
-'PPO': {'rmse': np.array([0.1518289 , 0.04699026, 0.01248575, 0.04337291, 0.07692969, 0.10662454, 0.13239991]),
-  'rmse_std': np.array([0.00188754, 0.0011886 , 0.00071831, 0.00107574, 0.00108538, 0.00117313, 0.00103038])},
- 'SAC': {'rmse': np.array([0.13106732, 0.04412564, 0.04392989, 0.05757863, 0.07185517, 0.08548335, 0.09768431]),  
-         'rmse_std': np.array([0.00451328, 0.0007881 , 0.00079868, 0.00086922, 0.00076229, 0.0006071 , 0.00066663])}, 
- 'DPPO': {'rmse': np.array([0.16318646, 0.05295693, 0.02341874, 0.04777906, 0.08090912, 0.11122228, 0.1399848 ]),  
-          'rmse_std': np.array([0.00500729, 0.00245919, 0.00125781, 0.00147439, 0.00164736, 0.00200121, 0.00172556])}, 
- 'PPO-MPC': {'rmse': np.array([0.02657339, 0.01117535, 0.00869317, 0.0078968 , 0.00635579, 0.00604681, 0.00595736]),  
-             'rmse_std': np.array([0.00253017, 0.00121169, 0.00088094, 0.0006619, 0.0005072, 0.00043874, 0.00037119])}}
-
+transfer_metric = load_metric(script_dir, transfer_metric, 'PPO')
+transfer_metric = load_metric(script_dir, transfer_metric, 'SAC')
+transfer_metric = load_metric(script_dir, transfer_metric, 'DPPO')
+transfer_metric = load_metric(script_dir, transfer_metric, 'PPO-MPC')
 transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'F-MPC')
 transfer_metric = load_metric(script_dir, transfer_metric, 'Nonlinear MPC')
@@ -65,6 +65,19 @@ transfer_metric = load_metric(script_dir, transfer_metric, 'Geometric Control')
 transfer_metric = load_metric(script_dir, transfer_metric, 'LQR')
 tag = ''
 transfer_metric = load_metric(script_dir, transfer_metric, 'GP-MPC', tag=tag)
+
+# Ensure plotting order: largest episode period on the left, smallest on the right
+episode_len_list = [9, 10, 11, 12, 13, 14, 15]
+episode_period_list = [T / 2 for T in episode_len_list]
+# Sort in descending order for plotting (largest period left)
+episode_period_sorted_idx = np.argsort(episode_period_list)[::-1]
+episode_period_list = [episode_period_list[i] for i in episode_period_sorted_idx]
+episode_len_list = [episode_len_list[i] for i in episode_period_sorted_idx]
+
+# Reorder transfer_metric arrays to match the plotting order
+for method in plot_list:
+    transfer_metric[method]['rmse'] = transfer_metric[method]['rmse'][episode_period_sorted_idx]
+    transfer_metric[method]['rmse_std'] = transfer_metric[method]['rmse_std'][episode_period_sorted_idx]
 
 # Set seaborn style
 sns.set_theme(style="whitegrid")
@@ -82,28 +95,31 @@ for method in plot_list:
 ax.axvline(x=5.5, linestyle='-.', color='gray')
 ax.text(0.81, 0.75, "Nominal Task", transform=ax.transAxes, fontsize=10, verticalalignment='center', horizontalalignment='right')
 
-# Create a zoomed-in inset plot
-fill_alpha = 0.2
-ax_inset = inset_axes(ax, width="40%", height="50%", loc='upper left', 
-                      bbox_to_anchor=(0.1, -0.05, 1, 1), bbox_transform=ax.transAxes)
-ax_inset.set_facecolor((0.5, 0.5, 0.5, fill_alpha))  # Set background to transparent gray
+# Only create inset for 'all' and 'control' options
+if option in ['all', 'control']:
+    # Create a zoomed-in inset plot
+    fill_alpha = 0.2
+    ax_inset = inset_axes(ax, width="40%", height="50%", loc='upper left', 
+                        bbox_to_anchor=(0.1, -0.05, 1, 1), bbox_transform=ax.transAxes)
+    ax_inset.set_facecolor((0.5, 0.5, 0.5, fill_alpha))  # Set background to transparent gray
+    for method in plot_list:
+        ax_inset.plot(episode_period_list, 
+                    transfer_metric[method]['rmse'], 
+                    color=plot_colors[method])
+        ax_inset.fill_between(episode_period_list, 
+                            transfer_metric[method]['rmse'] - transfer_metric[method]['rmse_std'],  
+                            transfer_metric[method]['rmse'] + transfer_metric[method]['rmse_std'], 
+                            color=plot_colors[method], alpha=0.1)
+    mark_inset(ax, ax_inset, loc1=1, loc2=3, 
+                fc="gray", ec="0.3", alpha=fill_alpha)
+    ax_inset.set_ylim(0, 0.045)
+    ax_inset.tick_params(axis='both', which='major', labelsize=8)
+    ax_inset.invert_xaxis()
 
-for method in plot_list:
-    ax_inset.plot(episode_period_list, 
-                  transfer_metric[method]['rmse'], 
-                  color=plot_colors[method])
-    ax_inset.fill_between(episode_period_list, 
-                          transfer_metric[method]['rmse'] - transfer_metric[method]['rmse_std'],  
-                          transfer_metric[method]['rmse'] + transfer_metric[method]['rmse_std'], 
-                          color=plot_colors[method], alpha=0.1)
-ax_inset.set_ylim(0, 0.045)
-ax_inset.invert_xaxis()
-ax_inset.tick_params(axis='both', which='major', labelsize=8)
-mark_inset(ax, ax_inset, loc1=2, loc2=4, 
-            fc="gray", ec="0.3", alpha=fill_alpha)
-
-ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+ax.set_ylim(0, 0.17)
+ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.2f}'))
 ax.invert_xaxis()
+# ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 ax.set_xlabel("Figure-Eight Trajectory Period (s)")
 ax.set_ylabel("RMSE [m]")
 

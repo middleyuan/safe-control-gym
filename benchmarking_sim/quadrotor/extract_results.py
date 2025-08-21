@@ -268,7 +268,9 @@ for additional in ['9', '10', '11', '12', '13', '14', '15']:
     std_rmse = np.std(metrics)
     results[additional] = {'mean_rmse': mean_rmse, 'std_rmse': std_rmse}
 results['inference_time'] = np.mean(timing_data)
+results['inference_time_std'] = np.std(timing_data)
 print('mean inference time:', results['inference_time'])
+print('std inference time:', results['inference_time_std'])
 print('results', results)
 np.save(f'data/{ctrl}{tag}_gen_results.npy', results)
 # print('metrics', metrics)
