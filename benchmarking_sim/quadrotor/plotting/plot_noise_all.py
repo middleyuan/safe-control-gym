@@ -166,13 +166,49 @@ def align_data_to_scale(data, target_scale):
 for method in noise_data.keys():
     noise_data[method] = align_data_to_scale(noise_data[method], noise_scale)
 
+# Analyze testing ranges and find intersection
+def analyze_testing_ranges():
+    """Analyze and report the testing ranges for each controller."""
+    print("\n" + "="*80)
+    print("TESTING RANGE ANALYSIS")
+    print("="*80)
+    
+    controller_ranges = {}
+    for method in noise_data.keys():
+        x_data = np.array(noise_scale)
+        y_mean = noise_data[method]['rmse_degradation_mean']
+        valid_mask = ~np.isnan(y_mean)
+        
+        if np.any(valid_mask):
+            x_valid = x_data[valid_mask]
+            min_range = np.min(x_valid)
+            max_range = np.max(x_valid)
+            controller_ranges[method] = {'min': min_range, 'max': max_range, 'valid_points': len(x_valid)}
+            print(f"{method:15}: Range [{min_range:6.2f}, {max_range:6.2f}] - {len(x_valid)} valid points")
+    
+    # Find intersection of all ranges
+    if controller_ranges:
+        intersection_min = max([r['min'] for r in controller_ranges.values()])
+        intersection_max = min([r['max'] for r in controller_ranges.values()])
+        print(f"\nCommon range intersection: [{intersection_min:6.2f}, {intersection_max:6.2f}]")
+        print(f"Maximum testing range: {max([r['max'] for r in controller_ranges.values()]):6.2f}")
+    
+    return controller_ranges
+
+controller_ranges = analyze_testing_ranges()
+max_testing_range = max([r['max'] for r in controller_ranges.values()]) if controller_ranges else max(noise_scale)
+
 fig = plt.figure(figsize=(8, 3))
 
 # plot rmse degradation for all methods
 double_results = {}
+relative_failure_threshold = 200  # 200% performance degradation
+
+print("\n" + "="*80)
+print("RELATIVE PERFORMANCE ANALYSIS (200% Degradation Threshold)")
+print("="*80)
 
 for method in noise_data.keys():
-    print(method)
     # Get aligned data and filter out NaN values
     x_data = np.array(noise_scale)
     y_mean = noise_data[method]['rmse_degradation_mean']
@@ -190,12 +226,21 @@ for method in noise_data.keys():
                          y_mean_valid - s * y_std_valid,  
                          y_mean_valid + s * y_std_valid, color=plot_colors[method], alpha=0.1)
         
-        # Find when RMSE degradation exceeds 200% using valid data
+        # Find when RMSE degradation exceeds threshold using valid data
+        failure_found = False
         for i, scale in enumerate(x_valid):
-            if y_mean_valid[i] > 200:
-                print(f"Method {method} reaches 200% performance at noise scale {scale}")
+            if y_mean_valid[i] > relative_failure_threshold:
+                print(f"{method:15}: FAILS at noise scale {scale:6.2f} (degradation = {y_mean_valid[i]:6.1f}%)")
                 double_results[method] = scale
+                failure_found = True
                 break
+        
+        if not failure_found:
+            max_degradation = np.max(y_mean_valid)
+            max_scale = x_valid[np.argmax(y_mean_valid)]
+            print(f"{method:15}: NO FAILURE, max degradation = {max_degradation:6.1f}% at scale {max_scale:6.2f} (tested up to {np.max(x_valid):6.2f})")
+    else:
+        print(f"{method:15}: NO VALID DATA")
     
 plt.xlabel("Noise Scale")
 plt.ylabel("Relative Performance %")
@@ -240,6 +285,10 @@ fig_abs = plt.figure(figsize=(8, 3))
 abs_rmse_threshold = 0.25
 abs_rmse_threshold_results = {}
 
+print("\n" + "="*80)
+print(f"ABSOLUTE PERFORMANCE ANALYSIS ({abs_rmse_threshold:.2f}m RMSE Threshold)")
+print("="*80)
+
 for method in noise_data.keys():
     if 'rmse_mean' in noise_data[method] and 'rmse_std' in noise_data[method]:
         # Get aligned data and filter out NaN values
@@ -261,13 +310,22 @@ for method in noise_data.keys():
                              color=plot_colors[method], alpha=0.1)
             
             # Check when absolute rmse exceeds threshold using valid data
+            failure_found = False
             for i, scale in enumerate(x_valid):
                 if y_mean_valid[i] > abs_rmse_threshold:
-                    print(f"Method {method} exceeds absolute RMSE of {abs_rmse_threshold} at noise scale {scale}")
+                    print(f"{method:15}: FAILS at noise scale {scale:6.2f} (RMSE = {y_mean_valid[i]:6.3f}m)")
                     abs_rmse_threshold_results[method] = scale
+                    failure_found = True
                     break
+            
+            if not failure_found:
+                max_rmse = np.max(y_mean_valid)
+                max_scale = x_valid[np.argmax(y_mean_valid)]
+                print(f"{method:15}: NO FAILURE, max RMSE = {max_rmse:6.3f}m at scale {max_scale:6.2f} (tested up to {np.max(x_valid):6.2f})")
+        else:
+            print(f"{method:15}: NO VALID DATA")
     else:
-        print(f"Warning: 'rmse_mean' or 'rmse_std' not found for method {method}. Skipping absolute plot.")
+        print(f"{method:15}: MISSING RMSE DATA - skipping absolute analysis")
 
 plt.xlabel("Noise Scale")
 plt.ylabel("RMSE [m]")
@@ -426,193 +484,162 @@ def create_ridge_plot():
     
     return controller_bounds
 
-# # Create an alternative simplified ridge plot 
-# def create_simple_ridge_plot():
-#     """Create a simpler ridge plot using violin plots."""
-#     # Calculate global RMSE range for consistent axis limits
-#     all_rmse_values = []
-#     for method in noise_data.keys():
-#         if 'rmse_mean' in noise_data[method]:
-#             all_rmse_values.extend(noise_data[method]['rmse_mean'])
-    
-#     if all_rmse_values:
-#         global_rmse_min = max(0, min(all_rmse_values))  # Ensure minimum is 0
-#         global_rmse_max = max(all_rmse_values) * 1.1
-#     else:
-#         global_rmse_min, global_rmse_max = 0, 1
-    
-#     fig, axes = plt.subplots(len(noise_data), 1, figsize=(10, len(noise_data) * 1.0), 
-#                             sharex=True, gridspec_kw={'hspace': 0.05})
-    
-#     if len(noise_data) == 1:
-#         axes = [axes]
-    
-#     controllers = list(noise_data.keys())
-    
-#     for i, (method, ax) in enumerate(zip(controllers, axes)):
-#         if 'rmse_mean' in noise_data[method]:
-#             rmse_values = noise_data[method]['rmse_mean']
-            
-#             # Filter out any NaN or infinite values
-#             rmse_values = np.array(rmse_values)
-#             rmse_values = rmse_values[np.isfinite(rmse_values)]
-            
-#             if len(rmse_values) > 0:
-#                 # Get minimum RMSE value for this controller to define gray area
-#                 min_rmse = np.min(rmse_values)
-                
-#                 # Add shaded gray area where controller has no density (left of minimum)
-#                 ax.axvspan(0, min_rmse, alpha=0.2, color='gray', zorder=0)
-                
-#                 # Create a simple histogram-style plot
-#                 ax.hist(rmse_values, bins=20, alpha=0.7, color=plot_colors[method], 
-#                        density=True, orientation='horizontal')
-                
-#                 # Add mean line
-#                 mean_rmse = np.mean(rmse_values)
-#                 ax.axhline(mean_rmse, color='red', linestyle='--', linewidth=2, alpha=0.8)
-                
-#                 # Customize appearance
-#                 ax.set_xlim(0, None)  # Ensure density starts from 0
-#                 ax.set_ylim(global_rmse_min, global_rmse_max)  # Use global RMSE range for y-axis
-#                 ax.set_ylabel('')
-#                 ax.set_xticks([])
-#                 ax.spines['bottom'].set_visible(False)
-#                 ax.spines['right'].set_visible(False)
-#                 ax.spines['top'].set_visible(False)
-                
-#                 # Add controller name
-#                 ax.text(0.02, 0.8, method, transform=ax.transAxes, 
-#                        fontsize=11, ha='left', va='top', weight='bold')
-                
-#                 # Add statistics
-#                 ax.text(0.98, 0.8, f'μ={mean_rmse:.3f}', transform=ax.transAxes,
-#                        fontsize=9, ha='right', va='top',
-#                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
-                
-#                 print(f"Controller {method}: RMSE range [{np.min(rmse_values):.3f}, {np.max(rmse_values):.3f}], mean={mean_rmse:.3f}")
-#             else:
-#                 print(f"No valid RMSE data for {method}")
-    
-#     # Configure the bottom axis
-#     axes[-1].spines['left'].set_visible(True)
-#     axes[-1].set_ylabel('RMSE [m]', fontsize=12)
-    
-#     # Set title
-#     if noise_option == 'obs_noise':
-#         title = 'RMSE Distribution: Observation Noise'
-#     elif noise_option == 'proc_noise':
-#         title = 'RMSE Distribution: Process Noise'
-#     elif noise_option == 'param':
-#         title = 'RMSE Distribution: Parametric Uncertainty'
-#     else:
-#         title = f'RMSE Distribution: {noise_option}'
-    
-#     fig.suptitle(title, fontsize=14, y=0.95)
-    
-#     # Save simple ridge plot
-#     simple_ridge_save_name = f"simple_ridge_plot_rmse_{noise_option}"
-#     simple_ridge_save_path = script_dir / 'noise' / f'{simple_ridge_save_name}.png'
-#     plt.savefig(simple_ridge_save_path, bbox_inches="tight", pad_inches=0.1, dpi=300)
-#     plt.savefig(simple_ridge_save_path.with_suffix('.pdf'), bbox_inches="tight", pad_inches=0.1)
-#     print(f"Simple ridge plot saved as {simple_ridge_save_path}")
-#     plt.close()
-
-# Create ridge plots
-print("Creating ridge plots...")
+# Create ridge plot
 controller_bounds = create_ridge_plot()
-# create_simple_ridge_plot()
 
-# # Create an alternative ridge plot with better spacing and violin-like appearance  
-# def create_violin_ridge_plot():
-#     """Create a violin-style ridge plot."""
-#     # Calculate global RMSE range for consistent axis limits
-#     all_rmse_values = []
-#     for method in noise_data.keys():
-#         if 'rmse_mean' in noise_data[method]:
-#             all_rmse_values.extend(noise_data[method]['rmse_mean'])
+# Final summary report
+def print_summary_report():
+    """Print a comprehensive summary of the analysis."""
+    print("\n" + "="*80)
+    print("SUMMARY REPORT")
+    print("="*80)
     
-#     if all_rmse_values:
-#         global_rmse_min = max(0, min(all_rmse_values))  # Ensure minimum is 0
-#         global_rmse_max = max(all_rmse_values) * 1.1
-#     else:
-#         global_rmse_min, global_rmse_max = 0, 1
+    # Noise type info
+    if noise_option == 'obs_noise':
+        noise_description = "Observation Noise"
+        noise_unit = ""
+    elif noise_option == 'proc_noise':
+        noise_description = "Process Noise"
+        noise_unit = ""
+    elif noise_option == 'param':
+        noise_description = "Parametric Uncertainty"
+        noise_unit = ""
+    else:
+        noise_description = noise_option
+        noise_unit = ""
     
-#     fig, axes = plt.subplots(len(noise_data), 1, figsize=(10, len(noise_data) * 1.2), 
-#                             sharex=True, gridspec_kw={'hspace': 0})
+    print(f"Noise Type: {noise_description}")
+    print(f"Method Filter: {method_type.upper()}")
+    print(f"Controllers Analyzed: {len(noise_data)}")
+    print(f"Maximum Testing Range: {max_testing_range:6.2f}{noise_unit}")
     
-#     if len(noise_data) == 1:
-#         axes = [axes]
+    # Relative performance summary
+    print(f"\nRelative Performance ({relative_failure_threshold}% degradation threshold):")
+    if double_results:
+        print("  Controllers that FAILED:")
+        for method, failure_scale in sorted(double_results.items(), key=lambda x: x[1]):
+            print(f"    {method:15}: {failure_scale:6.2f}{noise_unit}")
+        
+        robust_methods = set(noise_data.keys()) - set(double_results.keys())
+        if robust_methods:
+            print("  Controllers that SURVIVED:")
+            for method in sorted(robust_methods):
+                print(f"    {method:15}: No failure up to {max_testing_range:6.2f}{noise_unit}")
+    else:
+        print("  NO FAILURES detected for any controller")
     
-#     controllers = list(noise_data.keys())
-    
-#     for i, (method, ax) in enumerate(zip(controllers, axes)):
-#         if 'rmse_mean' in noise_data[method]:
-#             rmse_values = noise_data[method]['rmse_mean']
+    # Absolute performance summary
+    if any('rmse_mean' in data for data in noise_data.values()):
+        print(f"\nAbsolute Performance ({abs_rmse_threshold:.2f}m RMSE threshold):")
+        if abs_rmse_threshold_results:
+            print("  Controllers that FAILED:")
+            for method, failure_scale in sorted(abs_rmse_threshold_results.items(), key=lambda x: x[1]):
+                print(f"    {method:15}: {failure_scale:6.2f}{noise_unit}")
             
-#             # Get minimum RMSE value for this controller to define gray area
-#             min_rmse = np.min(rmse_values)
-            
-#             # Add shaded gray area where controller has no density (left of minimum)
-#             ax.axvspan(global_rmse_min, min_rmse, alpha=0.2, color='gray', zorder=0)
-            
-#             # Create violin plot for this controller
-#             parts = ax.violinplot([rmse_values], positions=[0], widths=0.8, 
-#                                 showmeans=False, showmedians=True, showextrema=False)
-            
-#             # Customize violin appearance
-#             for pc in parts['bodies']:
-#                 pc.set_facecolor(plot_colors[method])
-#                 pc.set_alpha(0.7)
-#                 pc.set_edgecolor('black')
-#                 pc.set_linewidth(1)
-            
-#             # Customize median line
-#             if 'cmedians' in parts:
-#                 parts['cmedians'].set_color('black')
-#                 parts['cmedians'].set_linewidth(2)
-            
-#             # Set y-axis properties
-#             ax.set_ylim(-0.5, 0.5)
-#             ax.set_xlim(global_rmse_min, global_rmse_max)  # Use global RMSE range
-#             ax.set_yticks([])
-#             ax.spines['left'].set_visible(False)
-#             ax.spines['right'].set_visible(False)
-#             ax.spines['top'].set_visible(False)
-            
-#             # Add controller name
-#             ax.text(-0.15, 0, method, transform=ax.transData, 
-#                    fontsize=11, ha='right', va='center', weight='bold')
-            
-#             # Add mean RMSE value as text
-#             mean_rmse = np.mean(rmse_values)
-#             ax.text(0.95, 0, f'{mean_rmse:.3f}', transform=ax.transAxes,
-#                    fontsize=10, ha='right', va='center', 
-#                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+            robust_methods_abs = set(noise_data.keys()) - set(abs_rmse_threshold_results.keys())
+            # Only include methods that have RMSE data
+            robust_methods_abs = {m for m in robust_methods_abs if 'rmse_mean' in noise_data[m]}
+            if robust_methods_abs:
+                print("  Controllers that SURVIVED:")
+                for method in sorted(robust_methods_abs):
+                    print(f"    {method:15}: No failure up to {max_testing_range:6.2f}{noise_unit}")
+        else:
+            print("  NO FAILURES detected for any controller")
     
-#     # Configure the bottom axis
-#     axes[-1].spines['bottom'].set_visible(True)
-#     axes[-1].set_xlabel('RMSE [m]', fontsize=12)
-    
-#     # Set title
-#     if noise_option == 'obs_noise':
-#         title = 'RMSE Distribution: Observation Noise'
-#     elif noise_option == 'proc_noise':
-#         title = 'RMSE Distribution: Process Noise'
-#     elif noise_option == 'param':
-#         title = 'RMSE Distribution: Parametric Uncertainty'
-#     else:
-#         title = f'RMSE Distribution: {noise_option}'
-    
-#     fig.suptitle(title, fontsize=14, y=0.95)
-    
-#     # Save violin ridge plot
-#     violin_ridge_save_name = f"violin_ridge_plot_rmse_{noise_option}"
-#     violin_ridge_save_path = script_dir / 'noise' / f'{violin_ridge_save_name}.png'
-#     plt.savefig(violin_ridge_save_path, bbox_inches="tight", pad_inches=0.1, dpi=300)
-#     plt.savefig(violin_ridge_save_path.with_suffix('.pdf'), bbox_inches="tight", pad_inches=0.1)
-#     print(f"Violin ridge plot saved as {violin_ridge_save_path}")
-#     plt.close()
+    print("\n" + "="*80)
 
-# # Create the violin-style ridge plot
-# create_violin_ridge_plot()
+print_summary_report()
+
+# Save failure results for use in plot_radar.py
+def save_failure_results():
+    """Save failure results to JSON files for use in plot_radar.py."""
+    import json
+    
+    def convert_numpy_types(obj):
+        """Convert numpy types to Python native types for JSON serialization."""
+        if hasattr(obj, 'item'):  # numpy scalar
+            return obj.item()
+        elif hasattr(obj, 'tolist'):  # numpy array
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy_types(item) for item in obj]
+        else:
+            return obj
+    
+    # Create data directory if it doesn't exist
+    data_dir = script_dir / 'data'
+    data_dir.mkdir(exist_ok=True)
+    
+    # Prepare failure results for different noise types
+    failure_data = {
+        'relative_failures': {},  # 200% degradation threshold failures
+        'absolute_failures': {},  # 0.25m RMSE threshold failures
+        'max_testing_range': convert_numpy_types(max_testing_range),
+        'relative_threshold': convert_numpy_types(relative_failure_threshold),
+        'absolute_threshold': convert_numpy_types(abs_rmse_threshold),
+        'noise_type': noise_option,
+        'method_filter': method_type
+    }
+    
+    # Add relative failure results (200% degradation threshold)
+    for method, failure_scale in double_results.items():
+        failure_data['relative_failures'][method] = convert_numpy_types(failure_scale)
+    
+    # Add absolute failure results (0.25m RMSE threshold)  
+    for method, failure_scale in abs_rmse_threshold_results.items():
+        failure_data['absolute_failures'][method] = convert_numpy_types(failure_scale)
+    
+    # Add non-failure information (methods that survived up to max testing range)
+    robust_methods_relative = set(noise_data.keys()) - set(double_results.keys())
+    robust_methods_absolute = set(noise_data.keys()) - set(abs_rmse_threshold_results.keys())
+    # Only include methods that have RMSE data for absolute analysis
+    robust_methods_absolute = {m for m in robust_methods_absolute if 'rmse_mean' in noise_data[m]}
+    
+    failure_data['robust_methods_relative'] = list(robust_methods_relative)
+    failure_data['robust_methods_absolute'] = list(robust_methods_absolute)
+    
+    # Save to JSON file
+    output_file = data_dir / f'failure_results_{noise_option}_{method_type}.json'
+    with open(output_file, 'w') as f:
+        json.dump(failure_data, f, indent=2)
+    
+    print(f"\nFailure results saved to: {output_file}")
+    
+    # Also save a consolidated file for radar plot usage
+    # This maps noise types to method failure points
+    consolidated_file = data_dir / 'robustness_failure_points.json'
+    
+    # Load existing data if file exists
+    if consolidated_file.exists():
+        with open(consolidated_file, 'r') as f:
+            consolidated_data = json.load(f)
+    else:
+        consolidated_data = {
+            'relative_failures': {
+                'obs_noise': {},
+                'proc_noise': {},
+                'param': {}
+            },
+            'absolute_failures': {
+                'obs_noise': {},
+                'proc_noise': {},
+                'param': {}
+            }
+        }
+    
+    # Update with current results
+    for method, failure_scale in double_results.items():
+        consolidated_data['relative_failures'][noise_option][method] = convert_numpy_types(failure_scale)
+    
+    for method, failure_scale in abs_rmse_threshold_results.items():
+        consolidated_data['absolute_failures'][noise_option][method] = convert_numpy_types(failure_scale)
+    
+    # Save consolidated data
+    with open(consolidated_file, 'w') as f:
+        json.dump(consolidated_data, f, indent=2)
+    
+    print(f"Consolidated failure results updated: {consolidated_file}")
+
+save_failure_results()

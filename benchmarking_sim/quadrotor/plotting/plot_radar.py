@@ -53,6 +53,10 @@ transfer_metric = load_metric(script_dir, transfer_metric, 'Linear MPC')
 transfer_metric = load_metric(script_dir, transfer_metric, 'Geometric Control')
 transfer_metric = load_metric(script_dir, transfer_metric, 'LQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'GP-MPC')
+transfer_metric = load_metric(script_dir, transfer_metric, 'PPO')
+transfer_metric = load_metric(script_dir, transfer_metric, 'DPPO')
+transfer_metric = load_metric(script_dir, transfer_metric, 'SAC')
+transfer_metric = load_metric(script_dir, transfer_metric, 'PPO-MPC')
 
 metric_index = {
     'worst_generalization_performance': 0,
@@ -86,52 +90,125 @@ axis_legend_dict = {
 
 ID_numbers = {
     'robustness_obs': {
-        'PPO': 140,
-        'SAC': 110,
-        'DPPO': 90,
+        'PPO': 60,
+        'SAC': 200,
+        'DPPO': 80,
     },
     'robustness_proc': {
-        'PPO': 45,
-        'SAC': 35,
-        'DPPO': 35,
+        'PPO': 20,
+        'SAC': 14,
+        'DPPO': 25,
     },
     'robustness_param': {
-        'PPO': 5.0,
-        'SAC': 5,
-        'DPPO': 5,
+        'PPO': 200,
+        'SAC': 200,
+        'DPPO': 200,
     },
     'worst_generalization_performance': {
-        'PPO': 0.05,
-        'SAC': 0.084,
-        'DPPO': 0.07
+        'PPO': 0.054727893216329365,
+        'SAC': 0.02443952134274480,
+        'DPPO': 0.05276080159023642
     }
 }
 
 ID_numbers_abs = {
     'robustness_obs': {
-        'PPO': 60,
-        'SAC': 35,
-        'DPPO': 80,
+        'PPO': 100,
+        'SAC': 0,
+        'DPPO': 100,
     },
     'robustness_proc': {
-        'PPO': 20,
-        'SAC': 7,
+        'PPO': 35,
+        'SAC': 0,
         'DPPO': 30,
     },
     'robustness_param': {
-        'PPO': 2.4,
-        'SAC': 4.0,
-        'DPPO': 5.0,
+        'PPO': 200,
+        'SAC': 0.01,
+        'DPPO': 200,
     },
     'worst_generalization_performance': {
-        'PPO': 0.043,
-        'SAC': 0.084,
-        'DPPO': 0.07
+        'PPO': 0.054727893216329365,
+        'SAC': 0.02443952134274480,
+        'DPPO': 0.05276080159023642
     }
 }
 
 if robustness_type == 'abs':
     ID_numbers = ID_numbers_abs
+
+def load_robustness_failure_points():
+    """Load robustness failure points from process_robustness_data.py results."""
+    import json
+    from pathlib import Path
+    
+    # Try to load the consolidated failure results
+    script_dir = os.path.dirname(__file__)
+    data_dir = Path(script_dir) / 'data'
+    consolidated_file = data_dir / 'robustness_failure_points.json'
+    
+    if not consolidated_file.exists():
+        print(f"Warning: Failure results file not found at {consolidated_file}")
+        print("Using hardcoded values. Run process_robustness_data.py for all noise types to generate failure data.")
+        return {}
+    
+    try:
+        with open(consolidated_file, 'r') as f:
+            failure_data = json.load(f)
+        
+        print(f"Loaded failure results from: {consolidated_file}")
+        return failure_data
+    except Exception as e:
+        print(f"Error loading failure results: {e}")
+        print("Using hardcoded values.")
+        return {}
+
+def update_metrics_with_failure_data(metrics_data, failure_data, robustness_type):
+    """Update metrics_data with failure points from process_robustness_data.py results."""
+    
+    if not failure_data:
+        print("No failure data available, using existing hardcoded values.")
+        return metrics_data
+    
+    # Choose the appropriate failure type
+    if robustness_type == 'abs':
+        failures = failure_data.get('absolute_failures', {})
+        print("Using absolute failure thresholds (0.25m RMSE)")
+    else:
+        failures = failure_data.get('relative_failures', {})
+        print("Using relative failure thresholds (200% degradation)")
+    
+    # Map noise types to metric names
+    noise_to_metric = {
+        'obs_noise': 'robustness_obs',
+        'proc_noise': 'robustness_proc',  
+        'param': 'robustness_param'
+    }
+    
+    if robustness_type == 'abs':
+        noise_to_metric = {
+            'obs_noise': 'abs_robustness_obs',
+            'proc_noise': 'abs_robustness_proc',
+            'param': 'abs_robustness_param'
+        }
+    
+    # Update metrics for each noise type
+    for noise_type, metric_name in noise_to_metric.items():
+        if noise_type in failures:
+            print(f"\nUpdating {metric_name} from {noise_type} failure data:")
+            
+            for method, failure_point in failures[noise_type].items():
+                if method in metrics_data:
+                    old_value = metrics_data[method][metric_name]
+                    metrics_data[method][metric_name] = failure_point
+                    print(f"  {method:15}: {old_value} -> {failure_point}")
+                else:
+                    print(f"  Warning: Method '{method}' not found in metrics_data")
+    
+    return metrics_data
+
+# Load failure data and update metrics
+failure_data = load_robustness_failure_points()
 
 def plot_id_number(ax, metric_name, model_name, angle, plot_colors, ID_numbers, ID_numbers_norm, small_text_size):
     """
@@ -274,7 +351,10 @@ def spider(df,
             ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], ID_numbers['robustness_proc'][model_name], size=small_text_size)
             ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], ID_numbers['robustness_obs'][model_name], size=small_text_size)
             ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], ID_numbers['robustness_param'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['worst_generalization_performance']], values_ID[metric_index['worst_generalization_performance']], ID_numbers['worst_generalization_performance'][model_name], size=small_text_size)
+            # Format worst_generalization_performance with 2 decimal places
+            worst_gen_value = ID_numbers['worst_generalization_performance'][model_name]
+            formatted_worst_gen = f'{worst_gen_value:.2f}' if isinstance(worst_gen_value, float) else str(worst_gen_value)
+            ax.text(angles[metric_index['worst_generalization_performance']], values_ID[metric_index['worst_generalization_performance']], formatted_worst_gen, size=small_text_size)
 
         # customize the text
         for _x, _y, t in zip(angles, values, actual_values):
@@ -362,6 +442,7 @@ for method in methods:
         'abs_robustness_param': 0,
     }
 
+######################## Nominal ###############################
 # Fill in the data
 # GP-MPC
 # metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
@@ -423,59 +504,56 @@ metrics_data['F-MPC']['abs_robustness_proc'] = 7
 metrics_data['F-MPC']['abs_robustness_param'] = 5.0
 
 # PPO
-metrics_data['PPO']['worst_generalization_performance'] = max(0.1623562128527632,  
-                                                              0.1497925874584164)
-metrics_data['PPO']['performance'] = 0.01292012481549391
+metrics_data['PPO']['worst_generalization_performance'] = max(transfer_metric['PPO']['rmse'][0], transfer_metric['PPO']['rmse'][-1])
+metrics_data['PPO']['performance'] = transfer_metric['PPO']['rmse'][2]
 metrics_data['PPO']['inference_time'] = 7.31e-5
 metrics_data['PPO']['model_complexity'] = 3
 metrics_data['PPO']['sampling_complexity'] = 739200
 metrics_data['PPO']['robustness_obs'] = 14
 metrics_data['PPO']['robustness_proc'] = 4
-metrics_data['PPO']['robustness_param'] = 1.6
+metrics_data['PPO']['robustness_param'] = 1.5
 metrics_data['PPO']['abs_robustness_obs'] = 60
 metrics_data['PPO']['abs_robustness_proc'] = 16
-metrics_data['PPO']['abs_robustness_param'] = 5.0
+metrics_data['PPO']['abs_robustness_param'] = 6.0
 
 # SAC
-metrics_data['SAC']['worst_generalization_performance'] = max(0.08555534895458854, 
-                                                              0.07275009863780316)
-metrics_data['SAC']['performance'] = 0.010062888932823382
+metrics_data['SAC']['worst_generalization_performance'] = max(transfer_metric['SAC']['rmse'][0], transfer_metric['SAC']['rmse'][-1])
+metrics_data['SAC']['performance'] = transfer_metric['SAC']['rmse'][2]
 metrics_data['SAC']['inference_time'] = 8.72e-5
 metrics_data['SAC']['model_complexity'] = 3
 metrics_data['SAC']['sampling_complexity'] = 250800
-metrics_data['SAC']['robustness_obs'] = 60
+metrics_data['SAC']['robustness_obs'] = 45
 metrics_data['SAC']['robustness_proc'] = 4
-metrics_data['SAC']['robustness_param'] = 1.8
+metrics_data['SAC']['robustness_param'] = 2.5
 metrics_data['SAC']['abs_robustness_obs'] = 200
-metrics_data['SAC']['abs_robustness_proc'] = 8
-metrics_data['SAC']['abs_robustness_param'] = 4.5
+metrics_data['SAC']['abs_robustness_proc'] = 7
+metrics_data['SAC']['abs_robustness_param'] = 5.0
 
 # DPPO
-metrics_data['DPPO']['worst_generalization_performance'] = max(0.14182353098764516, 
-                                                               0.1659762747503099)
-metrics_data['DPPO']['performance'] = 0.017101483201360564
+metrics_data['DPPO']['worst_generalization_performance'] = max(transfer_metric['DPPO']['rmse'][0], transfer_metric['DPPO']['rmse'][-1])
+metrics_data['DPPO']['performance'] = transfer_metric['DPPO']['rmse'][2]
 metrics_data['DPPO']['inference_time'] = 7.28e-5
 metrics_data['DPPO']['model_complexity'] = 3
 metrics_data['DPPO']['sampling_complexity'] = 712800
-metrics_data['DPPO']['robustness_obs'] = 20
-metrics_data['DPPO']['robustness_proc'] = 6
+metrics_data['DPPO']['robustness_obs'] = 12
+metrics_data['DPPO']['robustness_proc'] = 4
 metrics_data['DPPO']['robustness_param'] = 2.0
-metrics_data['DPPO']['abs_robustness_obs'] = 90
-metrics_data['DPPO']['abs_robustness_proc'] = 18
-metrics_data['DPPO']['abs_robustness_param'] = 200
+metrics_data['DPPO']['abs_robustness_obs'] = 40
+metrics_data['DPPO']['abs_robustness_proc'] = 14
+metrics_data['DPPO']['abs_robustness_param'] = 4.0
 
 # PPO-MPC
-metrics_data['PPO-MPC']['worst_generalization_performance'] = max(0.02657339, 0.00595736)
-metrics_data['PPO-MPC']['performance'] = 0.00906875984280484
+metrics_data['PPO-MPC']['worst_generalization_performance'] = max(transfer_metric['PPO-MPC']['rmse'][0], transfer_metric['PPO-MPC']['rmse'][-1])
+metrics_data['PPO-MPC']['performance'] = transfer_metric['PPO-MPC']['rmse'][2]
 metrics_data['PPO-MPC']['inference_time'] = 5.5e-4
 metrics_data['PPO-MPC']['model_complexity'] = 1
 metrics_data['PPO-MPC']['sampling_complexity'] = 224400
+metrics_data['PPO-MPC']['robustness_obs'] = 35
 metrics_data['PPO-MPC']['robustness_proc'] = 3
-metrics_data['PPO-MPC']['robustness_obs'] = 40
-metrics_data['PPO-MPC']['robustness_param'] = 1.2
-metrics_data['PPO-MPC']['abs_robustness_obs'] = 100
-metrics_data['PPO-MPC']['abs_robustness_proc'] = 7
-metrics_data['PPO-MPC']['abs_robustness_param'] = 5.
+metrics_data['PPO-MPC']['robustness_param'] = 2.0
+metrics_data['PPO-MPC']['abs_robustness_obs'] = 200
+metrics_data['PPO-MPC']['abs_robustness_proc'] = 9
+metrics_data['PPO-MPC']['abs_robustness_param'] = 7.
 
 # PID
 metrics_data['Geometric Control']['worst_generalization_performance'] = max(transfer_metric['Geometric Control']['rmse'][0], transfer_metric['Geometric Control']['rmse'][-1])
@@ -515,6 +593,9 @@ metrics_data['LQR']['robustness_param'] = 5.0
 metrics_data['LQR']['abs_robustness_obs'] = 60
 metrics_data['LQR']['abs_robustness_proc'] = 14
 metrics_data['LQR']['abs_robustness_param'] = 5.0
+
+# Update metrics with failure data from process_robustness_data.py
+metrics_data = update_metrics_with_failure_data(metrics_data, failure_data, robustness_type)
 
 max_values = {key: max([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
