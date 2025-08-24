@@ -2,20 +2,20 @@
 
 # SYS='cartpole'
 # SYS='quadrotor_2D'
-SYS='quadrotor_2D_attitude'
-# SYS='quadrotor_3D'
+# SYS='quadrotor_2D_attitude'
+SYS='quadrotor_3D_attitude'
 
 # TASK='stab'
 TASK='track'
 
 # ALGO='q_mpc'
 # ALGO='td3_mpc'
-# ALGO='ppo_mpc'
-ALGO='ppo_vmpc'
+ALGO='ppo_mpc'
+# ALGO='ppo_vmpc'
 # ALGO='appo_mpc'
 # ALGO='sac_mpc'
 
-EXP_NAME='ppo_vmpc'
+EXP_NAME='test'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -31,7 +31,7 @@ do
         --task ${SYS_NAME} \
         --overrides \
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-            ./config_overrides/${SYS}/${SYS}_${TASK}_mpc.yaml \
+            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./Results/${EXP_NAME} \
         --tag ${SYS}_${ALGO}_data \
         --seed ${SEED} \

@@ -14,7 +14,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
+def run(gui=False, plot=True, n_episodes=1, n_steps=None, curr_path='.'):
     """Main function to run RL experiments.
 
     Args:
@@ -129,7 +129,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
     # with open(f'./ppo_mpc_safety_config_results.pkl', 'wb') as f:
     #     pickle.dump(results, f)
 
-    if plot is False:
+    if plot is True:
         if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3
@@ -146,6 +146,11 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
             graph3_1 = 0
             graph3_2 = 4
         elif system == 'quadrotor_4D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+        elif system == 'quadrotor_9D':
             graph1_1 = 4
             graph1_2 = 5
             graph3_1 = 0

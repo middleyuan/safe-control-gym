@@ -906,6 +906,7 @@ class Quadrotor(BaseAviary):
         done = self._get_done()
         info = self._get_info()
         obs, rew, done, info = super().after_step(obs, rew, done, info)
+        print(obs, rew, done, info)
         return obs, rew, done, info
 
     def render(self, mode='human', close=False):
@@ -1302,7 +1303,7 @@ class Quadrotor(BaseAviary):
             # params_acc = prior_prop.get('params_acc', [-0.2039, 0.8, 0.076])
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
-            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280] )
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
             # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
             f_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
@@ -1326,6 +1327,23 @@ class Quadrotor(BaseAviary):
                                f_dot)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
+            lr_param = cs.MX.sym('learnable_param', 12)
+            parameterized_X_dot = cs.vertcat(
+                x_dot,
+                1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                y_dot,
+                1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                z_dot,
+                1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                phi_dot,
+                theta_dot,
+                psi_dot,
+                lr_param[0]*params_roll_rate[0] * phi + lr_param[1]*params_roll_rate[1] * phi_dot + lr_param[2]*params_roll_rate[2] * R_c,
+                lr_param[3]*params_pitch_rate[0] * theta + lr_param[4]*params_pitch_rate[1] * theta_dot + lr_param[5]*params_pitch_rate[2] * P_c,
+                lr_param[6]*params_yaw_rate[0] * psi + lr_param[7]*params_yaw_rate[1] * psi_dot + lr_param[8]*params_yaw_rate[2] * Y_c,
+                (lr_param[9]*params_acc[1] * (T_c + lr_param[10]*params_acc[0]) - force_motor) / lr_param[11]*params_acc[2]
+            )
 
         # Expand Q and R to be full matrices.
         self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
@@ -1931,6 +1949,7 @@ class Quadrotor(BaseAviary):
                 wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
                     0] - 1)  # +1 because state has already advanced but counter not incremented.
                 state_error = obs - self.X_GOAL[wp_idx]
+                print(self.X_GOAL[wp_idx])
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             rew = -dist
