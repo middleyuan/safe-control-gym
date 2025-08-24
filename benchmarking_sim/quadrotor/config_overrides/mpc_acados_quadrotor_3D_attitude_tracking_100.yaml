@@ -11,29 +11,29 @@ algo_config:
   #   - 0.1
   #   - 0.5
   #   - 0.001
-  horizon: 25
+  horizon: 30
   # q_mpc: [18, 0.1, 18, 0.5, 0.5, 1.0]
   # q_mpc: [18, 0.1, 18, 0.1, 18, 0.1, 0.5, 0.5, 0.001, 0.001]
   # r_mpc: [10., 3., 3.]
-  q_mpc:
-  - 10
-  - 1.0
-  - 10
-  - 1.0
-  - 10
-  - 1.0
-  - 2.0
-  - 2.0
-  - 2.0
+  q_mpc:  
+  - 50
   - 0.5
+  - 50
   - 0.5
+  - 50
   - 0.5
-  - 3
+  - 5
+  - 5
+  - 5
+  - 0.001
+  - 0.001
+  - 0.001
+  - 5
   r_mpc:
-  - 3
-  - 3
-  - 3
-  - 3
+  - 5
+  - 5
+  - 5
+  - 5
   # r_mpc: [10, 10]
   # Prior info
   # prior_info:
@@ -50,7 +50,7 @@ algo_config:
   #   prior_prop_rand_info: null
   warmstart: True
   soft_constraints: True
-  # use_RTI: True
+  use_RTI: True
   output_dir: ./mpc_acados/results
 
 

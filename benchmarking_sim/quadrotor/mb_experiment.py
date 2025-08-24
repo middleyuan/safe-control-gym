@@ -60,12 +60,12 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        # ALGO = 'mpc_acados'
+        ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
-        ALGO = 'pid'
+        # ALGO = 'pid'
         # ALGO = 'fmpc'
         ADDITIONAL = ''
         CTRL_ADD = ''
@@ -79,9 +79,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     SYS = 'quadrotor_3D_attitude'
     TASK = 'tracking'
     # ADDITIONAL = '_10' 
-    # ADDITIONAL = '_delay'
-    ADDITIONAL = ''
-    CTRL_ADD = ADDITIONAL
+    ADDITIONAL = '_delay'
+    # ADDITIONAL = ''
+    # CTRL_ADD = ADDITIONAL
+    CTRL_ADD = ''
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
@@ -282,6 +283,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         with open(f'./{config.output_dir}/rand_hist.txt', 'w') as file:
             for key, value in ctrl.rand_hist.items():
                 file.write(f'{key}: {value}\n')
+    
+    # print final rmse
+    print(f'Final RMSE: {results["metrics"]["rmse"]:.4f} m')
+    print(f'Final average return: {results["metrics"]["average_return"]:.4f}')
 
 # def plot_quad_eval(state_stack, input_stack, clipped_action_stack, env, save_path=None):
 def plot_quad_eval(res, env, save_path=None):
@@ -331,6 +336,7 @@ def plot_quad_eval(res, env, save_path=None):
 
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'state_trajectories.png'))
+        plt.savefig('./state_trajectories.png')
 
     # Plot inputs
     _, axs = plt.subplots(model.nu, figsize=(8, model.nu*1))
@@ -350,6 +356,7 @@ def plot_quad_eval(res, env, save_path=None):
 
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'input_trajectories.png'))
+        plt.savefig('./input_trajectories.png')
 
     # plot the figure-eight
     fig, axs = plt.subplots(2, figsize=(8, 8))
@@ -377,6 +384,7 @@ def plot_quad_eval(res, env, save_path=None):
 
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'state_xz_path.png'))
+        plt.savefig('./state_xz_path.png')
         print(f'Plots saved to {save_path}')
     if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
                          QuadType.THREE_D_ATTITUDE_10,
@@ -394,6 +402,7 @@ def plot_quad_eval(res, env, save_path=None):
 
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'state_xy_path.png'))
+            plt.savefig('./state_xy_path.png')
             
     # plot constraint violations
     fig, axs = plt.subplots(len(constraint_stack[0]), figsize=(8, len(constraint_stack[0])*1))
@@ -426,7 +435,50 @@ def plot_quad_eval(res, env, save_path=None):
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'constraint_trajectories.png'))
     
-
+    # Plot individual x, y, z tracking errors and combined error
+    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+                         QuadType.THREE_D_ATTITUDE_10,
+                         QuadType.THREE_D_ATTITUDE_DELAY]:
+        fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+        
+        # Calculate individual tracking errors
+        x_error = np.abs(np.array(state_stack).transpose()[x_idx, 0:plot_length] - 
+                         reference.transpose()[x_idx, 0:plot_length])
+        y_error = np.abs(np.array(state_stack).transpose()[y_idx, 0:plot_length] - 
+                         reference.transpose()[y_idx, 0:plot_length])
+        z_error = np.abs(np.array(state_stack).transpose()[z_idx, 0:plot_length] - 
+                         reference.transpose()[z_idx, 0:plot_length])
+        
+        # Plot x tracking error
+        axs[0, 0].plot(times, x_error)
+        axs[0, 0].set_xlabel('time [s]')
+        axs[0, 0].set_ylabel('x tracking error [m]')
+        axs[0, 0].set_title(f'X Tracking Error (RMSE: {np.sqrt(np.mean(x_error**2)):.4f} m)')
+        
+        # Plot y tracking error
+        axs[0, 1].plot(times, y_error)
+        axs[0, 1].set_xlabel('time [s]')
+        axs[0, 1].set_ylabel('y tracking error [m]')
+        axs[0, 1].set_title(f'Y Tracking Error (RMSE: {np.sqrt(np.mean(y_error**2)):.4f} m)')
+        
+        # Plot z tracking error
+        axs[1, 0].plot(times, z_error)
+        axs[1, 0].set_xlabel('time [s]')
+        axs[1, 0].set_ylabel('z tracking error [m]')
+        axs[1, 0].set_title(f'Z Tracking Error (RMSE: {np.sqrt(np.mean(z_error**2)):.4f} m)')
+        
+        # Plot combined tracking error
+        combined_error = np.sqrt(x_error**2 + y_error**2 + z_error**2)
+        axs[1, 1].plot(times, combined_error)
+        axs[1, 1].set_xlabel('time [s]')
+        axs[1, 1].set_ylabel('combined tracking error [m]')
+        axs[1, 1].set_title(f'Combined Tracking Error (RMSE: {np.sqrt(np.mean(combined_error**2)):.4f} m)')
+        
+        fig.tight_layout()
+        
+        if save_path is not None:
+            plt.savefig(os.path.join(save_path, 'xyz_tracking_errors.png'))
+            plt.savefig('./xyz_tracking_errors.png')
 
     # plt.show()
 

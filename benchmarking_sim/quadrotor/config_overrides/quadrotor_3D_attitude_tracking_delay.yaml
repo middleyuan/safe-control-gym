@@ -12,6 +12,7 @@ task_config:
     init_z_dot: 0
     init_theta: 0
     init_theta_dot: 0
+    init_tau: 0.36
   # randomized_init: True
   randomized_init: False
   randomized_inertial_prop: False
@@ -26,9 +27,9 @@ task_config:
     trajectory_scale: 1.0
 
   inertial_prop:
-    M: 0.033
+    M: 0.037
 
-  episode_len_sec: 30
+  episode_len_sec: 11
   cost: quadratic
 
   constraints:
