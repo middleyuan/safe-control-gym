@@ -906,7 +906,6 @@ class Quadrotor(BaseAviary):
         done = self._get_done()
         info = self._get_info()
         obs, rew, done, info = super().after_step(obs, rew, done, info)
-        print(obs, rew, done, info)
         return obs, rew, done, info
 
     def render(self, mode='human', close=False):
@@ -1949,7 +1948,6 @@ class Quadrotor(BaseAviary):
                 wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
                     0] - 1)  # +1 because state has already advanced but counter not incremented.
                 state_error = obs - self.X_GOAL[wp_idx]
-                print(self.X_GOAL[wp_idx])
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             rew = -dist
