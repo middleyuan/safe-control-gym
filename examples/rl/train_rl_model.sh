@@ -9,10 +9,27 @@ SYS='quadrotor_3D_attitude'
 # TASK='stab'
 TASK='track'
 
+
 ALGO='ppo'
 # ALGO='sac'
 # ALGO='dppo'
 # ALGO='safe_explorer_ppo'
+
+# ENV parameters for each algorithm
+if [ "${ALGO}" == 'ppo' ]; then
+    # PPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,5.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+    # Q=(3.0,0.1,3.0,0.1,3.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+elif [ "${ALGO}" == 'dppo' ]; then
+    # DPPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,5.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+elif [ "${ALGO}" == 'sac' ]; then
+    # SAC env parameters
+    # shellcheck disable=SC2054
+    Q=(3.0,0.1,3.0,0.1,3.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+fi
 
 EXP_NAME='test'
 
@@ -46,7 +63,7 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-SEEDS=(11)
+SEEDS=(30)
 
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do
@@ -63,8 +80,9 @@ for SEED in "${SEEDS[@]}"; do
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
-            task_config.normalized_rl_action_space=False 
-            # task_config.episode_len_sec=${SEED}
+            task_config.normalized_rl_action_space=False \
+            task_config.episode_len_sec=${SEED} \
+            task_config.rew_state_weight=${Q}
 done
 
 # Move the newly trained unsafe model.

@@ -53,7 +53,20 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
     elif [ "${TRAIN}" == 'generalization' ]; then
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_gen.yaml"
-    elif [ "${TRAIN}" == 'robustness_ob5' ]; then
+    elif [ "${TRAIN}" == 'robustness_ob5' ]; then# ENV parameters for each algorithm
+if [ "${ALGO}" == 'ppo' ]; then
+    # PPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'dppo' ]; then
+    # DPPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'sac' ]; then
+    # SAC env parameters
+    # shellcheck disable=SC2054
+    Q=(10.0,0.1,10.0,0.1,0.1,0.001)
+fi
         CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ob5.yaml"
     elif [ "${TRAIN}" == 'robustness_ps3' ]; then
@@ -84,7 +97,20 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
             --algo ${ALGO} \
             --task ${SYS_NAME} \
             --overrides \
-                "${CONFIG1}" \
+                "${CONFIG1}" \# ENV parameters for each algorithm
+if [ "${ALGO}" == 'ppo' ]; then
+    # PPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'dppo' ]; then
+    # DPPO env parameters
+    # shellcheck disable=SC2054
+    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+elif [ "${ALGO}" == 'sac' ]; then
+    # SAC env parameters
+    # shellcheck disable=SC2054
+    Q=(10.0,0.1,10.0,0.1,0.1,0.001)
+fi
                 "${CONFIG2}" \
             --output_dir ./Results/${EXP_NAME}/${TRAIN} \
             --tag ${SYS}_${ALGO}_data \

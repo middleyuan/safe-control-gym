@@ -20,8 +20,25 @@ else
     SYS_NAME='quadrotor'
 fi
 EXP_DATA='test'
-SEED=11
-SUBSEED=14
+SEED=1
+SUBSEED=10
+# Set episode_len_sec and trajectory file based on SEED
+if [ "$SEED" -eq 1 ]; then
+    EPISODE_LEN=23.24
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy"
+elif [ "$SEED" -eq 2 ]; then
+    EPISODE_LEN=29.05
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_f.npy"
+elif [ "$SEED" -eq 3 ]; then
+    EPISODE_LEN=43.575
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_3_vf_f.npy"
+elif [ "$SEED" -eq 0 ]; then
+    EPISODE_LEN=25.259999999999998
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+else
+    EPISODE_LEN=30  # Default value
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf.npy"  # Default trajectory
+fi
 EVAL='performance'
 # RL Experiment
 python3 ./rl_experiment.py \
@@ -37,4 +54,6 @@ python3 ./rl_experiment.py \
                 algo_config.training=False \
                 task_config.normalized_rl_action_space=False \
                 task_config.randomized_init=True \
-            --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data_seed${SEED}/seed${SUBSEED}_*/
+                task_config.episode_len_sec=${EPISODE_LEN} \
+                task_config.task_info.custom_snap_ref_traj=${TRAJ_FILE} \
+            --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data_obstacle_seed${SEED}/seed${SUBSEED}_*/

@@ -1,0 +1,46 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  # quad_type: 9
+  # normalized_rl_action_space: False
+  init_state:
+    init_x: 0
+    init_x_dot: 0
+    init_z: 0.75
+    init_z_dot: 0
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  # task: traj_tracking
+  # task_info:
+  #   trajectory_type: figure8
+  #   num_cycles: 2
+  #   trajectory_plane: 'xy'
+  #   trajectory_position_offset: [0, 0, 1]
+  #   trajectory_scale: 1.0
+  task: traj_tracking
+  task_info:
+    trajectory_type: figure8
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0, 0, 1]
+    trajectory_scale: 1.0
+    custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+  inertial_prop:
+    M: 0.033
+  # episode_len_sec: 15
+  # episode_len_sec: 20
+  episode_len_sec: 27
+  # episode_len_sec: 40
+  # cost: rl_reward
+  cost: quadratic
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+  done_on_violation: False

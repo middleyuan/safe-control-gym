@@ -19,14 +19,16 @@ algo_config:
   critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 1320000
+  max_env_steps: 5280000
+  # max_env_steps: 2640000
   rollout_batch_size: 5
-  rollout_steps: 660
+  rollout_steps: 1320
   eval_batch_size: 10
 
   # misc
   log_interval: 13200
-  save_interval: 1320000
+  save_interval: 5280000
+  # max_env_steps: 2640000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True

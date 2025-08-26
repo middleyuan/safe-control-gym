@@ -1,0 +1,194 @@
+algo: ppo
+algo_config:
+  activation: relu
+  actor_lr: 0.0003
+  clip_obs: 10
+  clip_param: 0.2
+  clip_reward: 10
+  critic_lr: 0.0003
+  deque_size: 10
+  entropy_coef: 0.002
+  eval_batch_size: 10
+  eval_interval: 13200
+  eval_save_best: true
+  exploration_init: -0.5
+  gae_lambda: 0.92
+  gamma: 0.98
+  hidden_dim: 128
+  log_interval: 13200
+  max_env_steps: 5280000
+  max_grad_norm: 0.5
+  mini_batch_size: 256
+  norm_obs: false
+  norm_reward: false
+  num_checkpoints: 0
+  num_workers: 1
+  opt_epochs: 20
+  rollout_batch_size: 5
+  rollout_steps: 660
+  save_interval: 5280000
+  target_kl: 0.01
+  tensorboard: false
+  training: true
+  use_clipped_value: false
+  use_gae: true
+device: cuda
+experiment_type: basic
+kv_overrides:
+- task_config.randomized_init=True
+- task_config.normalized_rl_action_space=False
+- task_config.episode_len_sec=23.24
+- task_config.task_info.custom_snap_ref_traj=/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy
+- task_config.rew_state_weight=3.0,0.1,3.0,0.1,3.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001
+output_dir: ./Results/test/quadrotor_3D_attitude_ppo_data_obstacle_seed1/seed1_Aug-21-18-30-40_58feed9
+overrides:
+- ./config_overrides/quadrotor_3D_attitude/ppo_quadrotor_3D_attitude.yaml
+- ./config_overrides/quadrotor_3D_attitude/quadrotor_3D_attitude_track.yaml
+restore: null
+seed: 1
+tag: quadrotor_3D_attitude_ppo_data_obstacle_seed1
+task: quadrotor
+task_config:
+  adversary_disturbance: null
+  adversary_disturbance_offset: 0.0
+  adversary_disturbance_scale: 0.01
+  constraint_penalty: -1
+  constraints:
+  - constrained_variable: state
+    constraint_form: default_constraint
+  - constrained_variable: input
+    constraint_form: default_constraint
+  cost: rl_reward
+  ctrl_freq: 60
+  disturbances:
+    action:
+    - disturbance_func: white_noise
+      std:
+      - 0.021
+      - 0.078
+      - 0.071
+      - 0.064
+    observation:
+    - disturbance_func: white_noise
+      std:
+      - 1.31e-05
+      - 0.000509
+      - 1.42e-05
+      - 0.000523
+      - 1.47e-05
+      - 0.000591
+      - 0.00123
+      - 0.000611
+      - 0.000604
+      - 0.0525
+      - 0.0262
+      - 0.0253
+      - 0.0001
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+  done_on_out_of_bound: true
+  done_on_violation: false
+  episode_len_sec: 23.24
+  gui: false
+  inertial_prop:
+    M: 0.037
+  inertial_prop_randomization_info: null
+  info_in_reset: true
+  init_state:
+    init_x: 2.5
+    init_x_dot: 0
+    init_y: 1.35
+    init_y_dot: 0
+    init_z: 1.2
+    init_z_dot: 0
+    randomized_init: true
+  init_state_randomization_info:
+    init_p:
+      distrib: normal
+      scale: 0.03452115832640752
+    init_phi:
+      distrib: normal
+      scale: 0.0026984744060397532
+    init_psi:
+      distrib: normal
+      scale: 0.0023822834889102923
+    init_q:
+      distrib: normal
+      scale: 0.02387283406599296
+    init_r:
+      distrib: normal
+      scale: 0.03123258323211547
+    init_theta:
+      distrib: normal
+      scale: 0.0024088251667187467
+    init_x:
+      distrib: normal
+      scale: 0.0011629923113331312
+    init_x_dot:
+      distrib: normal
+      scale: 0.003635597781389117
+    init_y:
+      distrib: normal
+      scale: 0.001670549279531124
+    init_y_dot:
+      distrib: normal
+      scale: 0.004965500657569368
+    init_z:
+      distrib: normal
+      scale: 0.0024990695232428458
+    init_z_dot:
+      distrib: normal
+      scale: 0.010193088084183025
+  norm_act_scale: 0.1
+  normalized_rl_action_space: false
+  obs_goal_horizon: 1
+  physics: dyn_si_3d_delay
+  pyb_freq: 60
+  quad_type: 9
+  randomized_inertial_prop: false
+  randomized_init: true
+  rew_act_weight:
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  rew_exponential: true
+  rew_state_weight: !!python/tuple
+  - 3.0
+  - 0.1
+  - 3.0
+  - 0.1
+  - 3.0
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.001
+  - 0.001
+  - 0.001
+  - 0.001
+  task: traj_tracking
+  task_info:
+    custom_snap_ref_traj: /home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy
+    num_cycles: 1
+    trajectory_plane: xy
+    trajectory_position_offset:
+    - 0.0
+    - 0
+    - 0
+    trajectory_scale: 1.0
+    trajectory_type: snap_custom
+  use_constraint_penalty: false
+  verbose: false
+use_gpu: true

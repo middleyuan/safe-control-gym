@@ -234,7 +234,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False, curr_path=None, 
         plt.legend()
         plt.grid(True)
         errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
-        # plt.show()
+        plt.show()
         plt.savefig(f"{curr_path}/trajectory_diff.png")  # Save instead of show        errors = np.linalg.norm(actual_traj - ref_traj, axis=1)  # Euclidean distance at each step
         rmse = np.sqrt(np.mean(errors**2))
         print(f"2ndTrajectory RMSE: {rmse:.4f}")

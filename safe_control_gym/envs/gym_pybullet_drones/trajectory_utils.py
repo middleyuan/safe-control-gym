@@ -646,13 +646,13 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
     
 
 class TrajectoryPlanner:
-    def __init__(self, waypoint_list, string_list, N=30):
+    def __init__(self, waypoint_list, string_list, N=45):
         self.waypoint_list = waypoint_list
         self.string_list = string_list
         self.T = waypoint_list[-1]['time']  # Trajectory length in time
         self.N = N  # number of waypoints
         self.dt = self.T / N
-        self.string_discrete_point = 10
+        self.string_discrete_point = 6
         # # waypoints
         # length_w = len(waypoint_list)
         # self.start_loc = waypoint_list[0]['position']
