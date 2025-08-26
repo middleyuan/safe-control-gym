@@ -4,19 +4,28 @@ from pathlib import Path
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
 
-from benchmarking_sim.quadrotor.mb_experiment_rollout import run
+# Conversion constants
+STEPS_PER_SECOND = 60  # Number of environment steps per second for time conversion
 
 plot_colors = {
-    'GP-MPC': 'royalblue',
+    # 'GP-MPC': 'royalblue',
+    'GP-MPC': 'green',
     'PPO': 'darkorange',
     'SAC': 'red',
     'DPPO': 'pink',
-    'Geometric Control': 'darkgray',
-    'Linear MPC': 'green',
-    'Nonlinear MPC': 'cadetblue',
-    'F-MPC': 'darkblue',
-    'iLQR': 'slateblue',
-    'LQR': 'blueviolet',
+    'Geometric Control': 'grey',
+    # 'Linear MPC': 'green',
+    'Nonlinear MPC': 'teal',
+    # 'F-MPC': 'darkblue',
+    # 'iLQR': 'slateblue',
+    # 'LQR': 'blueviolet',
+    # 'Linear MPC': 'greenyellow',
+    'Linear MPC': 'lightgreen',
+    # 'Nonlinear MPC': 'lime',
+    'F-MPC': 'slateblue',
+    'iLQR': 'deepskyblue',
+    # 'iLQR': 'royalblue',
+    'LQR': 'powderblue',
     'PPO-MPC': 'tan',
     'MAX': 'none',
     'MIN': 'none',
@@ -46,14 +55,15 @@ def load_metric(script_dir, transfer_metric, method, tag=''):
     ctrl = tag_ctrl_list[method]
     res = np.load(
         f'{script_dir}/../data/{ctrl}{tag}_gen_results.npy', allow_pickle=True).item()
-    transfer_metric[method] = {'rmse': [], 'rmse_std': [], 'inference_time': []}
+    transfer_metric[method] = {'rmse': [], 'rmse_std': [], 'inference_time': [], 'inference_time_std': []}
     for T in episode_len_list:
         T = '_'+str(T)
         transfer_metric[method]['rmse'].append(res[T]['mean_rmse'])
         transfer_metric[method]['rmse_std'].append(res[T]['std_rmse'])
     transfer_metric[method]['rmse'] = np.array(transfer_metric[method]['rmse'])
     transfer_metric[method]['rmse_std'] = np.array(transfer_metric[method]['rmse_std'])
-    transfer_metric[method]['inference_time'] = np.mean(res['inference_time'])
+    transfer_metric[method]['inference_time'] = res['inference_time'] if 'inference_time' in res else 0.0
+    transfer_metric[method]['inference_time_std'] = res['inference_time_std'] if 'inference_time_std' in res else 0.0
     return transfer_metric
 
 def load_gym_data(data_dir):
@@ -122,6 +132,7 @@ def extract_rollouts(notebook_dir, data_folder, controller_name, additional=''):
     return traj_resutls, metrics, timing_data
 
 def run_rollouts(task_description):
+    from benchmarking_sim.quadrotor.mb_experiment_rollout import run
 
     additional = getattr(task_description, 'additional', '')
     start_seed = getattr(task_description, 'start_seed', 1)
@@ -152,17 +163,20 @@ def run_rollouts(task_description):
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None, 
                                  traj_color='skyblue', hull_color='lightblue',
-                                 alpha=0.5, padding_factor=1.1):
+                                 alpha=0.5, padding_factor=1.1, plot_second_half=False):
     '''Plot trajectories with convex hull showing variance over seeds.
     
     Args:
         ax (Axes): Matplotlib axes.
         traj_data (np.ndarray): Trajectory data of shape (num_seeds, num_steps, 6).
         padding_factor (float): Padding factor for the convex hull.
+        plot_second_half (bool): If True, plot only the second half of the trajectory.
     '''
-    num_seeds, num_steps, _ = traj_data.shape
-
-    print('traj data shape:', traj_data.shape)
+    if plot_second_half:
+        traj_data = traj_data[:, traj_data.shape[1] // 2:, :]
+    
+    _, num_steps, _ = traj_data.shape
+    # print('traj data shape:', traj_data.shape)
     mean_traj = np.mean(traj_data, axis=0)
     
     ax.plot(mean_traj[:, 0], mean_traj[:, 2], color=traj_color, label=label)

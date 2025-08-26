@@ -2,7 +2,7 @@ import sys
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plot_xz_trajectory_with_hull
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plot_xz_trajectory_with_hull, STEPS_PER_SECOND
 from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
@@ -240,7 +240,7 @@ fig.subplots_adjust(top=0.2)
 # plot the convex hull of each steps
 hull_alpha = 0.3
 plot_second_half = True  # Option to plot only the second half of the trajectory
-max_steps = eval(additional) * 60
+max_steps = eval(additional) * STEPS_PER_SECOND
 reference_idx = np.arange(0, max_steps, 1)
 if plot_second_half:
     reference_idx = reference_idx[int(max_steps / 2):]
