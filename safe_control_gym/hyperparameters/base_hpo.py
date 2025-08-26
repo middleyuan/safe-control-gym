@@ -304,6 +304,16 @@ class BaseHPO(ABC):
                 if (base_param in self.algo_config or base_param in self.task_config or (self.safety_filter is not None and base_param in self.sf_config)):
                     # If base parameter exists in algo_config as a list/array
                     index = int(index_str)
+                    
+                    # Special handling for PID 2D constraint before setting the parameter
+                    if (self.algo == 'pid' and self.task == 'quadrotor_2D_attitude' and 
+                        base_param in ['p_coeff_for', 'i_coeff_for', 'd_coeff_for', 'p_coeff_tor', 'i_coeff_tor', 'd_coeff_tor'] and 
+                        index == 1 and base_param in self.algo_config):
+                        # For y-axis (index 1), use the x-axis value (index 0) if it exists in params
+                        x_axis_param = f'{base_param}_0'
+                        if x_axis_param in params:
+                            param_value = params[x_axis_param]
+                    
                     if base_param in self.algo_config:
                         self.algo_config[base_param][index] = param_value
                     elif base_param in self.task_config:
@@ -384,6 +394,33 @@ class BaseHPO(ABC):
             params[hp] = self.cast_to_original_type_from_config(hp, params[hp])
 
         return params
+
+    def apply_constraints_to_params(self, params):
+        """
+        Apply constraint logic to parameters for logging/saving purposes.
+        This ensures that saved trial parameters reflect the actual constraints used.
+        
+        Args:
+            params (dict): Original hyperparameters.
+            
+        Returns:
+            dict: Constrained hyperparameters.
+        """
+        # Make a copy to avoid modifying the original
+        constrained_params = deepcopy(params)
+        
+        # Apply PID 2D constraint for saving purposes
+        if self.algo == 'pid' and self.task == 'quadrotor_2D_attitude':
+            # PID parameters that need 2D constraint: p_coeff_for, i_coeff_for, d_coeff_for
+            pid_params = ['p_coeff_for', 'i_coeff_for', 'd_coeff_for', 'p_coeff_tor', 'i_coeff_tor', 'd_coeff_tor']
+            
+            for pid_param in pid_params:
+                if pid_param in constrained_params and isinstance(constrained_params[pid_param], list):
+                    if len(constrained_params[pid_param]) >= 2:
+                        # Set y-axis (index 1) equal to x-axis (index 0)
+                        constrained_params[pid_param][1] = constrained_params[pid_param][0]
+        
+        return constrained_params
 
     def evaluate(self, params, seed_list=None):
         """

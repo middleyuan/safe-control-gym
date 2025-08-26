@@ -283,6 +283,7 @@ class HPO_Vizier(BaseHPO):
                 params = {key: val.value for key, val in optimal_trial.parameters._items.items()}
                 params = self.post_process_best_hyperparams(params)
                 params = self.add_unoptimized_hps(params)
+                params = self.apply_constraints_to_params(params)  # Apply constraints for accurate logging
                 
                 # Create filename with multiple objective values
                 objective_values = [
@@ -343,6 +344,7 @@ class HPO_Vizier(BaseHPO):
                 trial_params = {key: val.value for key, val in t.parameters._items.items()}
                 trial_params = self.post_process_best_hyperparams(trial_params)
                 trial_params = self.add_unoptimized_hps(trial_params)
+                trial_params = self.apply_constraints_to_params(trial_params)  # Apply constraints for accurate logging
                 parameter_keys.update(trial_params.keys())
                 
                 trial_data.append((trial_number, trial_objective_values, trial_params))

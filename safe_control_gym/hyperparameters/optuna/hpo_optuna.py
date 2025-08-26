@@ -67,7 +67,7 @@ class HPO_Optuna(BaseHPO):
         """
 
         # sample candidate hyperparameters
-        sampled_hyperparams = HYPERPARAMS_SAMPLER[self.search_space_key](trial, self.state_dim, self.action_dim)
+        sampled_hyperparams = HYPERPARAMS_SAMPLER[self.search_space_key](trial, self.state_dim, self.action_dim, self.task, self.algo)
 
         # log trial number
         self.logger.info('Trial number: {}'.format(trial.number))
@@ -209,6 +209,7 @@ class HPO_Optuna(BaseHPO):
                 for i in range(min(self.hpo_config.save_n_best_hps, len(self.study.trials))):
                     params = trials[i].params
                     params = self.post_process_best_hyperparams(params)
+                    params = self.apply_constraints_to_params(params)  # Apply constraints for accurate logging
                     with open(f'{output_dir}/hyperparameters_trial{len(trials)}_{trials[i].value:.4f}.yaml', 'w')as f:
                         yaml.dump(params, f, default_flow_style=False)
             else:
@@ -216,6 +217,7 @@ class HPO_Optuna(BaseHPO):
                 for i in range(len(self.study.best_trials)):
                     params = best_trials[i].params
                     params = self.post_process_best_hyperparams(params)
+                    params = self.apply_constraints_to_params(params)  # Apply constraints for accurate logging
                     objective_values = [best_trials[i].values[j] for j in range(len(self.hpo_config.objective))]
                     with open(f'{output_dir}/hyperparameters_trial{len(trials)}_{objective_values}.yaml', 'w')as f:
                         yaml.dump(params, f, default_flow_style=False)
