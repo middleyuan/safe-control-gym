@@ -5,14 +5,15 @@ Usage:
     python plot_generalization.py [option] [--include-dr]
     
 Arguments:
-    option: 'all', 'control', or 'rl' (default: 'all')
-    --include-dr: Include domain randomization variants (optional)
+    option: 'all', 'control', 'rl', or 'dr' (default: 'all')
+    --include-dr: Include domain randomization variants (optional, ignored when option is 'dr')
     
 Examples:
     python plot_generalization.py all           # Plot all methods (no DR)
     python plot_generalization.py rl --include-dr  # Plot RL methods including domain randomization
     python plot_generalization.py control       # Plot only control methods
     python plot_generalization.py rl           # Plot only RL methods
+    python plot_generalization.py dr           # Plot only domain randomization methods
 """
 
 import numpy as np 
@@ -81,7 +82,11 @@ else:
 # Check for domain randomization flag
 include_domain_rand = '--include-dr' in sys.argv or '--domain-rand' in sys.argv
 
-assert option in ['all', 'control', 'rl'], f"Invalid option: {option}. Must be one of ['all', 'control', 'rl']"
+# If option is 'dr', force inclusion of domain randomization and ignore the flag
+if option == 'dr':
+    include_domain_rand = True
+
+assert option in ['all', 'control', 'rl', 'dr'], f"Invalid option: {option}. Must be one of ['all', 'control', 'rl', 'dr']"
 ##############################################
 control_list = [
     'Geometric Control', 'Linear MPC', 'Nonlinear MPC',
@@ -119,6 +124,8 @@ if option == 'control':
     plot_list = control_list
 elif option == 'rl':
     plot_list = rl_list + rl_dr_list
+elif option == 'dr':
+    plot_list = rl_dr_list  # Only domain randomization variants
 elif option == 'all':
     plot_list = control_list + rl_list + rl_dr_list
 
@@ -184,7 +191,12 @@ for method in plot_list:
 ax.axvline(x=5.5, linestyle='-.', color='gray')
 ax.text(0.81, 0.75, "Nominal Task", transform=ax.transAxes, fontsize=10, verticalalignment='center', horizontalalignment='right')
 
-# Only create inset for 'all' and 'control' options
+# Add additional vertical lines for DR option
+if option == 'dr':
+    ax.axvline(x=7.5, linestyle='-.', color='gray')
+    ax.axvline(x=4.5, linestyle='-.', color='gray')
+
+# Only create inset for 'all' and 'control' options (not for 'dr' only)
 if option in ['all', 'control']:
     # Create a zoomed-in inset plot
     fill_alpha = 0.2
@@ -211,7 +223,12 @@ if option in ['all', 'control']:
 ax.set_ylim(0, 0.17)
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.2f}'))
 ax.invert_xaxis()
-# ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+# Add legend for 'dr' option since there will be fewer methods to display
+if option == 'dr':
+    ax.legend(loc='best')
+
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 ax.set_xlabel("Figure-Eight Trajectory Period (s)")
 ax.set_ylabel("RMSE [m]")
 
