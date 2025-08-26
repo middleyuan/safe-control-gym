@@ -7,7 +7,7 @@ hpo_config:
   repetitions: 5 # number of samples of performance for each objective query
   n_episodes: 5 # number of episodes to evaluate each policy
   use_gpu: True
-  seed: 24
+  seed: 3
   save_n_best_hps: 1
   # budget
   trials: 50
@@ -15,35 +15,6 @@ hpo_config:
 
   # hyperparameters
   hps_config:
-    p_coeff_for: [.4, .4, 1.25]
+    p_coeff_for: [0.622, 0.622, 1.6]
     i_coeff_for: [.05, .05, .05]
-    d_coeff_for: [.2, .2, .5]
-
-    p_coeff_tor: [70000., 70000., 60000.]
-    i_coeff_tor: [.0, .0, 500.]
-    d_coeff_tor: [20000., 20000., 12000.]
-  ob_ns=5:
-    d_coeff_for:
-    - 0.46898134808245423
-    - 0.02745734534863471
-    - 1.376078166996502
-    d_coeff_tor:
-    - 15635.158926507713
-    - 20000.0
-    - 12223.649568108076
-    i_coeff_for:
-    - 0.001
-    - 1.1083241585618513
-    - 2.9694125643864226
-    i_coeff_tor:
-    - 158.3383973113913
-    - 326.44515274380717
-    - 352.1972188905085
-    p_coeff_for:
-    - 0.7791828177509557
-    - 0.001
-    - 5.0
-    p_coeff_tor:
-    - 50998.289413837105
-    - 79988.79332221144
-    - 78105.26307739614
+    d_coeff_for: [.4, .4, 1.056]

@@ -16,27 +16,75 @@ hpo_config:
   # hyperparameters
   hps_config:
     # model args
-    hidden_dim: 128
-    activation: relu
+    hidden_dim: 256
+    activation: "relu"
 
     # loss args
-    gamma: 0.98
-    gae_lambda: 0.92
+    gamma: 0.99
+    use_gae: True
+    gae_lambda: 0.95
     clip_param: 0.2
     target_kl: 0.01
-    entropy_coef: 0.002
+    entropy_coef: 0.001  # 0.008
     exploration_init: -0.5
 
     # optim args
     opt_epochs: 20
     mini_batch_size: 256
-    actor_lr: 0.001
-    critic_lr: 0.001
+    actor_lr: 0.0003
+    critic_lr: 0.0003
 
     # runner args
-    max_env_steps: 660000
-    rollout_batch_size: 5
+    max_env_steps: 1584000
+    rollout_batch_size: 10
+    rollout_steps: 330
+    eval_batch_size: 10
+
+    # misc
+    log_interval: 13200
+    save_interval: 1584000
+    num_checkpoints: 0
+    eval_interval: 13200
+    eval_save_best: True
+    tensorboard: True
 
     # objective
-    rew_state_weight: [3., .1, 3., .1, .1, 0.001]
+    rew_state_weight: [5., .1, 5., .1, .1, 0.001]
+    rew_act_weight: [.1, .1]
+
+  dr_init:
+    # model args
+    hidden_dim: 256
+    activation: "relu"
+
+    # loss args
+    gamma: 0.9
+    use_gae: False
+    gae_lambda: 0.9
+    clip_param: 0.1
+    target_kl: 0.001
+    entropy_coef: 0.01
+    exploration_init: -0.5
+
+    # optim args
+    opt_epochs: 3
+    mini_batch_size: 512
+    actor_lr: 0.0001
+    critic_lr: 0.0001
+
+    # runner args
+    max_env_steps: 3300000
+    rollout_batch_size: 100
+    rollout_steps: 330
+    eval_batch_size: 20
+
+    # misc
+    log_interval: 66000
+    save_interval: 3300000
+    num_checkpoints: 0
+    eval_interval: 66000
+    eval_save_best: True
+    tensorboard: True
+
+    rew_state_weight: [1., .1, 1., .1, .1, 0.001]
     rew_act_weight: [.1, .1]
