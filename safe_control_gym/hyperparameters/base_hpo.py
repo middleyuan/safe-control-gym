@@ -263,6 +263,39 @@ class BaseHPO(ABC):
             params (dict): Sampled hyperparameters.
 
         """
+        # Special handling for iLQR: set reward weights to match LQR weights
+        if self.algo == 'ilqr':
+            # Look for q_lqr and r_lqr parameters (either single values or multi-dimensional)
+            q_lqr_params = {}
+            r_lqr_params = {}
+            
+            for param_name, param_value in params.items():
+                if param_name.startswith('q_lqr_'):
+                    # Multi-dimensional parameter (e.g., q_lqr_0, q_lqr_1)
+                    base_param, index_str = param_name.rsplit('_', 1)
+                    if index_str.isdigit():
+                        index = int(index_str)
+                        q_lqr_params[index] = param_value
+                elif param_name.startswith('r_lqr_'):
+                    # Multi-dimensional parameter (e.g., r_lqr_0, r_lqr_1)
+                    base_param, index_str = param_name.rsplit('_', 1)
+                    if index_str.isdigit():
+                        index = int(index_str)
+                        r_lqr_params[index] = param_value
+            
+            # Set task reward weights to match LQR weights
+            if q_lqr_params:
+                if hasattr(self.task_config, 'rew_state_weight'):
+                    for index, value in q_lqr_params.items():
+                        if index < len(self.task_config.rew_state_weight):
+                            self.task_config.rew_state_weight[index] = value
+
+            if r_lqr_params:
+                if hasattr(self.task_config, 'rew_act_weight'):
+                    for index, value in r_lqr_params.items():
+                        if index < len(self.task_config.rew_act_weight):
+                            self.task_config.rew_act_weight[index] = value
+
         # Iterate through the params dictionary
         for param_name, param_value in params.items():
             # Handle multidimensional hyperparameters (e.g., q_mpc_0, q_mpc_1)

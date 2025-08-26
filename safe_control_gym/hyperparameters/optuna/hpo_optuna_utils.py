@@ -423,22 +423,22 @@ def ilqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int) -> Dict[s
     epsilon = trial.suggest_categorical('epsilon', iLQR_dict['epsilon']['values'])
 
     # cost parameters
-    # state_weight = [
-    #     trial.suggest_float(f'q_lqr_{i}', iLQR_dict['q_lqr']['values'][0], iLQR_dict['q_lqr']['values'][1], log=is_log_scale(iLQR_dict['q_lqr']))
-    #     for i in range(state_dim)
-    # ]
-    # action_weight = [
-    #     trial.suggest_float(f'r_lqr_{i}', iLQR_dict['r_lqr']['values'][0], iLQR_dict['r_lqr']['values'][1], log=is_log_scale(iLQR_dict['r_lqr']))
-    #     for i in range(action_dim)
-    # ]
+    state_weight = [
+        trial.suggest_float(f'q_lqr_{i}', iLQR_dict['q_lqr']['values'][0], iLQR_dict['q_lqr']['values'][1], log=is_log_scale(iLQR_dict['q_lqr']))
+        for i in range(state_dim)
+    ]
+    action_weight = [
+        trial.suggest_float(f'r_lqr_{i}', iLQR_dict['r_lqr']['values'][0], iLQR_dict['r_lqr']['values'][1], log=is_log_scale(iLQR_dict['r_lqr']))
+        for i in range(action_dim)
+    ]
 
     hps_suggestion = {
         'max_iterations': max_iterations,
         'lamb_factor': lamb_factor,
         'lamb_max': lamb_max,
         'epsilon': epsilon,
-        # 'q_lqr': state_weight,
-        # 'r_lqr': action_weight,
+        'q_lqr': state_weight,
+        'r_lqr': action_weight,
     }
 
     return hps_suggestion
