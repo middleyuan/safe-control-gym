@@ -194,15 +194,20 @@ def create_custom_ridge_plot(noise_data, noise_type, noise_scale, selected_noise
             # For obs_noise/proc_noise: [0, 1, 6, 16, 45, 100] -> indices [0, 1, 6, 13, 20, 26]
             if noise_type in ['obs_noise', 'proc_noise']:
                 # Find indices for specific noise levels we want to show
-                target_levels = [1, 6, 16, 45, 100]
+                target_levels = [1, 5, 20, 50, 100]
                 selected_noise_indices = []
                 for target in target_levels:
                     if target in noise_scale:
                         selected_noise_indices.append(noise_scale.index(target))
             else:
                 # For other noise types, use evenly spaced indices
-                selected_noise_indices = [0, len(noise_scale)//4, len(noise_scale)//2, 
-                                        3*len(noise_scale)//4, len(noise_scale)-1]
+                # selected_noise_indices = [0, len(noise_scale)//4, len(noise_scale)//2, 
+                #                         3*len(noise_scale)//4, len(noise_scale)-1]
+                target_levels = [0, 1, 2, 3, 4]
+                selected_noise_indices = []
+                for target in target_levels:
+                    if target in noise_scale:
+                        selected_noise_indices.append(noise_scale.index(target))
         else:
             selected_noise_indices = list(range(len(noise_scale)))
     
@@ -259,7 +264,7 @@ def create_custom_ridge_plot(noise_data, noise_type, noise_scale, selected_noise
     # Create subplots - one for each controller
     n_controllers = len(noise_data)
     fig, axes = plt.subplots(n_controllers, 1, figsize=(6, n_controllers * 2), 
-                            sharex=True, gridspec_kw={'hspace': 0.45})
+                            sharex=True, gridspec_kw={'hspace': 0.45}, dpi=1200)
     
     if n_controllers == 1:
         axes = [axes]
@@ -344,7 +349,7 @@ def create_custom_ridge_plot(noise_data, noise_type, noise_scale, selected_noise
         # Add legend for this controller outside the plot area (to the right)
         handles, labels = ax.get_legend_handles_labels()
         if handles:  # Only create legend if there are handles
-            ax.legend(handles, labels, bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+            ax.legend(handles, labels, bbox_to_anchor=(1.05, 0.94), loc='upper left', fontsize=8)
     
     # Set common x-label and limits
     axes[-1].set_xlabel('RMSE (m)', fontsize=12)
@@ -358,8 +363,8 @@ def create_custom_ridge_plot(noise_data, noise_type, noise_scale, selected_noise
         'param': 'Parametric Uncertainty'
     }
     
-    title = f'RMSE Distributions at Different Noise Levels \n{noise_title_map.get(noise_type, noise_type)}'
-    fig.suptitle(title, fontsize=14, y=0.98) # set the space between title and plot
+    title = f'RMSE Distributions at Different Levels of {noise_title_map.get(noise_type, noise_type)}'
+    fig.suptitle(title, fontsize=14, y=0.95, x=0.65, ha='center', va='top') # centered horizontally at the top
     
     # Save plot
     controller_names_str = "_".join([name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_") for name in noise_data.keys()])
@@ -437,7 +442,7 @@ def main():
     
     if not all_data:
         print("No data loaded. Please check controller names and ensure data files exist.")
-        print("Run process_robustness_data.py first to generate the required data files.")
+        print("Run process_experiment_data.py first to generate the required data files.")
         return
     
     # Align all data to common noise scale

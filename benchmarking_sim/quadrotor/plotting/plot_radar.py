@@ -21,7 +21,7 @@ plt.rcParams.update({
     # 'font.family': 'arial',
     'grid.alpha': 1.0,
     'savefig.bbox': 'tight',
-    # 'savefig.transparent': True,
+    'savefig.transparent': True,
     # 'font.size': 20,
 })
 
@@ -88,6 +88,7 @@ axis_legend_dict = {
     'robustness_param': r'$\theta$',
 }
 
+# domain randomization results
 ID_numbers = {
     'robustness_obs': {
         'PPO': 60,
@@ -138,18 +139,19 @@ if robustness_type == 'abs':
     ID_numbers = ID_numbers_abs
 
 def load_robustness_failure_points():
-    """Load robustness failure points from process_robustness_data.py results."""
+    """Load robustness failure points from process_experiment_data.py results."""
     import json
     from pathlib import Path
     
     # Try to load the consolidated failure results
     script_dir = os.path.dirname(__file__)
-    data_dir = Path(script_dir) / 'data'
+    # Look in the correct data directory (one level up from plotting/)
+    data_dir = Path(script_dir).parent / 'data'
     consolidated_file = data_dir / 'robustness_failure_points.json'
     
     if not consolidated_file.exists():
         print(f"Warning: Failure results file not found at {consolidated_file}")
-        print("Using hardcoded values. Run process_robustness_data.py for all noise types to generate failure data.")
+        print("Using hardcoded values. Run process_experiment_data.py for all noise types to generate failure data.")
         return {}
     
     try:
@@ -164,7 +166,7 @@ def load_robustness_failure_points():
         return {}
 
 def update_metrics_with_failure_data(metrics_data, failure_data, robustness_type):
-    """Update metrics_data with failure points from process_robustness_data.py results."""
+    """Update metrics_data with failure points from process_experiment_data.py results."""
     
     if not failure_data:
         print("No failure data available, using existing hardcoded values.")
@@ -348,9 +350,18 @@ def spider(df,
             ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], linestyle='--')
             ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], alpha=ID_alpha)
             ax.fill(angles, values_ID, alpha=ID_alpha, color=plot_colors[model_name])
-            ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], ID_numbers['robustness_proc'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], ID_numbers['robustness_obs'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], ID_numbers['robustness_param'][model_name], size=small_text_size)
+            # Format robustness values: integers for proc/obs, 1 decimal for param
+            proc_value = ID_numbers['robustness_proc'][model_name]
+            formatted_proc = f'{int(proc_value)}' if isinstance(proc_value, (int, float)) else str(proc_value)
+            ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], formatted_proc, size=small_text_size)
+            
+            obs_value = ID_numbers['robustness_obs'][model_name]
+            formatted_obs = f'{int(obs_value)}' if isinstance(obs_value, (int, float)) else str(obs_value)
+            ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], formatted_obs, size=small_text_size)
+            
+            param_value = ID_numbers['robustness_param'][model_name]
+            formatted_param = f'{param_value:.1f}' if isinstance(param_value, (int, float)) else str(param_value)
+            ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], formatted_param, size=small_text_size)
             # Format worst_generalization_performance with 2 decimal places
             worst_gen_value = ID_numbers['worst_generalization_performance'][model_name]
             formatted_worst_gen = f'{worst_gen_value:.2f}' if isinstance(worst_gen_value, float) else str(worst_gen_value)
@@ -368,8 +379,12 @@ def spider(df,
                 if t == 1: t = '   Partially uncertain \n nonlinear model'
                 if model_name == 'PID': t = '   Kinematic \n   model'
                 if t == 0: t = 'Perfect nonlinear\n   model'
+            elif _x == angles[metric_index['robustness_proc']]:
+                t = f'{int(t)}' if isinstance(t, (int, float)) else str(t)  # Integer for process noise
+            elif _x == angles[metric_index['robustness_obs']]:
+                t = f'{int(t)}' if isinstance(t, (int, float)) else str(t)  # Integer for observation noise
             elif _x == angles[metric_index['robustness_param']]:
-                t = f'{t:.1f}' if isinstance(t, float) else str(t)
+                t = f'{t:.1f}' if isinstance(t, float) else str(t)  # 1 decimal for parametric noise
             elif _x in [angles[metric_index['performance']], angles[metric_index['worst_generalization_performance']]]:
                 t = f'{t:.2f}' if isinstance(t, float) else str(t)  # 2 decimal places for performance and generalization
             else:
@@ -594,8 +609,90 @@ metrics_data['LQR']['abs_robustness_obs'] = 60
 metrics_data['LQR']['abs_robustness_proc'] = 14
 metrics_data['LQR']['abs_robustness_param'] = 5.0
 
-# Update metrics with failure data from process_robustness_data.py
+# Update metrics with failure data from process_experiment_data.py
 metrics_data = update_metrics_with_failure_data(metrics_data, failure_data, robustness_type)
+
+def load_domain_randomization_robustness_data():
+    """Load domain randomization robustness data from process_experiment_data.py results."""
+    import json
+    from pathlib import Path
+    
+    script_dir = os.path.dirname(__file__)
+    # Look in the correct data directory (one level up from plotting/)
+    data_dir = Path(script_dir).parent / 'data'
+    consolidated_file = data_dir / 'robustness_failure_points.json'
+    
+    if not consolidated_file.exists():
+        print(f"Warning: Domain randomization results file not found at {consolidated_file}")
+        return {}
+    
+    try:
+        with open(consolidated_file, 'r') as f:
+            failure_data = json.load(f)
+        
+        # Extract domain randomization sections
+        dr_relative = failure_data.get('domain_randomization_relative_failures', {})
+        dr_absolute = failure_data.get('domain_randomization_absolute_failures', {})
+        
+        return {
+            'domain_randomization_relative_failures': dr_relative,
+            'domain_randomization_absolute_failures': dr_absolute
+        }
+    except Exception as e:
+        print(f"Error loading domain randomization results: {e}")
+        return {}
+
+def update_id_numbers_with_domain_randomization_data(dr_data, robustness_type):
+    """Update ID_numbers with domain randomization failure points."""
+    global ID_numbers, ID_numbers_abs
+    
+    if not dr_data:
+        print("No domain randomization data available for ID numbers.")
+        return
+    
+    # Choose the appropriate failure type
+    if robustness_type == 'abs':
+        failures = dr_data.get('domain_randomization_absolute_failures', {})
+        target_dict = ID_numbers_abs
+        print("\nUpdating ID_numbers_abs with domain randomization absolute failure data:")
+    else:
+        failures = dr_data.get('domain_randomization_relative_failures', {})
+        target_dict = ID_numbers
+        print("\nUpdating ID_numbers with domain randomization relative failure data:")
+    
+    # Map noise types to metric names
+    noise_to_metric = {
+        'obs_noise': 'robustness_obs',
+        'proc_noise': 'robustness_proc',  
+        'param': 'robustness_param'
+    }
+    
+    # Update ID_numbers for each noise type with domain randomization data
+    for noise_type, metric_name in noise_to_metric.items():
+        if noise_type in failures and failures[noise_type]:  # Check that the dict is not empty
+            print(f"  Updating {metric_name} ID numbers from domain randomization {noise_type} data:")
+            
+            for method, failure_point in failures[noise_type].items():
+                if metric_name in target_dict and method in target_dict[metric_name]:
+                    old_value = target_dict[metric_name][method]
+                    # Update with domain randomization data
+                    target_dict[metric_name][method] = failure_point
+                    print(f"    {method:15}: {old_value} -> {failure_point} (domain randomization)")
+                elif metric_name in target_dict:
+                    # Add new method if it doesn't exist
+                    target_dict[metric_name][method] = failure_point
+                    print(f"    {method:15}: new -> {failure_point} (domain randomization)")
+                else:
+                    print(f"    Warning: Metric '{metric_name}' not found in ID_numbers")
+
+# Load and apply domain randomization data
+dr_data = load_domain_randomization_robustness_data()
+# Update ID_numbers instead of metrics_data
+update_id_numbers_with_domain_randomization_data(dr_data, robustness_type)
+
+# Update final ID_numbers selection after domain randomization updates
+if robustness_type == 'abs':
+    ID_numbers = ID_numbers_abs
 
 max_values = {key: max([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
