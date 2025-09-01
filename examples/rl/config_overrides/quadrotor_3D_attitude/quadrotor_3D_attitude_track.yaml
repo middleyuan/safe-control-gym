@@ -70,7 +70,8 @@ task_config:
   obs_goal_horizon: 1
 
   rew_state_weight: [3.0, 0.1, 3.0, 0.1, 3.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
-  rew_act_weight: [0.5, 0.5, 0.5, 0.5] #set to 1 if action noise is too large
+  # rew_act_weight: [0.5, 0.5, 0.5, 0.5] #set to 1 if action noise is too large
+  rew_act_weight: [0.25, 0.25, 0.25, 0.25] #set to 1 if action noise is too large
   rew_exponential: True
   episode_len_sec: 23.24
   # episode_len_sec: 28.8

@@ -25,7 +25,7 @@ algo_config:
   num_workers: 1
   opt_epochs: 20
   rollout_batch_size: 5
-  rollout_steps: 660
+  rollout_steps: 1320
   save_interval: 5280000
   target_kl: 0.01
   tensorboard: false
@@ -39,8 +39,8 @@ kv_overrides:
 - task_config.normalized_rl_action_space=False
 - task_config.episode_len_sec=23.24
 - task_config.task_info.custom_snap_ref_traj=/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy
-- task_config.rew_state_weight=3.0,0.1,3.0,0.1,3.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001
-output_dir: ./Results/test/quadrotor_3D_attitude_ppo_data_obstacle_seed1/seed1_Aug-21-18-30-40_58feed9
+- task_config.rew_state_weight=5.0,0.1,5.0,0.1,5.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001
+output_dir: ./Results/test/quadrotor_3D_attitude_ppo_data_obstacle_seed1/seed1_Aug-22-22-30-44_58feed9
 overrides:
 - ./config_overrides/quadrotor_3D_attitude/ppo_quadrotor_3D_attitude.yaml
 - ./config_overrides/quadrotor_3D_attitude/quadrotor_3D_attitude_track.yaml
@@ -159,17 +159,17 @@ task_config:
   randomized_inertial_prop: false
   randomized_init: true
   rew_act_weight:
-  - 0.1
-  - 0.1
-  - 0.1
-  - 0.1
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
   rew_exponential: true
   rew_state_weight: !!python/tuple
-  - 3.0
+  - 5.0
   - 0.1
-  - 3.0
+  - 5.0
   - 0.1
-  - 3.0
+  - 5.0
   - 0.1
   - 0.1
   - 0.1

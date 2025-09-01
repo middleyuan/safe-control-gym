@@ -1302,7 +1302,8 @@ class BaseAviary(BenchmarkEnv):
         # scale = 0.776  # Update this with actual estimated scale from MATLAB  
         # tau = 0.092  # Update this with actual estimated tau from MATLAB
         # params_acc = [-0.2039, 0.8, 0.076]  # [bias, scale, tau]
-        params_acc = [0.0905, 0.8, 0.0814]
+        # params_acc = [0.0905, 0.8, 0.0814]
+        params_acc = [0.1052, 0.8, 0.120]
         # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
         # force_motor_dot is the derivative in normalized space
         df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]

@@ -7,9 +7,11 @@ task_config:
   # quad_type: 9
   # normalized_rl_action_space: False
   init_state:
-    init_x: 0
+    init_x: 1.25
     init_x_dot: 0
-    init_z: 0.75
+    init_y: 0.5
+    init_y_dot: 0
+    init_z: 1.0
     init_z_dot: 0
   # obstacle course should be within
   # x: [-3, 3]
@@ -27,15 +29,14 @@ task_config:
     trajectory_type: figure8
     num_cycles: 2
     trajectory_plane: 'xy'
-    trajectory_position_offset: [0, 0, 1]
+    trajectory_position_offset: [0, 0, 0]
     trajectory_scale: 1.0
-    custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+    custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_s.npy"
   inertial_prop:
-    M: 0.033
-  # episode_len_sec: 15
-  # episode_len_sec: 20
-  episode_len_sec: 27
-  # episode_len_sec: 40
+    M: 0.037
+  # episode_len_sec: 12.5
+  # episode_len_sec: 15.5
+  # episode_len_sec: 20.5
   # cost: rl_reward
   cost: quadratic
   constraints:
