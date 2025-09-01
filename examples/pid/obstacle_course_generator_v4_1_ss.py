@@ -489,8 +489,8 @@ if __name__ == "__main__":
         (0.9, -1.1, 1.0), #22
         (-0.1, -1.1, 1.0), #23
         (-0.4, -0.5, 1.025, 1.2), #24
-        (-0.9, 0.0, 1.05), #25
-        (-1.4, 0.0, 1.075), #26
+        (-0.9, -0.05, 1.05), #25
+        (-1.4, -0.05, 1.075), #26
         (-1.6, -0.5, 1.1), #27
         (-1.4, -1.1, 1.1), #28
         (-1.0, -1.0, 1.075), #29
@@ -498,17 +498,17 @@ if __name__ == "__main__":
         (-0.2, -0.5, 1.0), #31
         (-0.1, -0.4, 0.95), #32
         (0.2, 0.0, 0.8, 1.2), #33
-        (-0.3, 0.35, 0.7, 1.3), #34
-        (-0.9, 0.4, 0.65, 1.5), #35
-        (-1.2, 0.35, 0.7, 1.5), #36
-        (-1.4, 0.05, 0.8, 1.3), #37
-        (-1.4, -0.2, 0.95, 1.1), #38
-        (-1.0, -0.4, 1.1, 1.1), #39
-        (-0.25, -0.25, 1.15), #40
-        (0.6, 0.1, 1.1), #41
-        (0.6, 0.5, 1.1), #42
-        (0.6, 1.0, 1.0), #43
-        (0.0, 1.0, 1.0)  #44
+        (-0.3, 0.35, 0.75, 1.3), #34
+        (-0.9, 0.4, 0.7, 1.5), #35
+        (-1.2, 0.35, 0.75, 1.5), #36
+        (-1.5, 0.05, 0.85, 1.3), #37
+        (-1.5, -0.2, 1.0, 1.2), #38
+        (-1.0, -0.4, 1.1, 1.2), #39
+        (-0.25, -0.25, 1.2), #40
+        (0.45, 0.1, 1.15), #41
+        (0.5, 0.5, 1.1), #42
+        (0.5, 1.0, 1.0), #43
+        (0.5, 1.0, 1.0)  #44
     ]
     # section2_total_time = 7.0  # seconds
     section2_total_time = 5.5  # seconds
@@ -542,11 +542,11 @@ if __name__ == "__main__":
     # Section 3: Speed Test
     section3 = TrajectoryBuilder()
     section3_wps = [
-        (-1.0, 1.0, 1.0),
+        (-1.1, 1.1, 1.0),
         (-1.6, 0.6, 1.0),
         (-1.6, -0.6, 1.0),
-        (-1.0, -1.0, 1.0),
-        (1.0, -1.0, 1.0),
+        (-1.1, -1.1, 1.0),
+        (1.1, -1.1, 1.0),
         (1.6, -0.6, 1.0),
         (1.6, 0.6, 1.0),
     ]
@@ -559,11 +559,11 @@ if __name__ == "__main__":
     final_trajectory = TrajectoryBuilder()
     # Section 1
     final_trajectory.concatenate(section1, time_offset=0, label="Section: Randomized String Obstacles")
-    offset_1 = section1.waypoints[-1].t + 0.25  # No extra time step needed
+    offset_1 = section1.waypoints[-1].t + 0.5  # No extra time step needed
 
     # Section 2
     final_trajectory.concatenate(section2, time_offset=offset_1, label="Section 2: Fixed Strings")
-    offset_2 = offset_1 + section2.waypoints[-1].t - section2.waypoints[0].t + 0.25 # accumulate correctly
+    offset_2 = offset_1 + section2.waypoints[-1].t - section2.waypoints[0].t + 0.5 # accumulate correctly
 
     # Section 3
     final_trajectory.concatenate(section3, time_offset=offset_2, label="Section 3: Disturbance Obstacles")
