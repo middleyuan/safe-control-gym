@@ -610,14 +610,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
 
             f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
-            f_cont_func = cs.Function('f_cont_func', [acados_model.x, acados_model.u, acados_model.p], [f_cont])
-            # use rk4 to discretize the continuous dynamics
-            k1 = f_cont_func(acados_model.x, acados_model.u, acados_model.p)
-            k2 = f_cont_func(acados_model.x + self.dt/2 * k1, acados_model.u, acados_model.p)
-            k3 = f_cont_func(acados_model.x + self.dt/2 * k2, acados_model.u, acados_model.p)
-            k4 = f_cont_func(acados_model.x + self.dt * k3, acados_model.u, acados_model.p)
-            f_disc = acados_model.x + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-            
             # self.sparse_gp_func = cs.Function('sparse_func',
             #                                   [acados_model.x, acados_model.u, z_ind, mean_post_factor], [f_disc])
         else:
@@ -638,14 +630,8 @@ class GPMPC_ACADOS_TP(GPMPC):
             
             f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
             f_cont_func = cs.Function('f_cont_func', [acados_model.x, acados_model.u, acados_model.p], [f_cont])
-            # use rk4 to discretize the continuous dynamics
-            k1 = f_cont_func(acados_model.x, acados_model.u, acados_model.p)
-            k2 = f_cont_func(acados_model.x + self.dt/2 * k1, acados_model.u, acados_model.p)
-            k3 = f_cont_func(acados_model.x + self.dt/2 * k2, acados_model.u, acados_model.p)
-            k4 = f_cont_func(acados_model.x + self.dt * k3, acados_model.u, acados_model.p)
-            f_disc = acados_model.x + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-
-        acados_model.disc_dyn_expr = f_disc
+        # acados_model.disc_dyn_expr = f_disc
+        acados_model.f_expl_expr = f_cont
 
 
 
@@ -757,7 +743,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         # set up solver options
         ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
         ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-        ocp.solver_options.integrator_type = 'DISCRETE'
+        ocp.solver_options.integrator_type = 'ERK'
 
         ocp.solver_options.nlp_solver_type = 'SQP' if not self.use_RTI else 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 25 if not self.use_RTI else 1
