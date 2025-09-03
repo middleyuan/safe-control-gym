@@ -1622,7 +1622,7 @@ class Quadrotor(BaseAviary):
                 self.force_motor_high
             ])
             self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
-                                 'phi', 'theta', 'psi', 'phi_dot', 'theta_dot', 'psi_dot', 'force_motor']
+                                 'phi', 'theta', 'psi', 'p', 'q', 'r', 'force_motor']
             self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
                                 'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s', 'N']
 

@@ -118,7 +118,14 @@ class GPMPC(MPC, ABC):
 
         if prior_info is None or prior_info == {}:
             raise ValueError('GPMPC requires prior_prop to be defined. You may use the real mass properties and then use prior_param_coeff to modify them accordingly.')
-        prior_info['prior_prop'].update((prop, val * prior_param_coeff) for prop, val in prior_info['prior_prop'].items())
+        # Handle both scalar and list values when applying prior_param_coeff
+        for prop, val in prior_info['prior_prop'].items():
+            if isinstance(val, (list, tuple)):
+                # For list/tuple values, multiply each element
+                prior_info['prior_prop'][prop] = [v * prior_param_coeff for v in val]
+            else:
+                # For scalar values, multiply directly
+                prior_info['prior_prop'][prop] = val * prior_param_coeff
         self.prior_env_func = partial(env_func, inertial_prop=prior_info['prior_prop'])
         if soft_constraints is None:
             self.soft_constraints_params = {'gp_soft_constraints': False,

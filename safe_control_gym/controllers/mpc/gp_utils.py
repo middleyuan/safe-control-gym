@@ -907,7 +907,7 @@ class BatchGPModel:
 
         # initialize with different length scales and output scales;
         # use the results with the lowest test loss.
-        max_trial = 1
+        max_trial = 3
         opti_result = []
         loss_result = []
         
@@ -1307,7 +1307,7 @@ class GaussianProcess:
         self.model.train()
         self.likelihood.train()
 
-        max_trial = 1
+        max_trial = 3
         opti_result = []
         loss_result = []
         for trial_idx in range(max_trial):
