@@ -19,9 +19,9 @@ ALGO='ppo'
 if [ "${ALGO}" == 'ppo' ]; then
     # PPO env parameters
     # shellcheck disable=SC2054
-    # Q=(5.0,0.1,5.0,0.1,5.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+    Q=(5.0,0.1,5.0,0.1,5.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
     # Q=(3.0,0.1,3.0,0.1,3.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
-    Q=(4.0,0.1,4.0,0.1,4.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
+    # Q=(4.0,0.1,4.0,0.1,4.0,0.1,0.1,0.1,0.1,0.001,0.001,0.001,0.001)
 elif [ "${ALGO}" == 'dppo' ]; then
     # DPPO env parameters
     # shellcheck disable=SC2054
@@ -64,30 +64,30 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
 fi
 
 # Train the unsafe controller/agent.
-# SEEDS=(1 2 3)
-SEEDS=(1 2 3)
+# SEEDS=(0 1 2)
+SEEDS=(3)
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do
     echo "Running with SEED: $SEED"
-    
+
     # Set episode_len_sec and trajectory file based on SEED
-    if [ "$SEED" -eq 1 ]; then
-        EPISODE_LEN=23.24
-        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy"
+    if [ "$SEED" -eq 0 ]; then
+        EPISODE_LEN=12.5
+        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_0_vf_ss.npy"
+    elif [ "$SEED" -eq 1 ]; then
+        EPISODE_LEN=15.5
+        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_ss.npy"
     elif [ "$SEED" -eq 2 ]; then
-        EPISODE_LEN=29.05
-        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_f.npy"
+        EPISODE_LEN=20.5
+        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_ss.npy"
     elif [ "$SEED" -eq 3 ]; then
-        EPISODE_LEN=43.575
-        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_3_vf_f.npy"
-    elif [ "$SEED" -eq 0 ]; then
-        EPISODE_LEN=25.259999999999998
-        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+        EPISODE_LEN=12.5
+        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_obstacle_ref_traj.npy"
     else
-        EPISODE_LEN=30  # Default value
-        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf.npy"  # Default trajectory
+        EPISODE_LEN=20.5  # Default value
+        TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_ss.npy"  # Default trajectory
     fi
-    
+
     python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         --algo ${ALGO} \
         --task ${SYS_NAME} \
@@ -102,7 +102,7 @@ for SEED in "${SEEDS[@]}"; do
             task_config.randomized_init=True \
             task_config.normalized_rl_action_space=False \
             task_config.episode_len_sec=${EPISODE_LEN} \
-            task_config.task_info.custom_snap_ref_traj=${TRAJ_FILE} \
+            task_config.task_info.custom_snap_ref_traj_obs=${TRAJ_FILE} \
             task_config.rew_state_weight=${Q}
 done
 
@@ -111,3 +111,21 @@ done
 
 # Removed the temporary data used to train the new unsafe model.
 # rm -r -f ./unsafe_rl_temp_data/
+    
+    # # Set episode_len_sec and trajectory file based on SEED
+    # if [ "$SEED" -eq 1 ]; then
+    #     EPISODE_LEN=23.24
+    #     TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy"
+    # elif [ "$SEED" -eq 2 ]; then
+    #     EPISODE_LEN=29.05
+    #     TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_f.npy"
+    # elif [ "$SEED" -eq 3 ]; then
+    #     EPISODE_LEN=43.575
+    #     TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_3_vf_f.npy"
+    # elif [ "$SEED" -eq 0 ]; then
+    #     EPISODE_LEN=25.259999999999998
+    #     TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+    # else
+    #     EPISODE_LEN=30  # Default value
+    #     TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf.npy"  # Default trajectory
+    # fi

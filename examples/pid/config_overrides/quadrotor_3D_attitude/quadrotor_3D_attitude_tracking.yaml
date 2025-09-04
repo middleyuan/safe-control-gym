@@ -1,9 +1,11 @@
 task_config:
-  info_in_reset: true
+  info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si_3d_delay
   quad_type: 9
+  # quad_type: 9
+  # normalized_rl_action_space: False
   init_state:
     init_x: 1.3
     init_x_dot: 0
@@ -11,153 +13,36 @@ task_config:
     init_y_dot: 0
     init_z: 1.1
     init_z_dot: 0
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  # task: traj_tracking
+  # task_info:
+  #   trajectory_type: figure8
+  #   num_cycles: 2
+  #   trajectory_plane: 'xy'
+  #   trajectory_position_offset: [0, 0, 1]
+  #   trajectory_scale: 1.0
   task: traj_tracking
   task_info:
     trajectory_type: snap_custom
-    num_cycles: 1
-    trajectory_plane: xy
-    trajectory_position_offset: [0.0, 0.0, 0.0]
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0, 0, 0]
     trajectory_scale: 1.0
-    strings:
-      # === Section: Randomized String Obstacles ===
-      - start: [1.041, 0.455, 1.438]
-        end: [0.003, 0.497, 0.509]
-      - start: [1.013, -0.44, 0.53]
-        end: [0.01, -0.508, 1.431]
-      - start: [1.018, -0.431, 1.504]
-        end: [1.041, 0.455, 1.438]
-      - start: [1.041, 0.455, 0.0]
-        end: [1.041, 0.455, 1.5]
-      - start: [1.018, -0.431, 0.0]
-        end: [1.018, -0.431, 1.5]
-      - start: [-0.0, 0.483, 0.0]
-        end: [-0.0, 0.483, 1.5]
-      - start: [0.01, -0.508, 0.0]
-        end: [0.01, -0.508, 1.5]
-      # === Section 2: Fixed Strings ===
-      - start: [-0.0, 0.483, 1.448]
-        end: [-0.981, -0.493, 1.433]
-      - start: [0.008, -0.503, 0.483]
-        end: [-0.954, 0.498, 1.031]
-      - start: [-0.947, 0.492, 1.417]
-        end: [-0.989, -0.51, 0.579]
-      - start: [-0.947, 0.492, 0.0]
-        end: [-0.947, 0.492, 1.5]
-      - start: [-0.981, -0.493, 0.0]
-        end: [-0.981, -0.493, 1.5]
-    waypoints:
-      # === Section: Randomized String Obstacles ===
-      - time: 0.0
-        position: [1.4, 0.5, 1.1]
-      - time: 0.0
-        position: [1.4, 0.5, 1.1]
-      - time: 0.34
-        position: [1.4, 1.1, 1.113]
-      - time: 0.87
-        position: [0.7, 1.1, 1.113]
-      - time: 1.32
-        position: [0.1, 1.1, 1.125]
-      - time: 1.66
-        position: [0.1, 0.5, 1.125]
-      - time: 1.85
-        position: [0.1, 0.0, 1.1]
-      - time: 2.19
-        position: [1.0, 0.0, 1.1]
-      - time: 2.51
-        position: [1.7, -0.1, 1.05]
-      - time: 2.91
-        position: [1.5, -0.9, 1.0]
-      - time: 3.44
-        position: [0.1, -0.9, 1.0]
-      - time: 3.59
-        position: [0.2, -0.5, 0.95]
-      - time: 4.02
-        position: [0.9, 0.0, 0.95]
-      - time: 4.36
-        position: [0.9, 0.5, 0.95]
-      - time: 4.57
-        position: [1.0, 0.8, 1.0]
-      - time: 4.82
-        position: [0.5, 0.8, 1.0]
-      - time: 5.01
-        position: [0.1, 0.8, 1.0]
-      - time: 5.13
-        position: [0.1, 0.5, 1.0]
-      - time: 5.32
-        position: [0.0, 0.0, 1.0]
-      - time: 5.81
-        position: [1.0, 0.0, 1.0]
-      - time: 6.0
-        position: [0.9, -0.5, 1.0]
-      # === Section 2: Fixed Strings ===
-      - time: 6.5
-        position: [0.9, -1.1, 1.0]
-      - time: 6.94
-        position: [-0.1, -1.1, 1.0]
-      - time: 7.24
-        position: [-0.4, -0.5, 1.025]
-      - time: 7.59
-        position: [-0.9, -0.05, 1.05]
-      - time: 7.81
-        position: [-1.4, -0.05, 1.075]
-      - time: 8.03
-        position: [-1.6, -0.5, 1.1]
-      - time: 8.31
-        position: [-1.4, -1.1, 1.1]
-      - time: 8.49
-        position: [-1.0, -1.0, 1.075]
-      - time: 8.68
-        position: [-0.6, -0.9, 1.05]
-      - time: 8.93
-        position: [-0.2, -0.5, 1.0]
-      - time: 8.99
-        position: [-0.1, -0.4, 0.95]
-      - time: 9.22
-        position: [0.2, 0.0, 0.8]
-      - time: 9.55
-        position: [-0.3, 0.35, 0.75]
-      - time: 9.89
-        position: [-0.9, 0.4, 0.7]
-      - time: 10.1
-        position: [-1.2, 0.35, 0.75]
-      - time: 10.38
-        position: [-1.5, 0.05, 0.85]
-      - time: 10.55
-        position: [-1.5, -0.2, 1.0]
-      - time: 10.84
-        position: [-1.0, -0.4, 1.1]
-      - time: 11.25
-        position: [-0.25, -0.25, 1.2]
-      - time: 11.6
-        position: [0.45, 0.1, 1.15]
-      - time: 11.78
-        position: [0.5, 0.5, 1.1]
-      - time: 12.0
-        position: [0.5, 1.0, 1.0]
-      - time: 12.0
-        position: [0.5, 1.0, 1.0]
-      # === Section 3: Disturbance Obstacles ===
-      - time: 12.5
-        position: [-1.1, 1.1, 1.0]
-      - time: 12.82
-        position: [-1.6, 0.6, 1.0]
-      - time: 13.35
-        position: [-1.6, -0.6, 1.0]
-      - time: 13.67
-        position: [-1.1, -1.1, 1.0]
-      - time: 14.65
-        position: [1.1, -1.1, 1.0]
-      - time: 14.96
-        position: [1.6, -0.6, 1.0]
-      - time: 15.5
-        position: [1.6, 0.6, 1.0]
+    custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_obstacle_ref_traj.npy"
+    # use_ilqr_ref: True
   inertial_prop:
     M: 0.037
-  episode_len_sec: 15.5
+  episode_len_sec: 12.5
+  # episode_len_sec: 15.5
+  # episode_len_sec: 20.5
+  # cost: rl_reward
   cost: quadratic
   constraints:
-  - constraint_form: default_constraint
-    constrained_variable: state
-  - constraint_form: default_constraint
-    constrained_variable: input
-  done_on_violation: false
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+  done_on_violation: False

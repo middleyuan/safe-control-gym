@@ -80,8 +80,9 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     TASK = 'tracking'
     # ADDITIONAL = '_10' 
     # ADDITIONAL = '_delay'
-    ADDITIONAL = ''
-    CTRL_ADD = ADDITIONAL
+    ADDITIONAL = '_delay'
+    # CTRL_ADD = ADDITIONAL
+    CTRL_ADD = ''
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
@@ -246,12 +247,12 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
               'action': all_trajs['action'][0],
               'rmse': metrics['rmse'],
               'average_return': metrics['average_return'],}
-    if generate_reference:
-        np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_ref_traj.npy', \
-                ref_data, allow_pickle=True)
-    elif generate_ilqr_warmstart:
-        np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_warmstart_traj.npy', \
-                ref_data, allow_pickle=True)
+    target_traj_length = "obstacle"
+    # np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_ref_traj.npy', \
+    #             ref_data, allow_pickle=True)
+    # elif generate_ilqr_warmstart:
+    #     np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_warmstart_traj.npy', \
+    #             ref_data, allow_pickle=True)
     
     if hasattr(experiment.env, 'dw_model'):
         force_log = experiment.env.dw_model.get_force_log()

@@ -36,24 +36,24 @@ else
     SYS_NAME='quadrotor'
 fi
 EXP_DATA='test'
-SEED=1
-SUBSEED=11
+SEED=3
+SUBSEED=03
 # Set episode_len_sec and trajectory file based on SEED
-if [ "$SEED" -eq 1 ]; then
-    EPISODE_LEN=23.24
-    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_f.npy"
+if [ "$SEED" -eq 0 ]; then
+    EPISODE_LEN=12.5
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_0_vf_ss.npy"
+elif [ "$SEED" -eq 1 ]; then
+    EPISODE_LEN=15.5
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_ss.npy"
 elif [ "$SEED" -eq 2 ]; then
-    EPISODE_LEN=29.05
-    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_f.npy"
+    EPISODE_LEN=20.5
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_ss.npy"
 elif [ "$SEED" -eq 3 ]; then
-    EPISODE_LEN=43.575
-    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_3_vf_f.npy"
-elif [ "$SEED" -eq 0 ]; then
-    EPISODE_LEN=25.259999999999998
-    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+    EPISODE_LEN=12.5
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_obstacle_ref_traj.npy"
 else
-    EPISODE_LEN=30  # Default value
-    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf.npy"  # Default trajectory
+    EPISODE_LEN=20.5  # Default value
+    TRAJ_FILE="/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_2_vf_ss.npy"  # Default trajectory
 fi
 EVAL='performance'
 # RL Experiment
@@ -71,6 +71,7 @@ python3 ./rl_experiment.py \
                 task_config.normalized_rl_action_space=False \
                 task_config.randomized_init=True \
                 task_config.episode_len_sec=${EPISODE_LEN} \
-                task_config.task_info.custom_snap_ref_traj=${TRAJ_FILE} \
                 task_config.rew_state_weight=${Q} \
+                task_config.task_info.custom_snap_ref_traj_obs=${TRAJ_FILE} \
             --pretrain_path ./Results/${EXP_DATA}/${SYS}_${ALGO}_data_obstacle_seed${SEED}/seed${SUBSEED}_*/
+            # task_config.task_info.custom_snap_ref_traj=${TRAJ_FILE} \

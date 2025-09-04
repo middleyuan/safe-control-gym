@@ -540,7 +540,7 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
         print(f"Trajectory plot saved to {save_path}")
     except:
         pass
-    plt.show()
+    # plt.show()
     plt.close(fig)
 
 def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, waypoints=None, strings=None, save_path=None):

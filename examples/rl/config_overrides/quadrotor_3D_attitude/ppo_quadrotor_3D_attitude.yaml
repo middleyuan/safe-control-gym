@@ -14,9 +14,9 @@ algo_config:
 
   # optim args
   opt_epochs: 20
-  mini_batch_size: 256
-  actor_lr: 0.0003
-  critic_lr: 0.0003
+  mini_batch_size: 512
+  actor_lr: 0.0005
+  critic_lr: 0.0005
 
   # runner args
   max_env_steps: 5280000
