@@ -387,8 +387,23 @@ class GPMPC_ACADOS_TRPY(GPMPC):
 
             x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(test_runs, epoch - 1, episode_length)
             train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq) # np.ndarray
+            
             if self.plot_trained_gp:
                 self.plot_gp_TRPY(train_inputs, train_targets, title=f'epoch_{epoch}_test', output_dir=self.output_dir)
+                
+                # Use the test run data for open-loop prediction evaluation
+                test_episode_data = test_runs[epoch - 1][0][0]  # First test episode from previous epoch
+                x0 = test_episode_data['obs'][0][0, :]  # Initial state
+                u_seq = test_episode_data['action'][0]  # Control sequence
+                x_true = test_episode_data['obs'][0]  # True trajectory
+                
+                self.plot_open_loop_prediction(
+                    x0=x0,
+                    u_seq=u_seq, 
+                    x_true=x_true,
+                    title=f'epoch_{epoch}_open_loop_eval',
+                    output_dir=self.output_dir
+                )
 
             # gather training data
             train_runs[epoch] = {}
@@ -684,7 +699,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
                              0, 0,
                              0, 0, 0,
                              R_pred, P_pred, Y_pred, T_pred)
-        f_cont_func = cs.Function('f_cont_func', [acados_model.x, acados_model.u, acados_model.p], [f_cont])
+        self.f_cont_func = cs.Function('f_cont_func', [acados_model.x, acados_model.u, acados_model.p], [f_cont])
         acados_model.f_expl_expr = f_cont
 
         acados_model.x_labels = self.env.STATE_LABELS
@@ -1775,25 +1790,134 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         fig.savefig(os.path.join(output_dir, f'{plt_title}.png'), dpi=300, bbox_inches='tight')
         print(f'Plot saved at {os.path.join(output_dir, f"{plt_title}.png")}')
         plt.close()
-        
-        # # Create additional input vs output plots for T (thrust) model
-        # if len(gp_data) > 0:
-        #     fig_input, ax_input = plt.subplots(1, 1, figsize=(8, 6))
-        #     t_data = gp_data[0]
-        #     ax_input.scatter(t_data['input'][:, 0], t_data['target'], 
-        #                    label='Target', color='gray', alpha=0.6)
-        #     ax_input.plot(t_data['input'][:, 0], t_data['mean'], 
-        #                 label='GP mean', color=t_data['color'], linewidth=2)
-        #     ax_input.set_ylabel(f'T residual {t_data["unit"]}')
-        #     ax_input.set_xlabel('$T_c$ [N]')
-        #     ax_input.set_title('T residual vs Thrust Command')
-        #     ax_input.legend()
-        #     ax_input.grid(True, alpha=0.3)
+    
+    def plot_open_loop_prediction(self,
+                                  x0,
+                                  u_seq,
+                                  x_true,
+                                  title=None,
+                                  output_dir=None):
+        """
+        Open-loop prediction plots comparing GP dynamics predictions with ground truth.
+        Integrates the continuous-time dynamics f_cont_func and compares the predicted 
+        force_motor state (last dimension) with the ground truth force_motor state.
+        """
+        if output_dir is None:
+            output_dir = self.output_dir
+        if title is None:
+            title = "open_loop_prediction"
             
-        #     input_plt_title = f'GP_T_input_output_{title}'
-        #     plt.suptitle(input_plt_title)
-        #     fig_input.tight_layout()
-        #     fig_input.savefig(os.path.join(output_dir, f'{input_plt_title}.png'), 
-        #                     dpi=300, bbox_inches='tight')
-        #     print(f'Input-output plot saved at {os.path.join(output_dir, f"{input_plt_title}.png")}')
-        #     plt.close()
+        # Convert inputs to numpy arrays if needed
+        if not isinstance(x0, np.ndarray):
+            x0 = np.array(x0)
+        if not isinstance(u_seq, np.ndarray):
+            u_seq = np.array(u_seq)
+        if not isinstance(x_true, np.ndarray):
+            x_true = np.array(x_true)
+            
+        # Get trajectory length
+        horizon = u_seq.shape[0]
+        dt = 1/60  # Assuming 60Hz simulation
+        time_steps = np.arange(horizon + 1) * dt
+        
+        # Initialize arrays for predictions
+        x_pred = np.zeros((horizon + 1, x0.shape[0]))
+        f_cont_pred = np.zeros((horizon, x0.shape[0]))
+        force_motor_pred = np.zeros(horizon + 1)  # Predicted force_motor state (integrated)
+        force_motor_true = np.zeros(horizon + 1)  # True force_motor state
+        
+        # Set initial condition
+        x_pred[0, :] = x0
+        force_motor_pred[0] = x0[-1]  # Initial force_motor state
+        force_motor_true[0] = x_true[0, -1]  # True initial force_motor state
+        
+        # Run open-loop prediction
+        for k in range(horizon):
+            # Current state and control
+            x_k = x_pred[k, :]
+            u_k = u_seq[k, :]
+            
+            # Predict dynamics using f_cont_func (continuous time)
+            # Note: f_cont_func expects [x, u, p] where p is parameters (empty for now)
+            f_cont_k = self.f_cont_func(x_k, u_k, [])
+            f_cont_pred[k, :] = np.array(f_cont_k).flatten()
+            
+            # Integrate dynamics for next state prediction (Euler integration)
+            x_pred[k + 1, :] = x_k + dt * np.array(f_cont_k).flatten()
+            
+            # Extract integrated force_motor state prediction (last dimension of integrated state)
+            force_motor_pred[k + 1] = x_pred[k + 1, -1]
+            
+            # Ground truth force_motor state (last dimension of x_true)
+            if k + 1 < x_true.shape[0]:
+                force_motor_true[k + 1] = x_true[k + 1, -1]
+            else:
+                force_motor_true[k + 1] = force_motor_true[k]  # Use previous value for last step
+        
+        # Create the comparison plot
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        
+        # Plot 1: Force motor state prediction vs ground truth
+        axes[0, 0].plot(time_steps, force_motor_pred, 'b-', linewidth=2, label='GP Predicted force_motor')
+        axes[0, 0].plot(time_steps, force_motor_true, 'r--', linewidth=2, label='Ground Truth force_motor')
+        axes[0, 0].set_xlabel('Time [s]')
+        axes[0, 0].set_ylabel('Force Motor [N]')
+        axes[0, 0].set_title('Force Motor State: GP Prediction vs Ground Truth')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # Plot 2: Force motor prediction error
+        force_motor_error = force_motor_pred - force_motor_true
+        axes[0, 1].plot(time_steps, force_motor_error, 'g-', linewidth=2)
+        axes[0, 1].set_xlabel('Time [s]')
+        axes[0, 1].set_ylabel('Force Motor Error [N]')
+        axes[0, 1].set_title('Force Motor State Prediction Error')
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # Plot 3: State trajectory comparison (position)
+        axes[1, 0].plot(time_steps, x_pred[:, 0], 'b-', linewidth=2, label='GP Predicted x')
+        axes[1, 0].plot(time_steps, x_true[:len(time_steps), 0], 'r--', linewidth=2, label='Ground Truth x')
+        axes[1, 0].plot(time_steps, x_pred[:, 1], 'c-', linewidth=2, label='GP Predicted y')
+        axes[1, 0].plot(time_steps, x_true[:len(time_steps), 1], 'm--', linewidth=2, label='Ground Truth y')
+        axes[1, 0].plot(time_steps, x_pred[:, 2], 'y-', linewidth=2, label='GP Predicted z')
+        axes[1, 0].plot(time_steps, x_true[:len(time_steps), 2], 'k--', linewidth=2, label='Ground Truth z')
+        axes[1, 0].set_xlabel('Time [s]')
+        axes[1, 0].set_ylabel('Position [m]')
+        axes[1, 0].set_title('Position Trajectories')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # Plot 4: Overall state prediction error (RMS)
+        state_errors = np.sqrt(np.mean((x_pred[:len(x_true), :] - x_true[:len(x_pred), :])**2, axis=1))
+        axes[1, 1].plot(time_steps[:len(state_errors)], state_errors, 'k-', linewidth=2)
+        axes[1, 1].set_xlabel('Time [s]')
+        axes[1, 1].set_ylabel('RMS State Error')
+        axes[1, 1].set_title('Overall State Prediction Error')
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # Add overall title and save
+        plt.suptitle(f'Open-Loop GP Dynamics Prediction - {title}', fontsize=16)
+        plt.tight_layout()
+        
+        # Save the plot
+        plot_path = os.path.join(output_dir, f'open_loop_prediction_{title}.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f'Open-loop prediction plot saved at {plot_path}')
+        
+        # Print some statistics
+        force_motor_rmse = np.sqrt(np.mean(force_motor_error**2))
+        force_motor_mae = np.mean(np.abs(force_motor_error))
+        print(f'Force Motor Prediction RMSE: {force_motor_rmse:.6f}')
+        print(f'Force Motor Prediction MAE: {force_motor_mae:.6f}')
+        
+        plt.close()
+        
+        return {
+            'force_motor_pred': force_motor_pred,
+            'force_motor_true': force_motor_true, 
+            'force_motor_error': force_motor_error,
+            'force_motor_rmse': force_motor_rmse,
+            'force_motor_mae': force_motor_mae,
+            'x_pred': x_pred,
+            'f_cont_pred': f_cont_pred
+        }
