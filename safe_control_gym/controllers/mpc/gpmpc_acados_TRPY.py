@@ -24,7 +24,7 @@ from termcolor import colored
 
 from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
 from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcessCollection, ZeroMeanIndependentGPModel,
-                                                       covMatern52ard, covSEard, covSE_single, kmeans_centriods, GaussianProcess)
+                                                       covMatern52ard, covMatern52_single, covSEard, covSE_single, kmeans_centriods, GaussianProcess)
 from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
 from safe_control_gym.controllers.mpc.mpc import MPC
 from safe_control_gym.controllers.mpc.gpmpc_base import GPMPC
@@ -581,24 +581,24 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         GP_T = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_T,
-            kernel='RBF_single', 
+            kernel=self.kernel, 
         )
         GP_R = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_R,
-            kernel='RBF_single',
+            kernel=self.kernel,
         )
 
         GP_P = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_P,
-            kernel='RBF_single',
+            kernel=self.kernel,
         )
         
         GP_Y = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_Y,
-            kernel='RBF_single',
+            kernel=self.kernel,
         )
 
         if gp_model:
@@ -1484,19 +1484,56 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         ks_P = cs.SX.zeros(1, n_ind_points) # kernel vector
         ks_Y = cs.SX.zeros(1, n_ind_points) # kernel vector
 
-        covSE_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
-                                       [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
-        covSE_R = cs.Function('covSE', [z1_R, z2_R, ell_s_R, sf2_s_R],
-                                        [covSE_single(z1_R, z2_R, ell_s_R, sf2_s_R)])
-        covSE_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
-                                       [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
-        covSE_Y = cs.Function('covSE', [z1_Y, z2_Y, ell_s_Y, sf2_s_Y],
-                                       [covSE_single(z1_Y, z2_Y, ell_s_Y, sf2_s_Y)])
+        # Create CasADI kernel functions based on GP kernel types
+        if GP_T.kernel == 'RBF_single':
+            covFunc_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                           [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+        elif GP_T.kernel == 'Matern_single':
+            covFunc_T = cs.Function('covMatern', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                           [covMatern52_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+        else:
+            # Default to RBF_single for backward compatibility
+            covFunc_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                           [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+        
+        if GP_R.kernel == 'RBF_single':
+            covFunc_R = cs.Function('covSE', [z1_R, z2_R, ell_s_R, sf2_s_R],
+                                            [covSE_single(z1_R, z2_R, ell_s_R, sf2_s_R)])
+        elif GP_R.kernel == 'Matern_single':
+            covFunc_R = cs.Function('covMatern', [z1_R, z2_R, ell_s_R, sf2_s_R],
+                                            [covMatern52_single(z1_R, z2_R, ell_s_R, sf2_s_R)])
+        else:
+            # Default to RBF_single for backward compatibility
+            covFunc_R = cs.Function('covSE', [z1_R, z2_R, ell_s_R, sf2_s_R],
+                                            [covSE_single(z1_R, z2_R, ell_s_R, sf2_s_R)])
+        
+        if GP_P.kernel == 'RBF_single':
+            covFunc_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
+                                           [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+        elif GP_P.kernel == 'Matern_single':
+            covFunc_P = cs.Function('covMatern', [z1_P, z2_P, ell_s_P, sf2_s_P],
+                                           [covMatern52_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+        else:
+            # Default to RBF_single for backward compatibility
+            covFunc_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
+                                           [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+        
+        if GP_Y.kernel == 'RBF_single':
+            covFunc_Y = cs.Function('covSE', [z1_Y, z2_Y, ell_s_Y, sf2_s_Y],
+                                           [covSE_single(z1_Y, z2_Y, ell_s_Y, sf2_s_Y)])
+        elif GP_Y.kernel == 'Matern_single':
+            covFunc_Y = cs.Function('covMatern', [z1_Y, z2_Y, ell_s_Y, sf2_s_Y],
+                                           [covMatern52_single(z1_Y, z2_Y, ell_s_Y, sf2_s_Y)])
+        else:
+            # Default to RBF_single for backward compatibility
+            covFunc_Y = cs.Function('covSE', [z1_Y, z2_Y, ell_s_Y, sf2_s_Y],
+                                           [covSE_single(z1_Y, z2_Y, ell_s_Y, sf2_s_Y)])
+        
         for i in range(n_ind_points):
-            ks_T[i] = covSE_T(z1_T, z_ind[i, T_data_idx], ell_s_T, sf2_s_T)
-            ks_R[i] = covSE_R(z1_R, z_ind[i, R_data_idx], ell_s_R, sf2_s_R)
-            ks_P[i] = covSE_P(z1_P, z_ind[i, P_data_idx], ell_s_P, sf2_s_P)
-            ks_Y[i] = covSE_Y(z1_Y, z_ind[i, Y_data_idx], ell_s_Y, sf2_s_Y)
+            ks_T[i] = covFunc_T(z1_T, z_ind[i, T_data_idx], ell_s_T, sf2_s_T)
+            ks_R[i] = covFunc_R(z1_R, z_ind[i, R_data_idx], ell_s_R, sf2_s_R)
+            ks_P[i] = covFunc_P(z1_P, z_ind[i, P_data_idx], ell_s_P, sf2_s_P)
+            ks_Y[i] = covFunc_Y(z1_Y, z_ind[i, Y_data_idx], ell_s_Y, sf2_s_Y)
         ks_func_T = cs.Function('K_s', [z1_T, z_ind, ell_s_T, sf2_s_T], [ks_T])
         ks_func_R = cs.Function('K_s', [z1_R, z_ind, ell_s_R, sf2_s_R], [ks_R])
         ks_func_P = cs.Function('K_s', [z1_P, z_ind, ell_s_P, sf2_s_P], [ks_P])

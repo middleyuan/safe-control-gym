@@ -76,6 +76,27 @@ def covMatern52ard(x,
     r_over_l = ca.sqrt(dist)
     return sf2 * (1 + ca.sqrt(5) * r_over_l + 5 / 3 * r_over_l ** 2) * ca.exp(- ca.sqrt(5) * r_over_l)
 
+def covMatern52_single(x,
+                       z,
+                       ell,
+                       sf2
+                       ):
+    '''Matern kernel that takes nu equal to 5/2 with single length scale.
+
+    Args:
+        x (np.array or casadi.MX/SX): First vector.
+        z (np.array or casadi.MX/SX): Second vector.
+        ell (float or casadi.MX/SX): Single length scale.
+        sf2 (float or casadi.MX/SX): output scale parameter.
+
+    Returns:
+        Matern52 kernel (casadi.MX/SX): Matern52 kernel.
+
+    '''
+    dist = ca.sum1((x - z) ** 2 / ell ** 2)
+    r_over_l = ca.sqrt(dist)
+    return sf2 * (1 + ca.sqrt(5) * r_over_l + 5 / 3 * r_over_l ** 2) * ca.exp(- ca.sqrt(5) * r_over_l)
+
 class ZeroMeanIndependentMultitaskGPModel(gpytorch.models.ExactGP):
     '''Multidimensional Gaussian Process model with zero mean function.
 
@@ -122,6 +143,11 @@ class ZeroMeanIndependentMultitaskGPModel(gpytorch.models.ExactGP):
                                               ard_num_dims=train_x.shape[1]),
                 batch_shape=torch.Size([self.n]),
                 ard_num_dims=train_x.shape[1]
+            )
+        elif kernel == 'Matern_single':
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.MaternKernel(batch_shape=torch.Size([self.n])),
+                batch_shape=torch.Size([self.n])
             )
         elif kernel == 'Linear':
             self.covar_module = gpytorch.kernels.LinearKernel(batch_shape=torch.Size([self.n])) \
@@ -172,6 +198,10 @@ class ZeroMeanIndependentGPModel(gpytorch.models.ExactGP):
                 gpytorch.kernels.MaternKernel(ard_num_dims=train_x.shape[1]),
                 ard_num_dims=train_x.shape[1]
             )
+        elif kernel == 'Matern_single':
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.MaternKernel(),
+            )
         elif kernel == 'RBF_single':
             self.covar_module = gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.RBFKernel(),
@@ -217,6 +247,11 @@ class BatchIndependentMultitaskGPModel(gpytorch.models.ExactGP):
             self.covar_module = gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.MaternKernel(ard_num_dims=train_x.shape[-1], batch_shape=torch.Size([train_y.shape[0]])),
                 batch_shape=torch.Size([train_y.shape[0]]), ard_num_dims=train_x.shape[-1]
+            )
+        elif kernel == 'Matern_single':
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.MaternKernel(batch_shape=torch.Size([train_y.shape[0]])),
+                batch_shape=torch.Size([train_y.shape[0]])
             )
         elif kernel == 'Linear':
             self.covar_module = gpytorch.kernels.LinearKernel(batch_shape=torch.Size(train_y.shape[0])) \
@@ -1084,6 +1119,12 @@ class BatchGPModel:
                                          [covMatern52ard(z, train_inputs.T, lengthscale.T, output_scale)],
                                          ['z'],
                                          ['K'])
+            elif self.kernel == 'Matern_single':
+                K_z_ztrain = ca.Function('k_z_ztrain',
+                                         [z],
+                                         [covMatern52_single(z, train_inputs.T, lengthscale.T, output_scale)],
+                                         ['z'],
+                                         ['K'])
             elif self.kernel == 'Linear':
                 K_z_ztrain = ca.Function('k_z_ztrain',
                                          [z],
@@ -1460,6 +1501,12 @@ class GaussianProcess:
             K_z_ztrain = ca.Function('k_z_ztrain',
                                      [z],
                                      [covMatern52ard(z, train_inputs.T, lengthscale.T, output_scale)],
+                                     ['z'],
+                                     ['K'])
+        elif self.kernel == 'Matern_single':
+            K_z_ztrain = ca.Function('k_z_ztrain',
+                                     [z],
+                                     [covMatern52_single(z, train_inputs.T, lengthscale.T, output_scale)],
                                      ['z'],
                                      ['K'])
         elif self.kernel == 'Linear':
