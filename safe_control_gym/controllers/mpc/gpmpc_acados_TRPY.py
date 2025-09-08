@@ -181,6 +181,12 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         self.rand_hist = {'task_rand': [], 'domain_rand': []}
         self.new_GP_model = False
         # self.param_noise_std = param_noise_std
+        
+        # Store the noise variances for use in GP training
+        self.thrust_noise_var = None
+        self.roll_noise_var = None
+        self.pitch_noise_var = None
+        self.yaw_noise_var = None
 
     def preprocess_training_data(self,
                                  x_seq,
@@ -280,23 +286,11 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         # yaw_noise_var = 2*self.obs_noise_std[self.psi_dot_idx]**2/dt**2 if hasattr(self, 'obs_noise_std') else 1e-6
         # yaw_noise_var += self.act_noise_std[3]**2 if hasattr(self, 'act_noise_std') else 0
         
-        thrust_noise_var = 0.2
-        pitch_noise_var = 1.5
-        roll_noise_var = 1.5
-        yaw_noise_var = 1
-        
-        # If domain randomization is used, add the propagated parametric noise
-        if hasattr(self, 'param_noise_std') and self.param_noise_std is not None:
-            # Add parametric uncertainty contributions if available
-            if 'thrust_coeff' in self.param_noise_std:
-                thrust_noise_var += np.max(self.param_noise_std['thrust_coeff'].scale**2 * T_cmd**2)
-            if 'roll_coeff' in self.param_noise_std:
-                roll_noise_var += np.max(self.param_noise_std['roll_coeff'].scale**2 * u_seq[:, self.phi_cmd_idx]**2)
-            if 'pitch_coeff' in self.param_noise_std:
-                pitch_noise_var += np.max(self.param_noise_std['pitch_coeff'].scale**2 * u_seq[:, self.theta_cmd_idx]**2)
-            if 'yaw_coeff' in self.param_noise_std:
-                yaw_noise_var += np.max(self.param_noise_std['yaw_coeff'].scale**2 * u_seq[:, self.psi_cmd_idx]**2)
-        
+        thrust_noise_var = 0.3
+        pitch_noise_var = 2
+        roll_noise_var = 2
+        yaw_noise_var = 2
+
         # Store the noise variances for use in GP training
         self.thrust_noise_var = np.array(np.max(thrust_noise_var))
         self.roll_noise_var = np.array(np.max(roll_noise_var))
@@ -840,8 +834,8 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         # ocp.solver_options.qp_solver_iter_max = 10
         # ocp.solver_options.qp_tol = 1e-4
         # ocp.solver_options.tol = 1e-4
-        ocp.solver_options.as_rti_level = 0 if not self.use_RTI else 4
-        ocp.solver_options.as_rti_iter = 1 if not self.use_RTI else 1
+        # ocp.solver_options.as_rti_level = 0 if not self.use_RTI else 4
+        # ocp.solver_options.as_rti_iter = 1 if not self.use_RTI else 1
 
         # ocp.solver_options.globalization = 'FUNNEL_L1PEN_LINESEARCH' if not self.use_RTI else 'MERIT_BACKTRACKING'
         ocp.solver_options.globalization = 'MERIT_BACKTRACKING'
