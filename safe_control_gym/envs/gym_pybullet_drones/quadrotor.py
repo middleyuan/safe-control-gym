@@ -1239,19 +1239,31 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T, R, P)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
-            params_acc = [20.907574256269616, 3.653687545690674]
-            params_roll_rate = [-130.3, -16.33, 119.3]
-            params_pitch_rate = [-99.94, -13.3, 84.73]
+            # params_acc = [20.907574256269616, 3.653687545690674]
+            # params_roll_rate = [-130.3, -16.33, 119.3]
+            # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # self.a = prior_prop.get('a', 20.907574256269616)
+            # self.b = prior_prop.get('b', 3.653687545690674)
+            # self.c = prior_prop.get('c', -130.3)
+            # self.d = prior_prop.get('d', -16.33)
+            # self.e = prior_prop.get('e', 119.3)
+            # self.f = prior_prop.get('f', -99.94)
+            # self.h = prior_prop.get('h', -13.3)
+            # self.l = prior_prop.get('l', 84.73)
             psi = 0
-
-            self.a = prior_prop.get('a', 20.907574256269616)
-            self.b = prior_prop.get('b', 3.653687545690674)
-            self.c = prior_prop.get('c', -130.3)
-            self.d = prior_prop.get('d', -16.33)
-            self.e = prior_prop.get('e', 119.3)
-            self.f = prior_prop.get('f', -99.94)
-            self.h = prior_prop.get('h', -13.3)
-            self.l = prior_prop.get('l', 84.73)
+            a_value = 0.5846 / self.MASS
+            b_value = 0.1537 / self.MASS
+            params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+            params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+            self.a = prior_prop.get('a', a_value)
+            self.b = prior_prop.get('b', b_value)
+            self.c = prior_prop.get('c', params_roll_rate[0])
+            self.d = prior_prop.get('d', params_roll_rate[1])
+            self.e = prior_prop.get('e', params_roll_rate[2])
+            self.f = prior_prop.get('f', params_pitch_rate[0])
+            self.h = prior_prop.get('h', params_pitch_rate[1])
+            self.l = prior_prop.get('l', params_pitch_rate[2])
 
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
@@ -1356,8 +1368,10 @@ class Quadrotor(BaseAviary):
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S]:
             U_EQ = np.array([u_eq, 0])
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE]:
             U_EQ = np.array([u_eq, 0, 0, 0])
+        elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY]:
+            U_EQ = np.array([u_eq/params_acc[1]-params_acc[0], 0, 0, 0])
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_10]:
             U_EQ = np.array([u_eq, 0, 0])
         else:
