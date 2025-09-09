@@ -3,11 +3,13 @@ from copy import deepcopy
 
 import casadi as cs
 import numpy as np
+import scipy
 from termcolor import colored
 
 from safe_control_gym.controllers.mpc.mpc_acados import MPC_ACADOS
 from safe_control_gym.controllers.mpc.mpc_utils import set_acados_constraint_bound
 from safe_control_gym.utils.utils import timing
+from safe_control_gym.envs.constraints import BoundedConstraint
 
 try:
     from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
@@ -88,7 +90,10 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         self.u_guess = None
         # linearization point
         self.x_lin = np.atleast_2d(self.model.X_EQ)[0, :].T
+        # self.x_lin[4] = 0.0
         self.u_lin = np.atleast_2d(self.model.U_EQ)[0, :].T
+        # print(f'Linearization point x_lin: {self.x_lin}, u_lin: {self.u_lin}')
+        # exit()
         # acados settings
         self.use_RTI = use_RTI
 
@@ -103,22 +108,85 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
     def setup_acados_optimizer(self, acados_model: AcadosModel) -> AcadosOcp:
         '''Sets up linearized optimization problem.'''
-        ocp = super().setup_acados_optimizer(acados_model)
+        # do not use the parent class method for debugging
+        # ocp = super().setup_acados_optimizer(acados_model)
+        
+        nx, nu = self.model.nx, self.model.nu
+        ny = nx + nu
+        ny_e = nx
+
+        # create ocp object to formulate the OCP
+        ocp = AcadosOcp()
+        ocp.model = acados_model
+
+        # set dimensions
+        ocp.dims.N = self.T  # prediction horizon
+
+        # set cost (NOTE: safe-control-gym uses quadratic cost)
+        ocp.cost.cost_type = 'LINEAR_LS'
+        ocp.cost.cost_type_e = 'LINEAR_LS'
+        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
+        ocp.cost.Vx = np.zeros((ny, nx))
+        ocp.cost.Vx[:nx, :nx] = np.eye(nx)
+        ocp.cost.Vu = np.zeros((ny, nu))
+        ocp.cost.Vu[nx:(nx + nu), :nu] = np.eye(nu)
+        ocp.cost.Vx_e = np.eye(nx)
+        # placeholder y_ref and y_ref_e (will be set in select_action)
+        ocp.cost.yref = np.zeros((ny, ))
+        ocp.cost.yref_e = np.zeros((ny_e, ))
         # Constraints are overridden with delta constraints
         # general constraint expressions
-        state_constraint_expr_list = []
-        input_constraint_expr_list = []
-        for sc_i, state_constraint in enumerate(self.state_constraints_sym):
-            state_constraint_expr_list.append(state_constraint(ocp.model.x+self.x_lin))
-        for ic_i, input_constraint in enumerate(self.input_constraints_sym):
-            input_constraint_expr_list.append(input_constraint(ocp.model.u+self.u_lin))
+        # state_constraint_expr_list = []
+        # input_constraint_expr_list = []
+        # for sc_i, state_constraint in enumerate(self.state_constraints_sym):
+        #     state_constraint_expr_list.append(state_constraint(ocp.model.x+self.x_lin))
+        # for ic_i, input_constraint in enumerate(self.input_constraints_sym):
+        #     input_constraint_expr_list.append(input_constraint(ocp.model.u+self.u_lin))
 
-        h_expr_list = state_constraint_expr_list + input_constraint_expr_list
-        h_expr = cs.vertcat(*h_expr_list)
-        h0_expr = cs.vertcat(*h_expr_list)
-        he_expr = cs.vertcat(*state_constraint_expr_list)  # terminal constraints are only state constraints
-        # pass the constraints to the ocp object
-        ocp = self.processing_acados_constraints_expression(ocp, h0_expr, h_expr, he_expr)
+        # h_expr_list = state_constraint_expr_list + input_constraint_expr_list
+        # h_expr = cs.vertcat(*h_expr_list)
+        # h0_expr = cs.vertcat(*h_expr_list)
+        # he_expr = cs.vertcat(*state_constraint_expr_list)  # terminal constraints are only state constraints
+        # # pass the constraints to the ocp object
+        # ocp = self.processing_acados_constraints_expression(ocp, h0_expr, h_expr, he_expr)
+        # for state_constraint in self.constraints.state_constraints:
+        #     if isinstance(state_constraint, BoundedConstraint):
+        #         ocp.constraints.lbx = state_constraint.lower_bounds - self.x_lin
+        #         ocp.constraints.ubx = state_constraint.upper_bounds - self.x_lin
+        #         ocp.constraints.idxbx = np.arange(nx)
+        #         ocp.constraints.lbx_e = state_constraint.lower_bounds - self.x_lin
+        #         ocp.constraints.ubx_e = state_constraint.upper_bounds - self.x_lin
+        #         ocp.constraints.idxbx_e = np.arange(nx)
+        #     else:
+        #         raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
+        for input_constraint in self.constraints.input_constraints:
+            if isinstance(input_constraint, BoundedConstraint):
+                ocp.constraints.lbu = input_constraint.lower_bounds - self.u_lin
+                ocp.constraints.ubu = input_constraint.upper_bounds - self.u_lin
+                ocp.constraints.idxbu = np.arange(nu)
+            else:
+                raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
+        print(f'ocp.constraints.lbx: {ocp.constraints.lbx}, ubx: {ocp.constraints.ubx}')
+        print(f'ocp.constraints.lbu: {ocp.constraints.lbu}, ubu: {ocp.constraints.ubu}')
+        print(f'ocp.constraints.lbx_e: {ocp.constraints.lbx_e}, ubx_e: {ocp.constraints.ubx_e}')
+
+        if self.soft_constraints:
+            print(colored('Linear MPC soft constraints not implemented yet.', 'yellow'))
+
+        # placeholder initial state constraint
+        x_init = np.zeros((nx))
+        ocp.constraints.x0 = x_init
+
+        # set up solver options
+        ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+        ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+        ocp.solver_options.integrator_type = 'DISCRETE'
+        ocp.solver_options.nlp_solver_type = 'SQP' if not self.use_RTI else 'SQP_RTI'
+        ocp.solver_options.nlp_solver_max_iter = 25 if not self.use_RTI else 1
+        # ocp.solver_options.globalization = 'FUNNEL_L1PEN_LINESEARCH' if not self.use_RTI else 'MERIT_BACKTRACKING'
+        # ocp.solver_options.globalization = 'MERIT_BACKTRACKING'
+        ocp.solver_options.tf = self.T * self.dt  # prediction horizon
         ocp.code_export_directory = self.output_dir + '/linear_mpc_c_generated_code'
 
         return ocp
@@ -155,7 +223,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
                 self.acados_ocp_solver.set(idx, 'x', init_x)
             for idx in range(self.T):
                 if nu == 1:
-                    init_u = np.array([self.u_guess[idx]])
+                    init_u = np.array([self.u_guess[idx]]) - self.u_lin
                 else:
                     init_u = self.u_guess[:, idx] - self.u_lin
                 self.acados_ocp_solver.set(idx, 'u', init_u)
@@ -170,7 +238,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         y_ref = np.concatenate((x_ref, u_ref), axis=0)
         for idx in range(self.T):
             self.acados_ocp_solver.set(idx, 'yref', y_ref[:, idx])
-        y_ref_e = goal_states[:, -1]
+        y_ref_e = goal_states[:, -1] - self.x_lin
         self.acados_ocp_solver.set(self.T, 'yref', y_ref_e)
 
         # solve the optimization problem
@@ -242,8 +310,105 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
         # recover the action
         action += self.u_lin.flatten()
+        
+        # self._compute_open_loop_prediction()
+        # self.plot_open_loop_prediction()
 
         if self.use_lqr_gain_and_terminal_cost:
             action += self.lqr_gain @ (obs - self.x_prev[:, 0])
 
         return action
+
+
+    # def _compute_open_loop_prediction(self):
+    #     """
+    #     Compute the open-loop prediction from the current MPC solution.
+    #     Stores the prediction in self.open_loop_states and self.open_loop_inputs.
+    #     """
+    #     if self.x_prev is None or self.u_prev is None:
+    #         return
+        
+    #     # Convert delta states/inputs back to absolute states/inputs
+    #     self.open_loop_states = self.x_prev + np.repeat(self.x_lin.reshape(-1, 1), self.T + 1, axis=1)
+        
+    #     if self.model.nu == 1:
+    #         # Handle 1D input case
+    #         u_prev_reshaped = self.u_prev.reshape(1, -1) if self.u_prev.ndim == 1 else self.u_prev
+    #         self.open_loop_inputs = u_prev_reshaped + np.repeat(self.u_lin.reshape(-1, 1), self.T, axis=1)
+    #     else:
+    #         self.open_loop_inputs = self.u_prev + np.repeat(self.u_lin.reshape(-1, 1), self.T, axis=1)
+
+    # def plot_open_loop_prediction(self, fig=None, show_states=True, show_inputs=True, 
+    #                              state_labels=None, input_labels=None):
+    #     """
+    #     Plot the open-loop prediction from the MPC solution.
+        
+    #     Args:
+    #         fig: matplotlib figure to plot on (creates new if None)
+    #         show_states (bool): whether to plot predicted states
+    #         show_inputs (bool): whether to plot predicted inputs  
+    #         state_labels (list): labels for state variables
+    #         input_labels (list): labels for input variables
+            
+    #     Returns:
+    #         fig: matplotlib figure object
+    #     """
+    #     import matplotlib.pyplot as plt
+        
+    #     if not hasattr(self, 'open_loop_states') or self.open_loop_states is None:
+    #         print("No open-loop prediction available yet. Run select_action first.")
+    #         return None
+        
+    #     if fig is None:
+    #         fig = plt.figure(figsize=(12, 8))
+        
+    #     nx, nu = self.model.nx, self.model.nu
+    #     time_horizon = np.arange(self.T + 1)
+    #     input_time_horizon = np.arange(self.T)
+        
+    #     # Determine subplot layout
+    #     n_plots = 0
+    #     if show_states and nx > 0:
+    #         n_plots += 1
+    #     if show_inputs and nu > 0:
+    #         n_plots += 1
+            
+    #     if n_plots == 0:
+    #         return fig
+        
+    #     plot_idx = 1
+        
+    #     # Plot states
+    #     if show_states and nx > 0:
+    #         ax_states = fig.add_subplot(n_plots, 1, plot_idx)
+    #         for i in range(nx):
+    #             label = state_labels[i] if state_labels and i < len(state_labels) else f'State {i+1}'
+    #             ax_states.plot(time_horizon, self.open_loop_states[i, :], 'o-', label=label)
+    #         ax_states.set_xlabel('Time Step')
+    #         ax_states.set_ylabel('State Value')
+    #         ax_states.set_title('Open-Loop State Prediction')
+    #         ax_states.legend()
+    #         ax_states.grid(True)
+    #         plot_idx += 1
+        
+    #     # Plot inputs
+    #     if show_inputs and nu > 0:
+    #         ax_inputs = fig.add_subplot(n_plots, 1, plot_idx)
+    #         for i in range(nu):
+    #             label = input_labels[i] if input_labels and i < len(input_labels) else f'Input {i+1}'
+    #             if nu == 1:
+    #                 input_data = self.open_loop_inputs if self.open_loop_inputs.ndim == 1 else self.open_loop_inputs[i, :]
+    #             else:
+    #                 input_data = self.open_loop_inputs[i, :]
+    #             ax_inputs.step(input_time_horizon, input_data, where='post', label=label)
+    #         ax_inputs.set_xlabel('Time Step')
+    #         ax_inputs.set_ylabel('Input Value')
+    #         ax_inputs.set_title('Open-Loop Input Prediction')
+    #         ax_inputs.legend()
+    #         ax_inputs.grid(True)
+        
+    #     plt.tight_layout()
+    #     # plt.show()
+    #     plt.savefig('./linear_mpc_open_loop_prediction.png')
+    #     plt.close()
+    #     print("Saved open-loop prediction figure to './linear_mpc_open_loop_prediction.png'")
