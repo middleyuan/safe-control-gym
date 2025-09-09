@@ -151,13 +151,13 @@ class LinearMPC_ACADOS(MPC_ACADOS):
                 # compute initial guess with IPOPT
                 self.compute_initial_guess(obs)
             for idx in range(self.T + 1):
-                init_x = self.x_guess[:, idx]
+                init_x = self.x_guess[:, idx] - self.x_lin
                 self.acados_ocp_solver.set(idx, 'x', init_x)
             for idx in range(self.T):
                 if nu == 1:
                     init_u = np.array([self.u_guess[idx]])
                 else:
-                    init_u = self.u_guess[:, idx]
+                    init_u = self.u_guess[:, idx] - self.u_lin
                 self.acados_ocp_solver.set(idx, 'u', init_u)
 
         # set reference for the control horizon
