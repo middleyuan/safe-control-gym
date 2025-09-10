@@ -4,6 +4,7 @@ from copy import deepcopy
 import casadi as cs
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
 from termcolor import colored
 
 from safe_control_gym.controllers.mpc.mpc_acados import MPC_ACADOS
@@ -44,6 +45,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             use_RTI: bool = False,
             compute_initial_guess_method = 'lqr',
             use_lqr_gain_and_terminal_cost: bool = False,
+            use_r_term: bool = False,
             **kwargs
     ):
         '''Creates task and controller.
@@ -63,6 +65,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             seed (int): random seed.
             use_RTI (bool): Real-time iteration for acados.
             use_lqr_gain_and_terminal_cost (bool): Use LQR ancillary gain and terminal cost for the MPC.
+            use_r_term (bool): Use r term correction for linearization error in MPC dynamics.
         '''
         for k, v in locals().items():
             if k != 'self' and k != 'kwargs' and '__' not in k:
@@ -90,20 +93,48 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         self.u_guess = None
         # linearization point
         self.x_lin = np.atleast_2d(self.model.X_EQ)[0, :].T
-        # self.x_lin[4] = 0.0
         self.u_lin = np.atleast_2d(self.model.U_EQ)[0, :].T
-        # print(f'Linearization point x_lin: {self.x_lin}, u_lin: {self.u_lin}')
-        # exit()
         # acados settings
         self.use_RTI = use_RTI
 
     def setup_acados_model(self) -> AcadosModel:
         '''Sets up symbolic model for acados.'''
         acados_model = super().setup_acados_model()
-        # override the dynamics function with linearized dynamics
-        f_disc = self.linear_dynamics_func(acados_model.x, 
-                                           acados_model.u)
-        acados_model.disc_dyn_expr = f_disc
+        
+        # Linear dynamics: Δx_{i,k+1} = A_{i,k}Δx_{i,k} + B_{i,k}Δu_{i,k}
+        f_linear = self.linear_dynamics_func(acados_model.x, acados_model.u)
+        
+        if self.use_r_term:
+            # Set up parameters for reference trajectory when using r term
+            nx, nu = self.model.nx, self.model.nu
+            
+            # Parameters: [x_ref_k, u_ref_k, x_ref_k+1]
+            # We need both current and next reference states to compute r term
+            x_ref_k = cs.MX.sym('x_ref_k', nx)
+            u_ref_k = cs.MX.sym('u_ref_k', nu)
+            x_ref_k_plus_1 = cs.MX.sym('x_ref_k_plus_1', nx)
+            
+            # Concatenate all parameters
+            acados_model.p = cs.vertcat(x_ref_k, u_ref_k, x_ref_k_plus_1)
+            
+            # Compute r term: r_i,k = f(x_ref_i,k, u_ref_i,k) - x_ref_i,k+1
+            # Use the original nonlinear discrete dynamics
+            fc_func = self.model.fc_func
+            k1 = fc_func(x_ref_k, u_ref_k)
+            k2 = fc_func(x_ref_k + self.dt / 2 * k1, u_ref_k)
+            k3 = fc_func(x_ref_k + self.dt / 2 * k2, u_ref_k)
+            k4 = fc_func(x_ref_k + self.dt * k3, u_ref_k)
+            f_nonlinear_ref = x_ref_k + self.dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+            
+            # Compute r term: difference between nonlinear dynamics and reference trajectory
+            r_term = f_nonlinear_ref - x_ref_k_plus_1
+            
+            # Complete dynamics with r term: Δx_{i,k+1} = A_{i,k}Δx_{i,k} + B_{i,k}Δu_{i,k} + r_{i,k}
+            acados_model.disc_dyn_expr = f_linear + r_term
+        else:
+            # Standard linear dynamics without r term
+            acados_model.disc_dyn_expr = f_linear
+        
         return acados_model
 
     def setup_acados_optimizer(self, acados_model: AcadosModel) -> AcadosOcp:
@@ -150,26 +181,23 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         # he_expr = cs.vertcat(*state_constraint_expr_list)  # terminal constraints are only state constraints
         # # pass the constraints to the ocp object
         # ocp = self.processing_acados_constraints_expression(ocp, h0_expr, h_expr, he_expr)
-        # for state_constraint in self.constraints.state_constraints:
-        #     if isinstance(state_constraint, BoundedConstraint):
-        #         ocp.constraints.lbx = state_constraint.lower_bounds - self.x_lin
-        #         ocp.constraints.ubx = state_constraint.upper_bounds - self.x_lin
-        #         ocp.constraints.idxbx = np.arange(nx)
-        #         ocp.constraints.lbx_e = state_constraint.lower_bounds - self.x_lin
-        #         ocp.constraints.ubx_e = state_constraint.upper_bounds - self.x_lin
-        #         ocp.constraints.idxbx_e = np.arange(nx)
-        #     else:
-        #         raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
+        for state_constraint in self.constraints.state_constraints:
+            if isinstance(state_constraint, BoundedConstraint):
+                ocp.constraints.lbx = state_constraint.lower_bounds - self.x_lin
+                ocp.constraints.ubx = state_constraint.upper_bounds - self.x_lin
+                ocp.constraints.idxbx = np.arange(nx)
+                ocp.constraints.lbx_e = state_constraint.lower_bounds - self.x_lin
+                ocp.constraints.ubx_e = state_constraint.upper_bounds - self.x_lin
+                ocp.constraints.idxbx_e = np.arange(nx)
+            else:
+                raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
         for input_constraint in self.constraints.input_constraints:
             if isinstance(input_constraint, BoundedConstraint):
-                ocp.constraints.lbu = input_constraint.lower_bounds - self.u_lin
-                ocp.constraints.ubu = input_constraint.upper_bounds - self.u_lin
+                ocp.constraints.lbu = input_constraint.lower_bounds - self.u_lin.flatten()
+                ocp.constraints.ubu = input_constraint.upper_bounds - self.u_lin.flatten()
                 ocp.constraints.idxbu = np.arange(nu)
             else:
                 raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
-        print(f'ocp.constraints.lbx: {ocp.constraints.lbx}, ubx: {ocp.constraints.ubx}')
-        print(f'ocp.constraints.lbu: {ocp.constraints.lbu}, ubu: {ocp.constraints.ubu}')
-        print(f'ocp.constraints.lbx_e: {ocp.constraints.lbx_e}, ubx_e: {ocp.constraints.ubx_e}')
 
         if self.soft_constraints:
             print(colored('Linear MPC soft constraints not implemented yet.', 'yellow'))
@@ -177,6 +205,12 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         # placeholder initial state constraint
         x_init = np.zeros((nx))
         ocp.constraints.x0 = x_init
+
+        # Initialize parameters for reference trajectory only if using r term
+        if self.use_r_term:
+            # Parameters: [x_ref_k, u_ref_k, x_ref_k+1] for each stage
+            n_params = 2 * nx + nu  # x_ref_k (nx) + u_ref_k (nu) + x_ref_k+1 (nx)
+            ocp.parameter_values = np.zeros((n_params,))
 
         # set up solver options
         ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
@@ -208,8 +242,8 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         '''
         nx, nu = self.model.nx, self.model.nu
         # set initial condition (0-th state)
-        self.acados_ocp_solver.set(0, 'lbx', obs)
-        self.acados_ocp_solver.set(0, 'ubx', obs)
+        self.acados_ocp_solver.set(0, 'lbx', obs - self.x_lin)
+        self.acados_ocp_solver.set(0, 'ubx', obs - self.x_lin)
 
         # warm-starting solver
         # NOTE: only for ipopt warm-starting; since acados
@@ -219,13 +253,13 @@ class LinearMPC_ACADOS(MPC_ACADOS):
                 # compute initial guess with IPOPT
                 self.compute_initial_guess(obs)
             for idx in range(self.T + 1):
-                init_x = self.x_guess[:, idx] - self.x_lin
+                init_x = self.x_guess[:, idx] - self.x_lin.flatten()
                 self.acados_ocp_solver.set(idx, 'x', init_x)
             for idx in range(self.T):
                 if nu == 1:
-                    init_u = np.array([self.u_guess[idx]]) - self.u_lin
+                    init_u = np.array([self.u_guess[idx]]) - self.u_lin.flatten()
                 else:
-                    init_u = self.u_guess[:, idx] - self.u_lin
+                    init_u = self.u_guess[:, idx] - self.u_lin.flatten()
                 self.acados_ocp_solver.set(idx, 'u', init_u)
 
         # set reference for the control horizon
@@ -238,8 +272,20 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         y_ref = np.concatenate((x_ref, u_ref), axis=0)
         for idx in range(self.T):
             self.acados_ocp_solver.set(idx, 'yref', y_ref[:, idx])
-        y_ref_e = goal_states[:, -1] - self.x_lin
+        y_ref_e = goal_states[:, -1] - self.x_lin.flatten()
         self.acados_ocp_solver.set(self.T, 'yref', y_ref_e)
+
+        # Set parameters for r term computation at each stage (only if using r term)
+        if self.use_r_term:
+            # Parameters: [x_ref_k, u_ref_k, x_ref_k+1] for each stage
+            for idx in range(self.T):
+                x_ref_k = goal_states[:, idx]  # Current reference state (absolute)
+                u_ref_k = self.U_EQ.reshape(-1)  # Current reference input (absolute)
+                x_ref_k_plus_1 = goal_states[:, idx + 1]  # Next reference state (absolute)
+                
+                # Combine parameters: [x_ref_k, u_ref_k, x_ref_k+1]
+                p_values = np.concatenate([x_ref_k, u_ref_k, x_ref_k_plus_1])
+                self.acados_ocp_solver.set(idx, 'p', p_values)
 
         # solve the optimization problem
         try:
@@ -280,6 +326,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             print(f'acados returned status {status}. ')
         action = self.acados_ocp_solver.get(0, 'u')
 
+        # Store the solution for warm-starting and results
         self.x_guess = self.x_prev
         self.u_guess = self.u_prev
         self.results_dict['horizon_states'].append(deepcopy(self.x_prev))
@@ -353,7 +400,6 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     #     Returns:
     #         fig: matplotlib figure object
     #     """
-    #     import matplotlib.pyplot as plt
         
     #     if not hasattr(self, 'open_loop_states') or self.open_loop_states is None:
     #         print("No open-loop prediction available yet. Run select_action first.")
@@ -365,6 +411,14 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     #     nx, nu = self.model.nx, self.model.nu
     #     time_horizon = np.arange(self.T + 1)
     #     input_time_horizon = np.arange(self.T)
+        
+    #     # Use environment state labels if none provided
+    #     if state_labels is None and hasattr(self.env, 'STATE_LABELS'):
+    #         state_labels = self.env.STATE_LABELS
+        
+    #     # Use environment action labels if none provided  
+    #     if input_labels is None and hasattr(self.env, 'ACTION_LABELS'):
+    #         input_labels = self.env.ACTION_LABELS
         
     #     # Determine subplot layout
     #     n_plots = 0

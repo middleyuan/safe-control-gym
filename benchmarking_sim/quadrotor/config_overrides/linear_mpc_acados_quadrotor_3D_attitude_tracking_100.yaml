@@ -1,13 +1,12 @@
 algo: linear_mpc_acados
 algo_config:
   horizon: 30
-# for fast figure-eight
   q_mpc:  
-  - 20
+  - 50
   - 0.5
-  - 20
+  - 50
   - 0.5
-  - 500
+  - 50
   - 0.5
   - 5
   - 5
@@ -15,35 +14,17 @@ algo_config:
   - 0.001
   - 0.001
   - 0.001
-  - 1
+  - 5
   r_mpc:
-  - 1
-  - 20
-  - 20
-  - 20
+  - 5
+  - 5
+  - 5
+  - 5
 
-# # for other traj
-#   q_mpc:  
-#   - 50
-#   - 0.5
-#   - 50
-#   - 0.5
-#   - 500
-#   - 0.5
-#   - 5
-#   - 5
-#   - 5
-#   - 0.001
-#   - 0.001
-#   - 0.001
-#   - 1
-#   r_mpc:
-#   - 1
-#   - 5
-#   - 5
-#   - 5
-  # warmstart: True
+  warmstart: True
   soft_constraints: True
+  # use_r_term: True
+  # use_lqr_gain_and_terminal_cost: True
   # use_RTI: True
   output_dir: ./linear_mpc_acados/results
 
