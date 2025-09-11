@@ -1485,9 +1485,12 @@ class Quadrotor(BaseAviary):
                                                      np.full(1, max_pitch_rad, np.float32),
                                                      np.full(1, max_yaw_rad, np.float32)]).flatten())
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
-            n_mot = 4
-            a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
-            a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            a_low = 0.08 # [N] measured from hardware data
+            a_high = 0.45 # [N]
+            max_roll_deg = 60
+            max_pitch_deg = 60
+            max_roll_rad = max_roll_deg * math.pi / 180
+            max_pitch_rad = max_pitch_deg * math.pi / 180
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
                                                      np.full(1, -max_roll_rad, np.float32),
                                                      np.full(1, -max_pitch_rad, np.float32)]).flatten(),
