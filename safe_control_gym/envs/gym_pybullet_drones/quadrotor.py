@@ -1373,7 +1373,7 @@ class Quadrotor(BaseAviary):
         elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY]:
             U_EQ = np.array([u_eq/params_acc[1]-params_acc[0], 0, 0, 0])
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_10]:
-            U_EQ = np.array([u_eq, 0, 0])
+            U_EQ = np.array([(u_eq - self.b) / self.a, 0, 0])
         else:
             U_EQ = np.ones(self.action_dim) * u_eq / self.action_dim
         # Define cost (quadratic form).
