@@ -1261,9 +1261,9 @@ class BaseAviary(BenchmarkEnv):
         params_acc = [0.0905, 0.8, 0.0814]
         f_dot = (params_acc[1] *(T_c + params_acc[0]) - forces_motor) / params_acc[2]
         # update rpy parameters (initial version)
-        params_roll_rate = [-286.2, -23.03, 225.6]
-        params_pitch_rate = [-286.2, -23.03, 225.6]
-        params_yaw_rate = [-192.9, -22.22, 323.5]        
+        params_roll_rate = [-238.1, -21.35, 179.65]
+        params_pitch_rate = [-238.1, -21.35, 179.65]
+        params_yaw_rate = [-170.4, -22.22, 280]        
         X_dot = cs.vertcat(x_dot, 
                             1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
                            y_dot,
