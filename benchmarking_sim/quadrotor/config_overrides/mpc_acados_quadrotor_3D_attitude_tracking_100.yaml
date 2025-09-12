@@ -37,15 +37,11 @@ algo_config:
   # r_mpc: [10, 10]
   # Prior info
   # prior_info:
-  #   # prior_prop: null
   #   prior_prop: 
-  #     beta_1: 18.11298
-  #     beta_2: 3.6800
-  #     beta_3: 0
-  #     alpha_1: -140.8
-  #     alpha_2: -13.4
-  #     alpha_3: 124.8
-  #   #   pitch_bias: 0.0 # in radian
+  #       params_acc: [0.0905, 1.2, 0.0814]
+  #       params_roll_rate: [-286.2, -23.03, 225.6]
+  #       params_pitch_rate: [-286.2, -23.03, 225.6]
+  #       params_yaw_rate: [-192.9, -22.22, 323.5]
   #   randomize_prior_prop: False
   #   prior_prop_rand_info: null
   warmstart: True

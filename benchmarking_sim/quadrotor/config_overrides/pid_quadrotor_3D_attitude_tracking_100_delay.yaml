@@ -1,0 +1,34 @@
+algo: pid
+algo_config:
+  prior_info:
+    prior_prop:
+      M: 0.037
+  #     Iyy: 0.000014
+
+  # p_coeff_for: [.4, .4, 1.25]
+  # i_coeff_for: [0, 0, 0]
+  # d_coeff_for: [.2, .2, .5]
+
+  # p_coeff_for: [0.8, 0.8, 1.25]
+  # i_coeff_for: [.05, .05, .05]
+  # d_coeff_for: [.7, .7, .85]
+
+  # p_coeff_for: [0.68, 0.69, 2.5]
+  # i_coeff_for: [.05, .05, .1]
+  # d_coeff_for: [.38, .39, .92]
+  
+  p_coeff_for: [1.0, 1.1, 1.25]
+  i_coeff_for: [.15, .15, .1]
+  d_coeff_for: [.85, .9, .92]
+
+  # p_coeff_for: [1.0, 1.1, 2.5]
+  # i_coeff_for: [.15, .15, .1]
+  # d_coeff_for: [.85, .9, .92]
+
+  # p_coeff_tor: [70000., 70000., 60000.]
+  # i_coeff_tor: [.0, .0, 500.]
+  # d_coeff_tor: [20000., 20000., 12000.]
+    
+
+  output_dir: ./pid/results
+      

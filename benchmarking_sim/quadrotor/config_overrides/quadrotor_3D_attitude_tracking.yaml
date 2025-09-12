@@ -15,7 +15,7 @@ task_config:
     init_z_dot: 0
     init_theta: 0
     init_theta_dot: 0
-    init_tau: 0.3234
+    init_tau: 0.3626
     # init_psi: 1.0
   # randomized_init: True
   randomized_init: False
@@ -36,7 +36,7 @@ task_config:
     # ilqr_traj_data: /home/mingxuan/Repositories/scg_tsung/examples/lqr/ilqr_ref_traj.npy
 
   inertial_prop:
-    M: 0.033
+    M: 0.037
   #   Iyy: 1.4e-05
   #   beta_1: 18.11
   #   beta_2: 3.68
