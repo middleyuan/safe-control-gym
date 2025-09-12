@@ -112,8 +112,8 @@ class FlatMPC(BaseController):
             # self.inertial_prop['gamma_2'] = 84.73
             self.inertial_prop['alpha_0'] = 0.5846 / self.env.MASS
             self.inertial_prop['alpha_1'] =  0.1537 / self.env.MASS
-            self.inertial_prop['alpha_0'] = 0.6921 / self.env.MASS
-            self.inertial_prop['alpha_1'] =  0.1205 / self.env.MASS
+            # self.inertial_prop['alpha_0'] = 0.6921 / self.env.MASS
+            # self.inertial_prop['alpha_1'] =  0.1205 / self.env.MASS
             self.inertial_prop['beta_0'] = -238.1
             self.inertial_prop['beta_1'] = -21.35
             self.inertial_prop['beta_2'] = 179.65
