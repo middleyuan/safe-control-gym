@@ -32,6 +32,7 @@ class iLQR(BaseController):
             lamb_max: float = 1000,
             epsilon: float = 0.01,
             warm_start_traj: str = None,
+            save_optimization_history: bool = False,
             **kwargs):
         '''Creates task and controller.
 
@@ -87,6 +88,7 @@ class iLQR(BaseController):
         if self.warm_start_traj is not None:
             self.load_warm_start_traj()
         self.load_warm_start_to_rollout = False  # otherwise load them to the iLQR optimization
+        self.save_optimization_history = save_optimization_history
         # self.load_warm_start_to_rollout = True # load them to the rollout
         self.reset()
 
@@ -271,7 +273,8 @@ class iLQR(BaseController):
         fig.tight_layout()
         # only show integer ticks for x-axis
         ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
-        fig.savefig(f'{self.output_dir}/optimization_log.png')
+        if self.save_optimization_history:
+            fig.savefig(f'{self.output_dir}/optimization_log.png')
 
     def update_policy(self, env):
         '''Updates policy.
