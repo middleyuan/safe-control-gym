@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
 from benchmarking_sim.quadrotor.plotting.safe.plot_helper_safe import (
     plot_xz_trajectory_with_hull,
     collect_state_constraint_values,
@@ -27,17 +26,29 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 os.mkdir(f'{script_path}/safe') \
     if not os.path.exists(f'{script_path}/safe') else None
 
-# Add PPO+MPSF color if not already defined - using a purple shade for good contrast
-if 'PPO+MPSF' not in plot_colors:
-    plot_colors['PPO+MPSF'] = 'mediumorchid'  # Purple color that contrasts well with orange (PPO) and tan (PPO-MPC)
-
 ref_color = 'black'
-gpmpc_color = plot_colors['GP-MPC']
+gpmpc_color = 'royalblue'
 gpmpc_hull_color = 'cornflowerblue'
-mpc_color = plot_colors['Nonlinear MPC']
-mpc_hull_color = plot_colors['Nonlinear MPC'] 
-ppo_color = plot_colors['PPO']
+mpc_color = 'cadetblue'
+mpc_hull_color = 'cadetblue'
+ppo_color = 'darkorange'
 ppo_hull_color = 'moccasin'
+
+plot_colors = {
+    'GP-MPC': 'royalblue',
+    'PPO': 'darkorange',
+    'SAC': 'red',
+    'DPPO': 'pink',
+    'PPO-MPC': 'tan',
+    'PID': 'darkgray',
+    'Linear MPC': 'green',
+    'Nonlinear MPC': 'cadetblue',
+    'iLQR': 'slateblue',
+    'LQR': 'blueviolet',
+    'F-MPC': 'darkblue',
+    'MAX': 'none',
+    'MIN': 'none',
+}
 
 episode_len = int(sys.argv[1]) if len(sys.argv) > 1 else 11
 
@@ -175,7 +186,7 @@ if sum_positive_violations_uncert_all is not None:
 if sum_positive_violations_cert_all is not None:
     plot_violations_over_time(ax_violations, 
                               sum_positive_violations_cert_all, 
-                              dt, label='PPO+MPSF (All State Constraints)', color=plot_colors['PPO+MPSF'])
+                              dt, label='PPO+MPSF (All State Constraints)', color=plot_colors['Linear MPC'])
 if sum_positive_violations_ppo_mpc_all is not None:
     plot_violations_over_time(ax_violations,
                               sum_positive_violations_ppo_mpc_all,
@@ -255,7 +266,7 @@ if sum_pos_violations_uncert is not None:
 if sum_pos_violations_cert is not None:
     plot_violations_over_time(ax_pos_violations,
                               sum_pos_violations_cert,
-                              dt, label='PPO+MPSF (Positional Constraints)', color=plot_colors['PPO+MPSF'])
+                              dt, label='PPO+MPSF (Positional Constraints)', color=plot_colors['Linear MPC'])
 if sum_pos_violations_ppo_mpc is not None:
     plot_violations_over_time(ax_pos_violations,
                               sum_pos_violations_ppo_mpc,
@@ -293,7 +304,7 @@ if cert_pos_constraint_values.size > 0:
                                   cert_pos_constraint_values,
                                   dt,
                                   label='PPO+MPSF',
-                                  color=plot_colors['PPO+MPSF'])
+                                  color=plot_colors['Linear MPC'])
 if ppo_mpc_pos_constraint_values.size > 0:
     plot_min_distance_to_boundary(ax_min_dist,
                                   ppo_mpc_pos_constraint_values,
@@ -312,7 +323,7 @@ if mpc_pos_constraint_values.size > 0:
                                   dt,
                                   label='MPC',
                                   color=plot_colors['Nonlinear MPC'])
-# set y scale to log
+
 ax_min_dist.set_xlabel('Time (s)')
 ax_min_dist.set_ylabel('Min. Distance to Pos. Boundary [m]')
 ax_min_dist.set_title('Min. Distance to Positional Safety Boundary Over Time')
@@ -328,65 +339,6 @@ fig_min_dist.tight_layout()
 min_dist_plot_path = f'{script_path}/safe/quadrotor_min_dist_to_boundary.png'
 fig_min_dist.savefig(min_dist_plot_path, dpi=300)
 print(f'Saved minimum distance to boundary plot to {min_dist_plot_path}')
-
-# Create violin plot for summary of minimum distance to positional safety boundary
-fig_min_dist_violinplot, ax_min_dist_violinplot = plt.subplots(figsize=(8, 4))
-all_min_dist_data_for_violinplot = {}
-
-# Define colors for the violin plot controllers
-min_dist_violinplot_colors = {
-    'PPO': plot_colors.get('PPO', 'gray'),
-    'PPO+MPSF': plot_colors.get('PPO+MPSF', 'gray'), 
-    'PPO-MPC': plot_colors.get('PPO-MPC', 'gray'),
-    'GP-MPC': plot_colors.get('GP-MPC', 'gray'),
-    'MPC': plot_colors.get('Nonlinear MPC', 'gray')
-}
-
-# Collect minimum distance data for violin plot (flattening all episodes and time steps)
-if uncert_pos_constraint_values is not None and uncert_pos_constraint_values.size > 0:
-    # Calculate distance to boundary: 0 - constraint_value (positive means safe, negative means violation)
-    distances_to_boundary = -uncert_pos_constraint_values
-    # Find minimum distance across constraints for each step and episode
-    min_distances = np.min(distances_to_boundary, axis=2)  # Shape: (num_episodes, num_steps)
-    all_min_dist_data_for_violinplot['PPO'] = min_distances
-
-if cert_pos_constraint_values is not None and cert_pos_constraint_values.size > 0:
-    distances_to_boundary = -cert_pos_constraint_values
-    min_distances = np.min(distances_to_boundary, axis=2)
-    all_min_dist_data_for_violinplot['PPO+MPSF'] = min_distances
-
-if ppo_mpc_pos_constraint_values is not None and ppo_mpc_pos_constraint_values.size > 0:
-    distances_to_boundary = -ppo_mpc_pos_constraint_values
-    min_distances = np.min(distances_to_boundary, axis=2)
-    all_min_dist_data_for_violinplot['PPO-MPC'] = min_distances
-
-if gpmpc_pos_constraint_values is not None and gpmpc_pos_constraint_values.size > 0:
-    distances_to_boundary = -gpmpc_pos_constraint_values
-    min_distances = np.min(distances_to_boundary, axis=2)
-    all_min_dist_data_for_violinplot['GP-MPC'] = min_distances
-
-if mpc_pos_constraint_values is not None and mpc_pos_constraint_values.size > 0:
-    distances_to_boundary = -mpc_pos_constraint_values
-    min_distances = np.min(distances_to_boundary, axis=2)
-    all_min_dist_data_for_violinplot['MPC'] = min_distances
-
-if all_min_dist_data_for_violinplot:
-    # Create violin plot using the same function but for min distance data
-    plot_constraint_violation_summary_violinplot(ax_min_dist_violinplot,
-                                                 all_min_dist_data_for_violinplot,
-                                                 min_dist_violinplot_colors)
-    ax_min_dist_violinplot.set_title('Distribution of Min. Distance to Positional Safety Boundary')
-    ax_min_dist_violinplot.set_ylabel('Min. Distance to Boundary [m]')
-    
-    # Add a horizontal line at y=0 to indicate the safety boundary
-    ax_min_dist_violinplot.axhline(0, color='black', linestyle='--', linewidth=0.8, alpha=0.7, label='Safety Boundary')
-    ax_min_dist_violinplot.set_ylim(top=0.1)  # Ensure y-axis includes some space below 0
-    fig_min_dist_violinplot.tight_layout()
-    min_dist_violinplot_path = f'{script_path}/safe/quadrotor_min_dist_to_boundary_violinplot.png'
-    fig_min_dist_violinplot.savefig(min_dist_violinplot_path, dpi=300)
-    print(f'Saved minimum distance to boundary violin plot to {min_dist_violinplot_path}')
-else:
-    print("Skipping minimum distance to boundary violin plot generation as no data was available.")
 
 # Create box plot for summary of positional constraint violations
 fig_pos_constraints_boxplot, ax_pos_constraints_boxplot = plt.subplots(figsize=(8, 4))
@@ -406,7 +358,7 @@ if mpc_pos_constraint_values is not None and mpc_pos_constraint_values.size > 0:
 # Define colors for the box plot controllers based on existing plot_colors
 boxplot_controller_colors = {
     'PPO': plot_colors.get('PPO', 'gray'),
-    'PPO+MPSF': plot_colors.get('PPO+MPSF', 'gray'), 
+    'PPO+MPSF': plot_colors.get('Linear MPC', 'gray'), 
     'PPO-MPC': plot_colors.get('PPO-MPC', 'gray'),
     'GP-MPC': plot_colors.get('GP-MPC', 'gray'),
     'MPC': plot_colors.get('Nonlinear MPC', 'gray')
@@ -479,7 +431,7 @@ plot_xz_trajectory_with_hull(ax, uncert_mpsf_traj_data, label='PPO',
                                 traj_color=plot_colors['PPO'], hull_color=plot_colors['PPO'],
                                 linewidth=2.0, alpha=alpha, padding_factor=k)
 plot_xz_trajectory_with_hull(ax, cert_mpsf_traj_data, label='PPO+MPSF',
-                                traj_color=plot_colors['PPO+MPSF'], hull_color=plot_colors['DPPO'],
+                                traj_color=plot_colors['Linear MPC'], hull_color=plot_colors['DPPO'],
                                 linewidth=2.0, alpha=alpha, padding_factor=k)
 plot_xz_trajectory_with_hull(ax, ppo_mpc_traj_data, label='PPO-MPC',
                             traj_color=plot_colors['PPO-MPC'], hull_color=plot_colors['PPO'],
