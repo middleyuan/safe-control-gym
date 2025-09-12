@@ -1362,7 +1362,7 @@ class Quadrotor(BaseAviary):
                 lr_param[0]*params_roll_rate[0] * phi + lr_param[1]*params_roll_rate[1] * phi_dot + lr_param[2]*params_roll_rate[2] * R_c,
                 lr_param[3]*params_pitch_rate[0] * theta + lr_param[4]*params_pitch_rate[1] * theta_dot + lr_param[5]*params_pitch_rate[2] * P_c,
                 lr_param[6]*params_yaw_rate[0] * psi + lr_param[7]*params_yaw_rate[1] * psi_dot + lr_param[8]*params_yaw_rate[2] * Y_c,
-                (lr_param[9]*params_acc[1] * (T_c + lr_param[10]*params_acc[0]) - force_motor) / lr_param[11]*params_acc[2]
+                (lr_param[9]*params_acc[1] * (T_c + lr_param[10]*params_acc[0]) - force_motor) / (lr_param[11]*params_acc[2])
             )
 
         # Expand Q and R to be full matrices.
