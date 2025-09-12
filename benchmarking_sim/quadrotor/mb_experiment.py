@@ -79,8 +79,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     SYS = 'quadrotor_3D_attitude'
     TASK = 'tracking'
     # ADDITIONAL = '_10' 
-    ADDITIONAL = '_delay'
-    # ADDITIONAL = ''
+    # ADDITIONAL = '_delay'
+    ADDITIONAL = ''
     # CTRL_ADD = ADDITIONAL
     CTRL_ADD = ''
     # ADDITIONAL = ''
@@ -131,7 +131,6 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         num_data_max = config.algo_config.num_epochs * config.algo_config.num_samples
         gp_tag = f'{PRIOR}_{num_data_max}' if gp_tag is None else gp_tag
         config.output_dir = os.path.join(config.output_dir, gp_tag + ADDITIONAL)
-    # print('output_dir',  config.algo_config.output_dir)
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)
@@ -153,6 +152,15 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                     config.algo_config.horizon = int(ref_traj_length * config.task_config.ctrl_freq)
                 else:
                     config.algo_config.horizon = int(target_traj_length * config.task_config.ctrl_freq)
+    
+    # set rew_state_weight and rew_action weight to q and r 
+    if ALGO in ['lqr', 'ilqr']:
+        config.task_config.rew_state_weight = config.algo_config.q_lqr
+        config.task_config.rew_act_weight = config.algo_config.r_lqr
+    elif ALGO in ['mpc_acados', 'linear_mpc_acados', 'gpmpc_acados_TP']:
+        config.task_config.rew_state_weight = config.algo_config.q_mpc
+        config.task_config.rew_act_weight = config.algo_config.r_mpc
+
     # Create an environment
     env_func = partial(make,
                        config.task,
