@@ -158,13 +158,20 @@ class MPC(BaseController):
         dfdu = dfdxdfdu['dfdu'].toarray()
         delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
         delta_u = cs.MX.sym('delta_u', self.model.nu, 1)
-        Ad, Bd = discretize_linear_system(dfdx, dfdu, self.dt, exact=True)
+        Ad, Bd = discretize_linear_system(dfdx, dfdu, self.dt)
         x_dot_lin = Ad @ delta_x + Bd @ delta_u
+        # discrete linear dynamics
         self.linear_dynamics_func = cs.Function('linear_discrete_dynamics',
                                                 [delta_x, delta_u],
                                                 [x_dot_lin],
                                                 ['x0', 'p'],
                                                 ['xf'])
+        # continuous linear dynamics
+        self.linear_dynamics_func_c = cs.Function('linear_continuous_dynamics',
+                                                    [delta_x, delta_u],
+                                                    [dfdx @ delta_x + dfdu @ delta_u],
+                                                    ['x0', 'p'],
+                                                    ['xdot'])
         self.dfdx = dfdx
         self.dfdu = dfdu
         # # check controlled system is stabilizable

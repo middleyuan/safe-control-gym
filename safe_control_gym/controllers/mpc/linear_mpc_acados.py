@@ -168,36 +168,36 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         ocp.cost.yref_e = np.zeros((ny_e, ))
         # Constraints are overridden with delta constraints
         # general constraint expressions
-        # state_constraint_expr_list = []
-        # input_constraint_expr_list = []
-        # for sc_i, state_constraint in enumerate(self.state_constraints_sym):
-        #     state_constraint_expr_list.append(state_constraint(ocp.model.x+self.x_lin))
-        # for ic_i, input_constraint in enumerate(self.input_constraints_sym):
-        #     input_constraint_expr_list.append(input_constraint(ocp.model.u+self.u_lin))
+        state_constraint_expr_list = []
+        input_constraint_expr_list = []
+        for sc_i, state_constraint in enumerate(self.state_constraints_sym):
+            state_constraint_expr_list.append(state_constraint(ocp.model.x+self.x_lin))
+        for ic_i, input_constraint in enumerate(self.input_constraints_sym):
+            input_constraint_expr_list.append(input_constraint(ocp.model.u+self.u_lin))
 
-        # h_expr_list = state_constraint_expr_list + input_constraint_expr_list
-        # h_expr = cs.vertcat(*h_expr_list)
-        # h0_expr = cs.vertcat(*h_expr_list)
-        # he_expr = cs.vertcat(*state_constraint_expr_list)  # terminal constraints are only state constraints
-        # # pass the constraints to the ocp object
-        # ocp = self.processing_acados_constraints_expression(ocp, h0_expr, h_expr, he_expr)
-        for state_constraint in self.constraints.state_constraints:
-            if isinstance(state_constraint, BoundedConstraint):
-                ocp.constraints.lbx = state_constraint.lower_bounds - self.x_lin
-                ocp.constraints.ubx = state_constraint.upper_bounds - self.x_lin
-                ocp.constraints.idxbx = np.arange(nx)
-                ocp.constraints.lbx_e = state_constraint.lower_bounds - self.x_lin
-                ocp.constraints.ubx_e = state_constraint.upper_bounds - self.x_lin
-                ocp.constraints.idxbx_e = np.arange(nx)
-            else:
-                raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
-        for input_constraint in self.constraints.input_constraints:
-            if isinstance(input_constraint, BoundedConstraint):
-                ocp.constraints.lbu = input_constraint.lower_bounds - self.u_lin.flatten()
-                ocp.constraints.ubu = input_constraint.upper_bounds - self.u_lin.flatten()
-                ocp.constraints.idxbu = np.arange(nu)
-            else:
-                raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
+        h_expr_list = state_constraint_expr_list + input_constraint_expr_list
+        h_expr = cs.vertcat(*h_expr_list)
+        h0_expr = cs.vertcat(*h_expr_list)
+        he_expr = cs.vertcat(*state_constraint_expr_list)  # terminal constraints are only state constraints
+        # pass the constraints to the ocp object
+        ocp = self.processing_acados_constraints_expression(ocp, h0_expr, h_expr, he_expr)
+        # for state_constraint in self.constraints.state_constraints:
+        #     if isinstance(state_constraint, BoundedConstraint):
+        #         ocp.constraints.lbx = state_constraint.lower_bounds - self.x_lin
+        #         ocp.constraints.ubx = state_constraint.upper_bounds - self.x_lin
+        #         ocp.constraints.idxbx = np.arange(nx)
+        #         ocp.constraints.lbx_e = state_constraint.lower_bounds - self.x_lin
+        #         ocp.constraints.ubx_e = state_constraint.upper_bounds - self.x_lin
+        #         ocp.constraints.idxbx_e = np.arange(nx)
+        #     else:
+        #         raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
+        # for input_constraint in self.constraints.input_constraints:
+        #     if isinstance(input_constraint, BoundedConstraint):
+        #         ocp.constraints.lbu = input_constraint.lower_bounds - self.u_lin.flatten()
+        #         ocp.constraints.ubu = input_constraint.upper_bounds - self.u_lin.flatten()
+        #         ocp.constraints.idxbu = np.arange(nu)
+        #     else:
+        #         raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
 
         if self.soft_constraints:
             print(colored('Linear MPC soft constraints not implemented yet.', 'yellow'))

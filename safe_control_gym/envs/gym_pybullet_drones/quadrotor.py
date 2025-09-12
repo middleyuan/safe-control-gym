@@ -721,6 +721,11 @@ class Quadrotor(BaseAviary):
                 prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_delay_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            if self.PHYSICS == Physics.DYN_SI_3D_10:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_10_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -1242,6 +1247,7 @@ class Quadrotor(BaseAviary):
             # params_acc = [20.907574256269616, 3.653687545690674]
             # params_roll_rate = [-130.3, -16.33, 119.3]
             # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # Old parameters for lighter quad
             # self.a = prior_prop.get('a', 20.907574256269616)
             # self.b = prior_prop.get('b', 3.653687545690674)
             # self.c = prior_prop.get('c', -130.3)
@@ -1251,8 +1257,11 @@ class Quadrotor(BaseAviary):
             # self.h = prior_prop.get('h', -13.3)
             # self.l = prior_prop.get('l', 84.73)
             psi = 0
+            # for large battery with LED deck
             a_value = 0.5846 / self.MASS
             b_value = 0.1537 / self.MASS
+            # a_value = 0.6921 / self.MASS
+            # b_value = 0.1205 / self.MASS
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])

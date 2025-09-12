@@ -1082,7 +1082,13 @@ class BaseAviary(BenchmarkEnv):
         self.vel[nth_drone, :] = vel.copy()
         self.ang_v[nth_drone, :] = ang_v.copy()
 
-    def setup_dynamics_si_3d_10_expression(self):
+    def setup_dynamics_si_3d_10_expression(self, prop_values=None):
+        
+        overridden_mass = self.MASS
+        if prop_values is not None:
+            overridden_mass = prop_values.get('M', self.MASS)
+        print("overridden_mass:", overridden_mass)
+        
         # Casadi states
         x = cs.MX.sym('x')
         y = cs.MX.sym('y')
@@ -1123,10 +1129,15 @@ class BaseAviary(BenchmarkEnv):
         #                    (- 25.651473451232217 * phi - 2.5580262532002482 * phi_dot + 17.524089241776338 * R)*0,
         #                    - 61.62863740616216 * theta - 7.205874472066235 * theta_dot + 51.90335491067372 * P,
         #                    (- 12.544174350349687 * psi - 0.012945379372787613 * psi_dot + 43.839961280232046 * Y)*0)
-        # TODO: double-check parameters
-        params_acc = [20.907574256269616, 3.653687545690674]
-        params_roll_rate = [-130.3, -16.33, 119.3]
-        params_pitch_rate = [-99.94, -13.3, 84.73]
+        # Old parameters for lighter quad
+        # params_acc = [20.907574256269616, 3.653687545690674]
+        # params_roll_rate = [-130.3, -16.33, 119.3]
+        # params_pitch_rate = [-99.94, -13.3, 84.73]
+        # params_acc = [0.6921 / self.MASS, 0.1205 / self.MASS]
+        # for large battery and LED deck
+        params_acc = [0.5846 / self.MASS, 0.1537 / self.MASS]
+        params_roll_rate = [-238.1, -21.35, 179.65]
+        params_pitch_rate = [-238.1, -21.35, 179.65]
         psi = 0
 
         X_dot = cs.vertcat(x_dot,
