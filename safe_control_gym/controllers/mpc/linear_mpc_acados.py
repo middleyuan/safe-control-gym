@@ -156,7 +156,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         # set cost (NOTE: safe-control-gym uses quadratic cost)
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
-        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
         ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :nx] = np.eye(nx)

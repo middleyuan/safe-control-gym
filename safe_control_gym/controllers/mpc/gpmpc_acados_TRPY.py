@@ -736,7 +736,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
         # cost weight matrices
-        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
         ocp.cost.W_e = self.P if hasattr(self, 'P') else self.Q
         # ocp.cost.W_e = self.Q
 
