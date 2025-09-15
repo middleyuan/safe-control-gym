@@ -1319,7 +1319,7 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+            params_acc = prior_prop.get('params_acc', [0.0905, 0.8, 0.0814])
             # params_acc = prior_prop.get('params_acc', [-0.2039, 0.8, 0.076])
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
