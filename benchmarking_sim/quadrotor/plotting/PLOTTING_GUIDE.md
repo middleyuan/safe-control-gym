@@ -142,23 +142,16 @@ python plot_custom_ridge_levels.py obs_noise ppo sac dppo ppo_mpc --include-dr p
 
 ### RL Methods
 ```bash
-python plot_traj_hull.py rl
+python3 plot_traj_hull.py rl 9
+python3 plot_traj_hull.py rl 11
+python3 plot_traj_hull.py rl 15
 ```
 
 ### Control Methods
 ```bash
-python plot_traj_hull.py control
-```
-
-### All Methods
-```bash
-python plot_traj_hull.py all
-```
-
-### With Domain Randomization
-```bash
-python plot_traj_hull.py rl --include-dr
-python plot_traj_hull.py all --include-dr
+python3 plot_traj_hull.py mb 9
+python3 plot_traj_hull.py mb 11
+python3 plot_traj_hull.py mb 15
 ```
 
 ---
