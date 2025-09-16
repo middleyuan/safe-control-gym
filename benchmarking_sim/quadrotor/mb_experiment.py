@@ -1,4 +1,3 @@
-
 import os
 import sys
 import pickle
@@ -18,9 +17,11 @@ from safe_control_gym.utils.utils import mkdirs, set_dir_from_config, timing
 from safe_control_gym.envs.gym_pybullet_drones.quadrotor import Quadrotor
 from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import QuadType
 from safe_control_gym.utils.gpmpc_plotting import make_quad_plots
+
 # from line_profiler import profile
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+
 
 # @profile
 @timing
@@ -60,13 +61,14 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        ALGO = 'mpc_acados'
+        # ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
         # ALGO = 'fmpc'
+        ALGO = 'ppo_mpc_acados'
         ADDITIONAL = ''
         CTRL_ADD = ''
         # gp_tag = 'safety'
@@ -89,45 +91,51 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     # ADDITIONAL = '_11'
     # ADDITIONAL='_snap'
     PRIOR = '100'
+    if ALGO == 'ppo_mpc_acados':
+        ALGO = 'mpc_acados'
+        PRIOR = 'ppo_mpc_100'
     agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
     SAFETY_FILTER = None
     # SAFETY_FILTER='linear_mpsc'
 
     # check if the config file exists
-    assert os.path.exists(f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml'), f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml does not exist'
-    assert os.path.exists(f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml'), f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml does not exist'
+    assert os.path.exists(
+        f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml'), f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml does not exist'
+    assert os.path.exists(
+        f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml'), f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml does not exist'
     if SAFETY_FILTER is None:
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', agent,
                         '--overrides',
-                            f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
-                            f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml',
+                        f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
+                        f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
                         '--output_dir', f'./{ALGO}/results',
-                            ]
+                        ]
     else:
-        MPSC_COST='one_step_cost'
+        MPSC_COST = 'one_step_cost'
         assert ALGO != 'gp_mpc', 'Safety filter not supported for gp_mpc'
-        assert os.path.exists(f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml'), f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
+        assert os.path.exists(
+            f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml'), f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', agent,
                         '--safety_filter', SAFETY_FILTER,
                         '--overrides',
-                            f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
-                            f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml',
-                            f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml',
+                        f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
+                        f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml',
+                        f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml',
                         '--kv_overrides', f'sf_config.cost_function={MPSC_COST}',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
                         '--output_dir', f'./{ALGO}/results',
-                            ]
+                        ]
     fac = ConfigFactory()
     fac.add_argument('--func', type=str, default='train', help='main function to run.')
     fac.add_argument('--n_episodes', type=int, default=1, help='number of episodes to run.')
     # merge config and create output directory
     config = fac.merge()
-    if ALGO in ['gpmpc_acados', 'gp_mpc' , 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
+    if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
         num_data_max = config.algo_config.num_epochs * config.algo_config.num_samples
         gp_tag = f'{PRIOR}_{num_data_max}' if gp_tag is None else gp_tag
         config.output_dir = os.path.join(config.output_dir, gp_tag + ADDITIONAL)
@@ -152,7 +160,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                     config.algo_config.horizon = int(ref_traj_length * config.task_config.ctrl_freq)
                 else:
                     config.algo_config.horizon = int(target_traj_length * config.task_config.ctrl_freq)
-    
+
     # set rew_state_weight and rew_action weight to q and r 
     if ALGO in ['lqr', 'ilqr']:
         config.task_config.rew_state_weight = config.algo_config.q_lqr
@@ -175,17 +183,17 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                 seed=config.seed,
                 **config.algo_config
                 )
-    
+
     # Setup safety filter
     if SAFETY_FILTER is not None:
         env_func_filter = partial(make,
-                                config.task,
-                                seed=config.seed,
-                                **config.task_config)
+                                  config.task,
+                                  seed=config.seed,
+                                  **config.task_config)
         safety_filter = make(config.safety_filter,
-                            env_func_filter,
-                            seed=config.seed,
-                            **config.sf_config)
+                             env_func_filter,
+                             seed=config.seed,
+                             **config.sf_config)
         safety_filter.reset()
 
     all_trajs = defaultdict(list)
@@ -200,8 +208,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
 
         # Create experiment, train, and run evaluation
-        if SAFETY_FILTER is None:  
-            if ALGO in ['gpmpc_acados', 'gp_mpc' , 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
+        if SAFETY_FILTER is None:
+            if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
                 experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
                 if config.algo_config.num_epochs == 1:
                     print('Evaluating prior controller')
@@ -212,7 +220,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                     # (NOTE: not using launch_training method since calling plotting before eval will break the eval)
                     experiment.reset()
                     train_runs, test_runs = ctrl.learn(env=static_train_env)
-            else:   
+            else:
                 experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
                 experiment.launch_training()
         else:
@@ -229,15 +237,14 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
 
         # plotting training and evaluation results
         # training
-        if ALGO in ['gpmpc_acados', 'gp_mpc' , 'gpmpc_acados_TP', 'gpmpc_acados_TRP'] and \
-           config.algo_config.gp_model_path is None and \
-           config.algo_config.num_epochs > 1:
-                if isinstance(static_env, Quadrotor):
-                    make_quad_plots(test_runs=test_runs, 
-                                    train_runs=train_runs, 
-                                    trajectory=ctrl.traj.T,
-                                    dir=ctrl.output_dir)
-
+        if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP'] and \
+                config.algo_config.gp_model_path is None and \
+                config.algo_config.num_epochs > 1:
+            if isinstance(static_env, Quadrotor):
+                make_quad_plots(test_runs=test_runs,
+                                train_runs=train_runs,
+                                trajectory=ctrl.traj.T,
+                                dir=ctrl.output_dir)
 
         # Close environments
         static_env.close()
@@ -251,21 +258,21 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     random_env.close()
     metrics = experiment.compute_metrics(all_trajs)
     all_trajs = dict(all_trajs)
-    ref_data={'obs': all_trajs['obs'][0], 
-              'action': all_trajs['action'][0],
-              'rmse': metrics['rmse'],
-              'average_return': metrics['average_return'],}
+    ref_data = {'obs': all_trajs['obs'][0],
+                'action': all_trajs['action'][0],
+                'rmse': metrics['rmse'],
+                'average_return': metrics['average_return'], }
     if generate_reference:
         np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_ref_traj.npy', \
                 ref_data, allow_pickle=True)
     elif generate_ilqr_warmstart:
         np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_warmstart_traj.npy', \
                 ref_data, allow_pickle=True)
-    
+
     if hasattr(experiment.env, 'dw_model'):
         force_log = experiment.env.dw_model.get_force_log()
         fig, ax = plt.subplots()
-        ax.plot(np.arange(len(force_log))/60, force_log)
+        ax.plot(np.arange(len(force_log)) / 60, force_log)
         ax.set_xlabel('Time [s]')
         ax.set_ylabel('Downwash force [N]')
         ax.set_title('Downwash force')
@@ -273,7 +280,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
 
     if save_data:
         results = {'trajs_data': all_trajs, 'metrics': metrics}
-        with open(f'./{config.output_dir}/{config.algo}_data_{config.task}_{config.task_config.task}.pkl', 'wb') as file:
+        with open(f'./{config.output_dir}/{config.algo}_data_{config.task}_{config.task_config.task}.pkl',
+                  'wb') as file:
             pickle.dump(results, file)
         # save rmse to a file
         with open(f'./{config.output_dir}/metrics.txt', 'w') as f:
@@ -284,17 +292,18 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     print('FINAL METRICS - ' + ', '.join([f'{key}: {value}' for key, value in metrics.items()]))
     print(f'pyb_client: {ctrl.env.PYB_CLIENT}')
     if not isinstance(config.task_config.episode_len_sec, list):
-        plot_quad_eval(results, 
-                    experiment.env, 
-                    config.output_dir)
+        plot_quad_eval(results,
+                       experiment.env,
+                       config.output_dir)
     if hasattr(ctrl, 'rand_hist'):
         with open(f'./{config.output_dir}/rand_hist.txt', 'w') as file:
             for key, value in ctrl.rand_hist.items():
                 file.write(f'{key}: {value}\n')
-    
+
     # print final rmse
     print(f'Final RMSE: {results["metrics"]["rmse"]:.4f} m')
     print(f'Final average return: {results["metrics"]["average_return"]:.4f}')
+
 
 # def plot_quad_eval(state_stack, input_stack, clipped_action_stack, env, save_path=None):
 def plot_quad_eval(res, env, save_path=None):
@@ -307,13 +316,13 @@ def plot_quad_eval(res, env, save_path=None):
     state_stack = res['trajs_data']['obs'][0]
     input_stack = res['trajs_data']['action'][0]
     constraint_stack = [res['trajs_data']['info'][0][i]['constraint_values'] \
-        for i in range(1, len(res['trajs_data']['info'][0]))]
+                        for i in range(1, len(res['trajs_data']['info'][0]))]
     constraint_stack = np.array(constraint_stack)
     model = env.symbolic
     if env.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         x_idx, z_idx = 0, 2
     # elif env.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-    elif env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+    elif env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE,
                            QuadType.THREE_D_ATTITUDE_10,
                            QuadType.THREE_D_ATTITUDE_DELAY]:
         x_idx, y_idx, z_idx = 0, 2, 4
@@ -329,7 +338,7 @@ def plot_quad_eval(res, env, save_path=None):
     action_bound = env.action_space
 
     # Plot states
-    fig, axs = plt.subplots(model.nx, figsize=(8, model.nx*1))
+    fig, axs = plt.subplots(model.nx, figsize=(8, model.nx * 1))
     for k in range(model.nx):
         axs[k].plot(times, np.array(state_stack).transpose()[k, 0:plot_length], label='actual')
         axs[k].plot(times, reference.transpose()[k, 0:plot_length], color='r', label='desired')
@@ -347,7 +356,7 @@ def plot_quad_eval(res, env, save_path=None):
         plt.savefig('./state_trajectories.png')
 
     # Plot inputs
-    _, axs = plt.subplots(model.nu, figsize=(8, model.nu*1))
+    _, axs = plt.subplots(model.nu, figsize=(8, model.nu * 1))
     if model.nu == 1:
         axs = [axs]
     for k in range(model.nu):
@@ -368,10 +377,10 @@ def plot_quad_eval(res, env, save_path=None):
 
     # plot the figure-eight
     fig, axs = plt.subplots(2, figsize=(8, 8))
-    axs[0].plot(np.array(state_stack).transpose()[x_idx, 0:plot_length], 
-             np.array(state_stack).transpose()[z_idx, 0:plot_length], label='actual')
-    axs[0].plot(reference.transpose()[x_idx, 0:plot_length], 
-             reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
+    axs[0].plot(np.array(state_stack).transpose()[x_idx, 0:plot_length],
+                np.array(state_stack).transpose()[z_idx, 0:plot_length], label='actual')
+    axs[0].plot(reference.transpose()[x_idx, 0:plot_length],
+                reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
     axs[0].set_xlabel('x [m]')
     axs[0].set_ylabel('z [m]')
     axs[0].set_title('State path in x-z plane')
@@ -394,14 +403,14 @@ def plot_quad_eval(res, env, save_path=None):
         plt.savefig(os.path.join(save_path, 'state_xz_path.png'))
         plt.savefig('./state_xz_path.png')
         print(f'Plots saved to {save_path}')
-    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE,
                          QuadType.THREE_D_ATTITUDE_10,
                          QuadType.THREE_D_ATTITUDE_DELAY]:
         fig, axs = plt.subplots(1)
-        axs.plot(np.array(state_stack).transpose()[x_idx, 0:plot_length], 
-                np.array(state_stack).transpose()[y_idx, 0:plot_length], label='actual')
+        axs.plot(np.array(state_stack).transpose()[x_idx, 0:plot_length],
+                 np.array(state_stack).transpose()[y_idx, 0:plot_length], label='actual')
         axs.plot(reference.transpose()[x_idx, 0:plot_length],
-                    reference.transpose()[y_idx, 0:plot_length], color='r', label='desired')
+                 reference.transpose()[y_idx, 0:plot_length], color='r', label='desired')
         axs.set_xlabel('x [m]')
         axs.set_ylabel('y [m]')
         axs.set_title('State path in x-y plane')
@@ -411,9 +420,9 @@ def plot_quad_eval(res, env, save_path=None):
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'state_xy_path.png'))
             plt.savefig('./state_xy_path.png')
-            
+
     # plot constraint violations
-    fig, axs = plt.subplots(len(constraint_stack[0]), figsize=(8, len(constraint_stack[0])*1))
+    fig, axs = plt.subplots(len(constraint_stack[0]), figsize=(8, len(constraint_stack[0]) * 1))
     constr_state_idx = 0
     for k in range(len(constraint_stack[0])):
         axs[k].plot(times, constraint_stack[:, k], label='actual')
@@ -421,74 +430,76 @@ def plot_quad_eval(res, env, save_path=None):
         violated = np.where(constraint_stack[:, k] > 0, 1, 0)
         violated_step = np.where(violated == 1)
         violated_values = constraint_stack[violated_step, k]
-        axs[k].scatter(times[violated_step], violated_values, 
+        axs[k].scatter(times[violated_step], violated_values,
                        color='red', label='violated', marker='x')
-        
+
         # the lable should be 11 22 33 ish
-        constr_state_idx += 1 if k%2 == 0 else 0
-        if constr_state_idx-1 < len(env.STATE_LABELS):
-            axs[k].set(ylabel=f'constraint {constr_state_idx-1}' + f'\n[{env.STATE_UNITS[constr_state_idx-1]}]')
+        constr_state_idx += 1 if k % 2 == 0 else 0
+        if constr_state_idx - 1 < len(env.STATE_LABELS):
+            axs[k].set(ylabel=f'constraint {constr_state_idx - 1}' + f'\n[{env.STATE_UNITS[constr_state_idx - 1]}]')
         else:
-            axs[k].set(ylabel=f'constraint {constr_state_idx-1}' + f'\n[{env.ACTION_UNITS[constr_state_idx-1-len(env.STATE_LABELS)]}]')
+            axs[k].set(
+                ylabel=f'constraint {constr_state_idx - 1}' + f'\n[{env.ACTION_UNITS[constr_state_idx - 1 - len(env.STATE_LABELS)]}]')
 
         axs[k].hlines(0, 0, times[-1], color='gray', linestyle='--')
         # axs[k].set(ylabel=f'constraint {k}' + f'\n[{env.STATE_UNITS[k]}]')
         axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
     axs[0].set_title('Constraint Trajectories')
-    axs[-1].legend(ncol=3, bbox_transform=fig.transFigure, 
+    axs[-1].legend(ncol=3, bbox_transform=fig.transFigure,
                    bbox_to_anchor=(1, 0), loc='upper right')
     axs[-1].set(xlabel='time (sec)')
     fig.tight_layout()
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'constraint_trajectories.png'))
-    
+
     # Plot individual x, y, z tracking errors and combined error
-    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, 
+    if env.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE,
                          QuadType.THREE_D_ATTITUDE_10,
                          QuadType.THREE_D_ATTITUDE_DELAY]:
         fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-        
+
         # Calculate individual tracking errors
-        x_error = np.abs(np.array(state_stack).transpose()[x_idx, 0:plot_length] - 
+        x_error = np.abs(np.array(state_stack).transpose()[x_idx, 0:plot_length] -
                          reference.transpose()[x_idx, 0:plot_length])
-        y_error = np.abs(np.array(state_stack).transpose()[y_idx, 0:plot_length] - 
+        y_error = np.abs(np.array(state_stack).transpose()[y_idx, 0:plot_length] -
                          reference.transpose()[y_idx, 0:plot_length])
-        z_error = np.abs(np.array(state_stack).transpose()[z_idx, 0:plot_length] - 
+        z_error = np.abs(np.array(state_stack).transpose()[z_idx, 0:plot_length] -
                          reference.transpose()[z_idx, 0:plot_length])
-        
+
         # Plot x tracking error
         axs[0, 0].plot(times, x_error)
         axs[0, 0].set_xlabel('time [s]')
         axs[0, 0].set_ylabel('x tracking error [m]')
-        axs[0, 0].set_title(f'X Tracking Error (RMSE: {np.sqrt(np.mean(x_error**2)):.4f} m)')
-        
+        axs[0, 0].set_title(f'X Tracking Error (RMSE: {np.sqrt(np.mean(x_error ** 2)):.4f} m)')
+
         # Plot y tracking error
         axs[0, 1].plot(times, y_error)
         axs[0, 1].set_xlabel('time [s]')
         axs[0, 1].set_ylabel('y tracking error [m]')
-        axs[0, 1].set_title(f'Y Tracking Error (RMSE: {np.sqrt(np.mean(y_error**2)):.4f} m)')
-        
+        axs[0, 1].set_title(f'Y Tracking Error (RMSE: {np.sqrt(np.mean(y_error ** 2)):.4f} m)')
+
         # Plot z tracking error
         axs[1, 0].plot(times, z_error)
         axs[1, 0].set_xlabel('time [s]')
         axs[1, 0].set_ylabel('z tracking error [m]')
-        axs[1, 0].set_title(f'Z Tracking Error (RMSE: {np.sqrt(np.mean(z_error**2)):.4f} m)')
-        
+        axs[1, 0].set_title(f'Z Tracking Error (RMSE: {np.sqrt(np.mean(z_error ** 2)):.4f} m)')
+
         # Plot combined tracking error
-        combined_error = np.sqrt(x_error**2 + y_error**2 + z_error**2)
+        combined_error = np.sqrt(x_error ** 2 + y_error ** 2 + z_error ** 2)
         axs[1, 1].plot(times, combined_error)
         axs[1, 1].set_xlabel('time [s]')
         axs[1, 1].set_ylabel('combined tracking error [m]')
-        axs[1, 1].set_title(f'Combined Tracking Error (RMSE: {np.sqrt(np.mean(combined_error**2)):.4f} m)')
-        
+        axs[1, 1].set_title(f'Combined Tracking Error (RMSE: {np.sqrt(np.mean(combined_error ** 2)):.4f} m)')
+
         fig.tight_layout()
-        
+
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'xyz_tracking_errors.png'))
             plt.savefig('./xyz_tracking_errors.png')
 
     # plt.show()
+
 
 def wrap2pi_vec(angle_vec):
     '''Wraps a vector of angles between -pi and pi.
@@ -498,9 +509,9 @@ def wrap2pi_vec(angle_vec):
     '''
     for k, angle in enumerate(angle_vec):
         while angle > np.pi:
-            angle -= 2*np.pi
+            angle -= 2 * np.pi
         while angle <= -np.pi:
-            angle += 2*np.pi
+            angle += 2 * np.pi
         angle_vec[k] = angle
     return angle_vec
 
