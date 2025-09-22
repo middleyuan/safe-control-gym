@@ -93,7 +93,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     PRIOR = '100'
     if ALGO == 'ppo_mpc_acados':
         ALGO = 'mpc_acados'
-        PRIOR = 'ppo_mpc_100'
+        episode_len = 30
+        PRIOR = f'{episode_len}_ppo_mpc_100'
     agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
     SAFETY_FILTER = None
     # SAFETY_FILTER='linear_mpsc'

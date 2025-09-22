@@ -515,19 +515,19 @@ class Quadrotor(BaseAviary):
                     CUSTOM_REF_TRAJ = {}
                     CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
                     CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
-                    np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                                         'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
-                    # add attribute to self.TASK_INFO
-                    self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                                         'custom_snap_ref_traj.npy')
-                    _plot_trajectory(POS_REF,
-                                     waypoints=waypoints,
-                                     strings=strings,
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-                    _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
-                                     waypoints=waypoints,
-                                     strings=strings,
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    # np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    # # add attribute to self.TASK_INFO
+                    # self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy')
+                    # _plot_trajectory(POS_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    # _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
