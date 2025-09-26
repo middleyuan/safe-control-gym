@@ -34,6 +34,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         save_data (bool): Whether to save the collected experiment data.
     '''
     generate_reference = False
+    generate_npy_reference = True
     generate_ilqr_warmstart = False
     # generate_reference = True
     # generate_ilqr_warmstart = True
@@ -132,6 +133,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         gp_tag = f'{PRIOR}_{num_data_max}' if gp_tag is None else gp_tag
         config.output_dir = os.path.join(config.output_dir, gp_tag + ADDITIONAL)
     # print('output_dir',  config.algo_config.output_dir)
+    target_traj_length = config.task_config.episode_len_sec
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)
@@ -247,11 +249,13 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
               'action': all_trajs['action'][0],
               'rmse': metrics['rmse'],
               'average_return': metrics['average_return'],}
-    if generate_reference:
-        np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_ref_traj.npy', \
+    if generate_npy_reference:
+        traj_length_str = str(target_traj_length).replace('.', '_')
+        np.save(f'./data/{ALGO}_{SYS}_{traj_length_str}_ref_traj.npy', \
                 ref_data, allow_pickle=True)
     elif generate_ilqr_warmstart:
-        np.save(f'./data/{ALGO}_{SYS}_{target_traj_length}_warmstart_traj.npy', \
+        traj_length_str = str(target_traj_length).replace('.', '_')
+        np.save(f'./data/{ALGO}_{SYS}_{traj_length_str}_warmstart_traj.npy', \
                 ref_data, allow_pickle=True)
     
     if hasattr(experiment.env, 'dw_model'):
@@ -381,7 +385,6 @@ def plot_quad_eval(res, env, save_path=None):
     axs[1].set_title(f'Tracking error {rmse:.4f} m')
 
     fig.tight_layout()
-
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'state_xz_path.png'))
         plt.savefig('./state_xz_path.png')
@@ -399,10 +402,10 @@ def plot_quad_eval(res, env, save_path=None):
         axs.set_title('State path in x-y plane')
         axs.legend()
         fig.tight_layout()
-
         if save_path is not None:
             plt.savefig(os.path.join(save_path, 'state_xy_path.png'))
             plt.savefig('./state_xy_path.png')
+        plt.show()
             
     # plot constraint violations
     fig, axs = plt.subplots(len(constraint_stack[0]), figsize=(8, len(constraint_stack[0])*1))
