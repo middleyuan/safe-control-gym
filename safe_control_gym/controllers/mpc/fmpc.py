@@ -102,14 +102,24 @@ class FlatMPC(BaseController):
 
             # not as a nice variable in the env yet, thats why its defined here again
             self.inertial_prop = {}
-            self.inertial_prop['alpha_0'] = 20.907574256269616
-            self.inertial_prop['alpha_1'] = 3.653687545690674
-            self.inertial_prop['beta_0'] = -130.3
-            self.inertial_prop['beta_1'] = -16.33
-            self.inertial_prop['beta_2'] = 119.3
-            self.inertial_prop['gamma_0'] = -99.94
-            self.inertial_prop['gamma_1'] = -13.3
-            self.inertial_prop['gamma_2'] = 84.73
+            # self.inertial_prop['alpha_0'] = 20.907574256269616
+            # self.inertial_prop['alpha_1'] = 3.653687545690674
+            # self.inertial_prop['beta_0'] = -130.3
+            # self.inertial_prop['beta_1'] = -16.33
+            # self.inertial_prop['beta_2'] = 119.3
+            # self.inertial_prop['gamma_0'] = -99.94
+            # self.inertial_prop['gamma_1'] = -13.3
+            # self.inertial_prop['gamma_2'] = 84.73
+            self.inertial_prop['alpha_0'] = 0.5846 / self.env.MASS
+            self.inertial_prop['alpha_1'] =  0.1537 / self.env.MASS
+            # self.inertial_prop['alpha_0'] = 0.6921 / self.env.MASS
+            # self.inertial_prop['alpha_1'] =  0.1205 / self.env.MASS
+            self.inertial_prop['beta_0'] = -238.1
+            self.inertial_prop['beta_1'] = -21.35
+            self.inertial_prop['beta_2'] = 179.65
+            self.inertial_prop['gamma_0'] = -238.1
+            self.inertial_prop['gamma_1'] = -21.35
+            self.inertial_prop['gamma_2'] = 179.65
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
             self.action_from_flat_states_func = _get_u_from_flat_states_2D_att
             self.transform_env_goal_to_flat_func = _transform_env_goal_to_flat_2D_att # map components of X_goal to flat state z

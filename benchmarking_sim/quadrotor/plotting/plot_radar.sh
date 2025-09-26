@@ -8,4 +8,5 @@ for algo in 'ilqr' 'pid' 'lqr' \
             'ppo' 'sac' 'dppo' 'ppo_mpc' # 'ppo_id' 'sac_id' 'dppo_id'
 do
     python3 plot_radar.py $algo
+    python3 plot_radar.py $algo 'abs'
 done 

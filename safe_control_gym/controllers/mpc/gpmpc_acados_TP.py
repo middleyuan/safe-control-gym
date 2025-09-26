@@ -24,7 +24,7 @@ from termcolor import colored
 
 from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
 from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcessCollection, ZeroMeanIndependentGPModel,
-                                                       covMatern52ard, covSEard, 
+                                                       covMatern52ard, covMatern52_single, covSEard, 
                                                        covSE_single, covLinear,
                                                        kmeans_centriods, GaussianProcess)
 from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
@@ -671,7 +671,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
         # cost weight matrices
-        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
         ocp.cost.W_e = self.P if hasattr(self, 'P') else self.Q
         # ocp.cost.W_e = self.Q
 
@@ -1210,7 +1210,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         z2_T = cs.SX.sym('z2', 1)
         z1_P = cs.SX.sym('z1', 3)
         z2_P = cs.SX.sym('z2', 3)
-        ell_s_P = cs.SX.sym('ell', 1) if GP_P.kernel == 'RBF_single' else cs.SX.sym('ell', 3)
+        ell_s_P = cs.SX.sym('ell', 1) if GP_P.kernel in ['RBF_single', 'Matern_single'] else cs.SX.sym('ell', 3)
         sf2_s_P = cs.SX.sym('sf2')
         z_ind = cs.SX.sym('z_ind', n_ind_points, Nx)
         ks_T = cs.SX.zeros(1, n_ind_points) # kernel vector
@@ -1227,8 +1227,15 @@ class GPMPC_ACADOS_TP(GPMPC):
         else:
             ell_s_T = cs.SX.sym('ell', 1)
             sf2_s_T = cs.SX.sym('sf2')
-            cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
-                                        [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+            if GP_T.kernel == 'RBF_single':
+                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                            [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+            elif GP_T.kernel == 'Matern_single':
+                cov_T = cs.Function('covMatern', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                            [covMatern52_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+            else:
+                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
+                                            [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
             for i in range(n_ind_points):
                 ks_T[i] = cov_T(z1_T, z_ind[i, 0], ell_s_T, sf2_s_T)
             ks_func_T = cs.Function('K_s', [z1_T, z_ind, ell_s_T, sf2_s_T], [ks_T])
@@ -1239,6 +1246,12 @@ class GPMPC_ACADOS_TP(GPMPC):
         elif GP_P.kernel == 'RBF_single':
             cov_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
                                         [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+        elif GP_P.kernel == 'Matern':
+            cov_P = cs.Function('covMatern', [z1_P, z2_P, ell_s_P, sf2_s_P],
+                                        [covMatern52ard(z1_P, z2_P, ell_s_P, sf2_s_P)])
+        elif GP_P.kernel == 'Matern_single':
+            cov_P = cs.Function('covMatern', [z1_P, z2_P, ell_s_P, sf2_s_P],
+                                        [covMatern52_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
         for i in range(n_ind_points):
             ks_P[i] = cov_P(z1_P, z_ind[i, 1:], ell_s_P, sf2_s_P)
         ks_func_P = cs.Function('K_s', [z1_P, z_ind, ell_s_P, sf2_s_P], [ks_P])

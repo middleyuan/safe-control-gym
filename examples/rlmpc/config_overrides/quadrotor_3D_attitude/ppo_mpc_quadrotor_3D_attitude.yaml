@@ -14,7 +14,7 @@ algo_config:
     # model_param: [0.6825742117895708, 0.4292449477599564, 0.4813652415802387, 0.4521088665975965, 0.30893385663149797]
     model_param: [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]
     mpc_config:
-      horizon: 40
+      horizon: 50
       warmstart: True
       n_parallel_solver: 10
       n_train_solver: 16

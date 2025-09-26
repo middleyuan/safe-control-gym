@@ -2,15 +2,15 @@ algo: ilqr
 algo_config:
   # Cost parameters
   q_lqr:
-  - 20.0
-  - 8.268573002362753
-  - 20.0
-  - 16.67568785514287
+  - 12.390313861032691
+  - 0.7642930312246806
+  - 12.224190822634686
+  - 2.852238630017285
   - 0.0001
   - 0.0001
   r_lqr:
-  - 5.0
-  - 3.6870301920384767
+  - 3.909121902381871
+  - 0.6078492221768744
 
   # Model arguments
   # Note: Higher simulation frequency is required if using controller designed
@@ -18,12 +18,13 @@ algo_config:
   discrete_dynamics: True
 
   # iLQR arguments
-  epsilon: 0.005
-  lamb_factor: 20
-  lamb_max: 1000
-  max_iterations: 10
+  epsilon: 0.0001
+  lamb_factor: 5
+  lamb_max: 2000
+  max_iterations: 15
   warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_11_warmstart_traj.npy
   # the actual warm start trajectory file name will be modified in the controller
   # to match the current episode length
+  # save_optimization_history: True
 
   output_dir: ./ilqr/results

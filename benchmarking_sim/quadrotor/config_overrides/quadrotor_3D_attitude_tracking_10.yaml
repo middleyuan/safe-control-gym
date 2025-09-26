@@ -28,9 +28,9 @@ task_config:
     trajectory_position_offset: [0, 0., 1]
     trajectory_scale: 1.0
   inertial_prop:
-    M: 0.033
+    M: 0.037
 
-  episode_len_sec: 30
+  episode_len_sec: 7
   cost: quadratic
 
   constraints:

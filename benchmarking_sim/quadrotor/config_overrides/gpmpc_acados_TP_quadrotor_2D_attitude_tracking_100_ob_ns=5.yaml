@@ -1,25 +1,25 @@
   algo: gpmpc_acados_TP
   algo_config:
-    horizon: 25
+    horizon: 40
     q_mpc:
-    - 20.0
-    - 0.0001
-    - 20.0
-    - 0.0001
+    - 11.954093168040306
+    - 1.594226860590206
+    - 18.908567136706754
+    - 5.771537314262366
     - 0.0001
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.09314138912453233
+    - 2.241473769957689
+    - 4.905657814964632
     gp_model_path: null
     test_data_ratio: 0.2
     soft_constraints: null
     optimization_iterations:
-    - 500
-    - 500
+    - 2500
+    - 2500
     learning_rate:
-    - 0.0005000000000000001
-    - 0.0005000000000000001
+    - 0.0005547757359901814
+    - 0.0005547757359901814
     normalize_training_data: False
     # normalize_training_data: True
     prior_info:
@@ -50,9 +50,9 @@
     overwrite_saved_data: false
     online_learning: False
     additional_constraints: null
-    n_ind_points: 30
-    num_epochs: 7
-    num_samples: 40
+    n_ind_points: 40
+    num_epochs: 5
+    num_samples: 60
     num_test_episodes_per_epoch: 1
     num_train_episodes_per_epoch: 1
     same_test_initial_state: true

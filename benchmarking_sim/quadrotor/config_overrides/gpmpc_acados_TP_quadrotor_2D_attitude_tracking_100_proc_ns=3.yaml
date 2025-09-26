@@ -2,24 +2,24 @@
   algo_config:
     horizon: 30
     q_mpc:
-    - 13.292406412280716
-    - 0.0001
-    - 20.0
-    - 10.305046091004552
-    - 0.0001
+    - 12.0
+    - 0.1
+    - 12.0
+    - 0.1
+    - 0.05
     - 0.0001
     r_mpc:
-    - 3.6596089573941435
-    - 0.9668690221532095
+    - 3.0
+    - 3.0
     gp_model_path: null
     test_data_ratio: 0.2
     soft_constraints: null
     optimization_iterations:
-    - 1500
-    - 1500
+    - 3000
+    - 3000
     learning_rate:
-    - 0.015811388300841896
-    - 0.015811388300841896
+    - 0.01
+    - 0.01
     normalize_training_data: False
     # normalize_training_data: True
     prior_info:

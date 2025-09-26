@@ -1,16 +1,18 @@
 algo: lqr
 algo_config:
   # Cost parameters
+  # q_lqr: [20.0, 0.0001, 20.0, 9.642687551285645, 0.0001, 0.0001]
+  # r_lqr: [1, 1]
   q_lqr:
   - 20.0
   - 0.0001
-  - 12.193213412962592
-  - 0.0001
+  - 20.0
+  - 20.0
   - 0.0001
   - 0.0001
   r_lqr:
-  - 2.8870209381059326
-  - 0.833915768977858
+  - 1.9019894654920908
+  - 0.9198955273244754
 
   # Model arguments
   # Note: Higher simulation frequency is required if using controller designed

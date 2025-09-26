@@ -7,6 +7,7 @@ import scipy
 from termcolor import colored
 
 from safe_control_gym.controllers.mpc.mpc import MPC
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.controllers.mpc.mpc_utils import set_acados_constraint_bound
 from safe_control_gym.utils.utils import timing
 
@@ -30,6 +31,7 @@ class MPC_ACADOS(MPC):
             horizon: int = 5,
             q_mpc: list = [1],
             r_mpc: list = [1],
+            qt_mpc: list = None,
             warmstart: bool = True,
             soft_constraints: bool = False,
             soft_penalty: float = 10000,
@@ -43,7 +45,7 @@ class MPC_ACADOS(MPC):
             seed: int = 0,
             use_RTI: bool = False,
             compute_initial_guess_method: str = 'ipopt',
-            use_lqr_gain_and_terminal_cost: bool = False,
+            # use_lqr_gain_and_terminal_cost: bool = False,
             **kwargs
     ):
         '''Creates task and controller.
@@ -81,7 +83,7 @@ class MPC_ACADOS(MPC):
             output_dir=output_dir,
             additional_constraints=additional_constraints,
             compute_initial_guess_method=compute_initial_guess_method,  # use ipopt initial guess by default
-            use_lqr_gain_and_terminal_cost=use_lqr_gain_and_terminal_cost,
+            # use_lqr_gain_and_terminal_cost=use_lqr_gain_and_terminal_cost,
             use_gpu=use_gpu,
             seed=seed,
             **kwargs
@@ -91,6 +93,10 @@ class MPC_ACADOS(MPC):
         self.u_guess = None
         # acados settings
         self.use_RTI = use_RTI
+        
+        self.Q_T = self.Q
+        if qt_mpc is not None:
+            self.Q_T = get_cost_weight_matrix(qt_mpc, self.model.nx)
 
     def reset_before_run(self, obs=None, info=None, env=None):
         super().reset_before_run(obs, info, env)
@@ -166,8 +172,11 @@ class MPC_ACADOS(MPC):
         # set cost (NOTE: safe-control-gym uses quadratic cost)
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
-        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
-        ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
+        ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
+        ocp.cost.W_e = self.Q_T # NOTE: temporarily used for hardware setup
+        # ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        # ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
+        # ocp.cost.W_e = self.Q_T / self.dt
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :nx] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
@@ -351,8 +360,8 @@ class MPC_ACADOS(MPC):
         self.results_dict['goal_states'].append(deepcopy(goal_states))
 
         self.prev_action = action
-        if self.use_lqr_gain_and_terminal_cost:
-            action += self.lqr_gain @ (obs - self.x_prev[:, 0])
+        # if self.use_lqr_gain_and_terminal_cost:
+        #     action += self.lqr_gain @ (obs - self.x_prev[:, 0])
 
         return action
 

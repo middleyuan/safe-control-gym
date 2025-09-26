@@ -32,6 +32,7 @@ class iLQR(BaseController):
             lamb_max: float = 1000,
             epsilon: float = 0.01,
             warm_start_traj: str = None,
+            save_optimization_history: bool = False,
             **kwargs):
         '''Creates task and controller.
 
@@ -87,6 +88,7 @@ class iLQR(BaseController):
         if self.warm_start_traj is not None:
             self.load_warm_start_traj()
         self.load_warm_start_to_rollout = False  # otherwise load them to the iLQR optimization
+        self.save_optimization_history = save_optimization_history
         # self.load_warm_start_to_rollout = True # load them to the rollout
         self.reset()
 
@@ -173,13 +175,17 @@ class iLQR(BaseController):
                 print(colored('Warm-start trajectory is used for first iteration of iterative optimization.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
+                self.input_ff = np.copy(self.input_stack)
                 # self.total_cost = self.optimization_log['warmstart_return']
 
             print(colored(f'Iteration: {self.ite_counter}, Cost: {self.total_cost}', 'green'))
             print(colored('--------------------------', 'green'))
             self.optimization_log[f'{self.ite_counter}'] = self.total_cost
 
-            if self.ite_counter == 0 and env.done_on_out_of_bound and self.final_info['out_of_bounds']:
+            if self.ite_counter == 0 and \
+               env.done_on_out_of_bound and \
+               self.final_info['out_of_bounds'] and \
+               self.warm_start_traj is None:    
                 print(colored('[ERROR] The initial policy might be unstable. Break from iLQR updates.', 'red'))
                 break
 
@@ -245,7 +251,7 @@ class iLQR(BaseController):
 
             self.ite_counter += 1
 
-        self.plot_optimization_log()
+        # self.plot_optimization_log()
         self.reset()
 
     def plot_optimization_log(self):
@@ -267,7 +273,8 @@ class iLQR(BaseController):
         fig.tight_layout()
         # only show integer ticks for x-axis
         ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
-        fig.savefig(f'{self.output_dir}/optimization_log.png')
+        if self.save_optimization_history:
+            fig.savefig(f'{self.output_dir}/optimization_log.png')
 
     def update_policy(self, env):
         '''Updates policy.
@@ -275,6 +282,10 @@ class iLQR(BaseController):
         Args:
             env (BenchmarkEnv): The environment to be used for training.
         '''
+
+        # Initialize arrays for the backward pass
+        self.gains_fb = np.zeros((self.num_steps, self.model.nu, self.model.nx))
+        self.input_ff = np.zeros((self.model.nu, self.num_steps))
 
         # Get symbolic loss function which also contains the necessary Jacobian
         # and Hessian of the loss w.r.t. state and input.

@@ -40,7 +40,7 @@
       # prior_prop:
       prior_prop: 
         M: 0.037 # Must be capitcal M 
-        param_acc: [-0.1, 1.2, 0.2]
+        params_acc: [-0.1, 1.2, 0.2]
         params_roll_rate: [-286.2, -23.03, 225.6]
         params_pitch_rate: [-286.2, -23.03, 225.6]
         params_yaw_rate: [-192.9, -22.22, 323.5]

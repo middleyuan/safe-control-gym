@@ -5,14 +5,19 @@ import matplotlib.pyplot as plt
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None,
                                  traj_color='skyblue', hull_color='lightblue',
-                                 linewidth=1.0, linestyle='-', alpha=0.5, padding_factor=1.1):
+                                 linewidth=1.0, linestyle='-', alpha=0.5, padding_factor=1.1,
+                                 plot_second_half=False):
     '''Plot trajectories with convex hull showing variance over seeds.
     
     Args:
         ax (Axes): Matplotlib axes.
         traj_data (np.ndarray): Trajectory data of shape (num_seeds, num_steps, 6).
         padding_factor (float): Padding factor for the convex hull.
+        plot_second_half (bool): If True, plot only the second half of the trajectory.
     '''
+    if plot_second_half:
+        traj_data = traj_data[:, traj_data.shape[1] // 2:, :]
+    
     num_seeds, num_steps, _ = traj_data.shape
 
     print('traj data shape:', traj_data.shape)

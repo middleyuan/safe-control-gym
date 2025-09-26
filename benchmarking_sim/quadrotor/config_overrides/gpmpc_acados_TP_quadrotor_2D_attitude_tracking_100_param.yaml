@@ -2,15 +2,15 @@
   algo_config:
     horizon: 30
     q_mpc:
-    - 20.0
+    - 10.181172990870493
     - 0.0001
-    - 20.0
-    - 20.0
-    - 0.0001
+    - 13.052139785049615
+    - 1.9985022117677154
+    - 7.659717297031741
     - 0.0001
     r_mpc:
-    - 5.0
-    - 0.0439605475782572
+    - 2.3955676678918123
+    - 2.9187051738158094
     gp_model_path: null
     test_data_ratio: 0.2
     soft_constraints: null
@@ -18,8 +18,8 @@
     - 2000
     - 2000
     learning_rate:
-    - 0.012189697694200046
-    - 0.012189697694200046
+    - 0.017677866751141063
+    - 0.017677866751141063
     normalize_training_data: False
     # normalize_training_data: True
     prior_info:
@@ -54,7 +54,7 @@
     additional_constraints: null
     n_ind_points: 40
     num_epochs: 5
-    num_samples: 40
+    num_samples: 20
     num_test_episodes_per_epoch: 1
     num_train_episodes_per_epoch: 1
     same_test_initial_state: true

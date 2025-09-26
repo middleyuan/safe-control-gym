@@ -1,0 +1,100 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  normalized_rl_action_space: False
+
+  init_state:
+    init_x: 0.0
+    init_x_dot: 0
+    init_y: 0.0
+    init_y_dot: 0
+    init_z: 1
+    init_z_dot: 0
+    init_theta: 0
+    init_theta_dot: 0
+    init_tau: 0.3626
+
+  randomized_init: True
+  randomized_inertial_prop: False
+
+  init_state_randomization_info:
+    init_x:
+      distrib: 'normal'
+      scale: 0.0011629923113331312
+    init_x_dot:
+      distrib: 'normal'
+      scale: 0.003635597781389117
+    init_y:
+      distrib: 'normal'
+      scale: 0.001670549279531124
+    init_y_dot:
+      distrib: 'normal'
+      scale: 0.004965500657569368
+    init_z:
+      distrib: 'normal'
+      scale: 0.0024990695232428458
+    init_z_dot:
+      distrib: 'normal'
+      scale: 0.010193088084183025
+    init_phi:
+      distrib: 'normal'
+      scale: 0.0026984744060397532
+    init_theta:
+      distrib: 'normal'
+      scale: 0.0024088251667187467
+    init_psi:
+      distrib: 'normal'
+      scale: 0.0023822834889102923
+    init_p:
+      distrib: 'normal'
+      scale: 0.03452115832640752
+    init_q:
+      distrib: 'normal'
+      scale: 0.02387283406599296
+    init_r:
+      distrib: 'normal'
+      scale: 0.03123258323211547
+
+  task: traj_tracking
+  task_info:
+    trajectory_type: figure8
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0, 0, 1]
+    trajectory_scale: 1.0
+
+  inertial_prop:
+    M: 0.037
+
+  episode_len_sec: 30
+  cost: rl_reward
+  obs_goal_horizon: 1
+  rew_exponential: True
+
+  rew_state_weight: [20.0, 0.1, 20.0, 0.1, 20.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+  rew_act_weight: [1.0, 1.0, 1.0, 1.0]  #set to 1 if action noise is too large
+
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+
+  done_on_out_of_bound: True
+  done_on_violation: False
+  disturbances:
+    action:
+      - disturbance_func: white_noise
+        # std: [0.021, 0.078, 0.071, 0.064]
+        std: [0.063, 0.234, 0.213, 0.192]  # 3 times
+        # std: [0.1558, 0.1725]  # 5 times
+        # std: [0.21812, 0.2415]  # 7 times
+        # std: [0.3116, 0.345]  # 10 times
+    observation:
+      - disturbance_func: white_noise
+        # std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        std: [1.31e-04, 5.09e-03, 1.42e-04, 5.23e-03, 1.47e-04, 5.91e-03, 1.23e-02, 6.11e-03, 6.04e-03, 5.25e-01, 2.62e-01, 2.53e-01, 1.00e-03, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00]
+        # std: [0.005814961556665656, 0.018177988906945586, 0.00835274639765562, 0.02482750328784684, 0.012495347616214229, 0.050965440420915125, 0.013492372030198766, 0.012044125833593733, 0.011911417444551462, 0.1726057916320376, 0.1193641703299648, 0.15616291616057735, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

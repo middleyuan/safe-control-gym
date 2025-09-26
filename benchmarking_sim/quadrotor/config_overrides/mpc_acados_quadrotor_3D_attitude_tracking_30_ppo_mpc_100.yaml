@@ -1,0 +1,25 @@
+algo: mpc_acados
+algo_config:
+  horizon: 30
+  q_mpc: [1.9784e+01, 7.5093e-02, 1.9734e+01, 2.9363e-01, 2.0183e+01, 2.4793e-01, 2.2362e-01, 9.1660e-01, 3.2496e-01, 7.7808e-03, 6.0792e-03, 7.4568e-03, 1.8337e-01]
+  r_mpc: [1.3958e+00, 1.3075e+00, 1.4373e+00, 1.5363e+00]
+  # Prior info
+  prior_info:
+#    prior_prop:
+#      params_roll_rate: [-238.1, -21.35, 179.65]
+#      params_pitch_rate: [-238.1, -21.35, 179.65]
+#      params_yaw_rate: [-170.4, -22.22, 280]
+#      params_acc: [0.0905, 0.8, 0.0814]
+    prior_prop:
+      params_roll_rate: [-4.01762641e+02, -2.38694101e+01, 1.07942668e+02]
+      params_pitch_rate: [-3.05487634e+02, -2.72854526e+01, 1.57105559e+02]
+      params_yaw_rate: [-2.40937216e+02, -3.28557137e+01, 9.71176267e+01]
+      params_acc: [8.85788754e-02,  7.72293282e-01,  7.59109393e-02]
+#     randomize_prior_prop: False
+#     prior_prop_rand_info: null
+  warmstart: True
+  soft_constraints: True
+  use_RTI: True
+  output_dir: ./ppo_mpc_acados/results
+
+

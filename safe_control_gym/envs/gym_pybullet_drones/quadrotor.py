@@ -519,19 +519,19 @@ class Quadrotor(BaseAviary):
                     CUSTOM_REF_TRAJ = {}
                     CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
                     CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
-                    np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                                         'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
-                    # add attribute to self.TASK_INFO
-                    self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                                         'custom_snap_ref_traj.npy')
-                    _plot_trajectory(POS_REF,
-                                     waypoints=waypoints,
-                                     strings=strings,
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-                    _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
-                                     waypoints=waypoints,
-                                     strings=strings,
-                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    # np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    # # add attribute to self.TASK_INFO
+                    # self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy')
+                    # _plot_trajectory(POS_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    # _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
@@ -725,6 +725,11 @@ class Quadrotor(BaseAviary):
                 prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_delay_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            if self.PHYSICS == Physics.DYN_SI_3D_10:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_10_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -1243,19 +1248,35 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T, R, P)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
-            params_acc = [20.907574256269616, 3.653687545690674]
-            params_roll_rate = [-130.3, -16.33, 119.3]
-            params_pitch_rate = [-99.94, -13.3, 84.73]
+            # params_acc = [20.907574256269616, 3.653687545690674]
+            # params_roll_rate = [-130.3, -16.33, 119.3]
+            # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # Old parameters for lighter quad
+            # self.a = prior_prop.get('a', 20.907574256269616)
+            # self.b = prior_prop.get('b', 3.653687545690674)
+            # self.c = prior_prop.get('c', -130.3)
+            # self.d = prior_prop.get('d', -16.33)
+            # self.e = prior_prop.get('e', 119.3)
+            # self.f = prior_prop.get('f', -99.94)
+            # self.h = prior_prop.get('h', -13.3)
+            # self.l = prior_prop.get('l', 84.73)
             psi = 0
-
-            self.a = prior_prop.get('a', 20.907574256269616)
-            self.b = prior_prop.get('b', 3.653687545690674)
-            self.c = prior_prop.get('c', -130.3)
-            self.d = prior_prop.get('d', -16.33)
-            self.e = prior_prop.get('e', 119.3)
-            self.f = prior_prop.get('f', -99.94)
-            self.h = prior_prop.get('h', -13.3)
-            self.l = prior_prop.get('l', 84.73)
+            # for large battery with LED deck
+            a_value = 0.5846 / self.MASS
+            b_value = 0.1537 / self.MASS
+            # a_value = 0.6921 / self.MASS
+            # b_value = 0.1205 / self.MASS
+            params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+            params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+            self.a = prior_prop.get('a', a_value)
+            self.b = prior_prop.get('b', b_value)
+            self.c = prior_prop.get('c', params_roll_rate[0])
+            self.d = prior_prop.get('d', params_roll_rate[1])
+            self.e = prior_prop.get('e', params_roll_rate[2])
+            self.f = prior_prop.get('f', params_pitch_rate[0])
+            self.h = prior_prop.get('h', params_pitch_rate[1])
+            self.l = prior_prop.get('l', params_pitch_rate[2])
 
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
@@ -1423,10 +1444,12 @@ class Quadrotor(BaseAviary):
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S]:
             U_EQ = np.array([u_eq, 0])
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE]:
             U_EQ = np.array([u_eq, 0, 0, 0])
+        elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY]:
+            U_EQ = np.array([u_eq/params_acc[1]-params_acc[0], 0, 0, 0])
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_10]:
-            U_EQ = np.array([u_eq, 0, 0])
+            U_EQ = np.array([(u_eq - self.b) / self.a, 0, 0])
         else:
             U_EQ = np.ones(self.action_dim) * u_eq / self.action_dim
         # Define cost (quadratic form).
@@ -1538,9 +1561,12 @@ class Quadrotor(BaseAviary):
                                                      np.full(1, max_pitch_rad, np.float32),
                                                      np.full(1, max_yaw_rad, np.float32)]).flatten())
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
-            n_mot = 4
-            a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
-            a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            a_low = 0.08 # [N] measured from hardware data
+            a_high = 0.45 # [N]
+            max_roll_deg = 60
+            max_pitch_deg = 60
+            max_roll_rad = max_roll_deg * math.pi / 180
+            max_pitch_rad = max_pitch_deg * math.pi / 180
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
                                                      np.full(1, -max_roll_rad, np.float32),
                                                      np.full(1, -max_pitch_rad, np.float32)]).flatten(),
