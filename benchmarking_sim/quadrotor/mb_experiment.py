@@ -62,14 +62,14 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        # ALGO = 'mpc_acados'
+        ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
         # ALGO = 'fmpc'
-        ALGO = 'ppo_mpc_acados'
+        # ALGO = 'ppo_mpc_acados'
         ADDITIONAL = ''
         CTRL_ADD = ''
         # gp_tag = 'safety'
@@ -94,7 +94,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     PRIOR = '100'
     if ALGO == 'ppo_mpc_acados':
         ALGO = 'mpc_acados'
-        episode_len = 30
+        episode_len = 7
         PRIOR = f'{episode_len}_ppo_mpc_100'
     agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
     SAFETY_FILTER = None

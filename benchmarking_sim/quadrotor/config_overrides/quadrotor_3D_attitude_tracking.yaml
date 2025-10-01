@@ -46,7 +46,7 @@ task_config:
   #   alpha_3: 124.8
   #   pitch_bias: 0.0 # in radian
 
-  episode_len_sec: 11
+  episode_len_sec: 7
   cost: quadratic
 
   constraints:
