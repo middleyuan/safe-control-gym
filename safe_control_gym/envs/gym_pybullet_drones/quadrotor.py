@@ -1382,8 +1382,8 @@ class Quadrotor(BaseAviary):
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             elif model_choice == "linear":
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
-                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
-                params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
+                params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+                # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
                 params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
                 params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
                 params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])

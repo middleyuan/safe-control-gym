@@ -82,8 +82,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     SYS = 'quadrotor_3D_attitude'
     TASK = 'tracking'
     # ADDITIONAL = '_10' 
-    # ADDITIONAL = '_delay'
-    ADDITIONAL = ''
+    ADDITIONAL = '_delay'
+    # ADDITIONAL = ''
     # CTRL_ADD = ADDITIONAL
     CTRL_ADD = ''
     # ADDITIONAL = ''
