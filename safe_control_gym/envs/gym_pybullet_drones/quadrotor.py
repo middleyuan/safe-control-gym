@@ -2029,7 +2029,7 @@ class Quadrotor(BaseAviary):
         # obs = self.state
         # RL cost.
         if self.COST == Cost.RL_REWARD:
-            act = np.asarray(self.current_clipped_action)
+            act = np.asarray(self.current_noisy_physical_action)
             act_error = act - self.U_GOAL
             # Quadratic costs w.r.t state and action
             # TODO: consider using multiple future goal states for cost in tracking
