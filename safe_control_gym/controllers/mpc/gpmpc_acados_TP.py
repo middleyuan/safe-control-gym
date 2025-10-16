@@ -77,7 +77,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             output_dir: str = 'results/temp',
             compute_ipopt_initial_guess: bool = True,
             use_RTI: bool = False,
-            use_linear_prior: bool = True,
             **kwargs
     ):
         super().__init__(
@@ -204,20 +203,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         x_dot_seq = [(x_next_seq[i, :] - x_seq[i, :])/dt for i in range(x_seq.shape[0])]
         x_dot_seq = np.array(x_dot_seq)
 
-        # apply a low pass filter to the numerical differentiation
-        # fig, ax = plt.subplots(2, 1)
-        # ax[0].plot(x_dot_seq[:, 3], label='original')
-        # ax[1].plot(x_dot_seq[:, 1], label='original')
-        # Wn = 0.8
-        # b, a = butter(4, Wn, btype='lowpass')
-        # x_dot_seq = filtfilt(b, a, x_dot_seq, axis=0)
-        # ax[0].plot(x_dot_seq[:, 3], '--', label='filtered')
-        # ax[1].plot(x_dot_seq[:, 1], '--', label='filtered')
-        # ax[0].legend()
-        # ax[1].legend()
-        # # plt.show()
-        # fig.savefig(f'{self.output_dir}/filtered_numerical_diff.png')
-
         T_true_data = np.sqrt((x_dot_seq[:, self.state_labels.index('z_dot')] +  g) ** 2 \
                             + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2))
         targets_T = (T_true_data - T_prior_data).reshape(-1, 1)
@@ -329,10 +314,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         for epoch in range(1, self.num_epochs):
             # only take data from the last episode from the last epoch
             episode_length = train_runs[epoch - 1][self.num_train_episodes_per_epoch - 1][0]['obs'][0].shape[0]
-            if True:
-                x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(train_runs, epoch - 1, self.num_samples, train_envs[epoch - 1].np_random)
-            else:
-                x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(train_runs, epoch - 1, self.num_samples)
+            x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(train_runs, epoch - 1, self.num_samples, train_envs[epoch - 1].np_random)
             train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq) # np.ndarray
             training_results = self.train_gp(input_data=train_inputs, target_data=train_targets)
             
@@ -386,12 +368,6 @@ class GPMPC_ACADOS_TP(GPMPC):
                     num_train_episodes_per_epoch=self.num_train_episodes_per_epoch,
                     num_test_episodes_per_epoch=self.num_test_episodes_per_epoch,
                     num_samples=self.num_samples,
-                    # trajectory=self.trajectory,
-                    # ctrl_freq=self.config.task_config.ctrl_freq,
-                    # lengthscales=lengthscale,
-                    # outputscale=outputscale,
-                    # noise=noise,
-                    # kern=kern,
                     train_data=self.train_data,
                     test_data=self.test_data,
                     )
@@ -508,7 +484,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         GP_T = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_T,
-            # kernel='RBF_single', 
             kernel='Linear',
         )
 
@@ -516,8 +491,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_P,
             kernel='RBF_single',
-            # kernel='Linear',
-            # kernel='RBF',
         )
 
         if gp_model:
@@ -534,25 +507,10 @@ class GPMPC_ACADOS_TP(GPMPC):
                     gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'),
                     init_noise_var=self.pitch_noise_var)
             
-            # # use thread to train the two GPs
-            # thread_T = threading.Thread(target=GP_T.train, args=(train_input_T, train_target_T, test_inputs_T, test_targets_T,
-            #         self.optimization_iterations[0], self.learning_rate[0], self.use_gpu, os.path.join(self.output_dir, 'best_model_T.pth')))
-            # thread_P = threading.Thread(target=GP_P.train, args=(train_input_P, train_target_P, test_inputs_P, test_targets_P,
-            #         self.optimization_iterations[1], self.learning_rate[1], self.use_gpu, os.path.join(self.output_dir, 'best_model_P.pth')))
-            # thread_T.start()
-            # thread_P.start()
-            # thread_T.join()
-            # thread_P.join()
         self.new_GP_model = True
         self.gaussian_process = [GP_T, GP_P]
 
         self.reset()
-        # if self.train_data['train_targets'].shape[0] <= self.n_ind_points:
-        #    n_ind_points = self.train_data['train_targets'].shape[0]
-        # else:
-        #    n_ind_points = self.n_ind_points
-        # self.set_gp_dynamics_func(n_ind_points)
-        # self.setup_gp_optimizer(n_ind_points)
         # Collect training results.
         training_results = {}
         training_results['train_targets'] = train_targets
@@ -573,17 +531,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         acados_model.name = model_name + '_' + current_time
 
-        A_lin = self.discrete_dfdx
-        B_lin = self.discrete_dfdu
-
         z = cs.vertcat(acados_model.x, acados_model.u)  # GP prediction point
-
-        # full_dyn = self.prior_dynamics_func(x0=acados_model.x- cs.MX(self.prior_ctrl.X_EQ[:, None]),
-        #                                     p=acados_model.u- cs.MX(self.prior_ctrl.U_EQ[:, None]))['xf'] \
-        #     + self.prior_ctrl.X_EQ[:, None] \
-        #     + self.Bd @ self.gaussian_process.casadi_predict(z=z)['mean']
-        # self.full_func = cs.Function('full_func', [acados_model.x, acados_model.u], [full_dyn])
-
         if self.sparse_gp:
             # sparse GP inducing points
             '''
@@ -610,8 +558,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
 
             f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
-            # self.sparse_gp_func = cs.Function('sparse_func',
-            #                                   [acados_model.x, acados_model.u, z_ind, mean_post_factor], [f_disc])
         else:
             GP_T = self.gaussian_process[0]
             GP_P = self.gaussian_process[1]
@@ -629,11 +575,8 @@ class GPMPC_ACADOS_TP(GPMPC):
             augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
             
             f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
-            f_cont_func = cs.Function('f_cont_func', [acados_model.x, acados_model.u, acados_model.p], [f_cont])
-        # acados_model.disc_dyn_expr = f_disc
+        
         acados_model.f_expl_expr = f_cont
-
-
 
         acados_model.x_labels = self.env.STATE_LABELS
         acados_model.u_labels = self.env.ACTION_LABELS
@@ -655,7 +598,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
     def setup_acados_optimizer(self, n_ind_points):
         print('=================Setting up GPMPC acados optimizer=================')
-        # before_optimizer_setup = time.time()
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
         ny_e = nx
@@ -673,7 +615,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         # cost weight matrices
         ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
         ocp.cost.W_e = self.P if hasattr(self, 'P') else self.Q
-        # ocp.cost.W_e = self.Q
 
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :nx] = np.eye(nx)
@@ -747,8 +688,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         ocp.solver_options.nlp_solver_type = 'SQP' if not self.use_RTI else 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 25 if not self.use_RTI else 1
-        # ocp.solver_options.globalization = 'FUNNEL_L1PEN_LINESEARCH' if not self.use_RTI else 'MERIT_BACKTRACKING'
-        # ocp.solver_options.globalization = 'MERIT_BACKTRACKING'
         # prediction horizon
         ocp.solver_options.tf = self.T * self.dt
 
@@ -758,7 +697,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         # get current time in yy-mm-dd-hh-mm-ss format
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         ocp.code_export_directory = self.output_dir + f'/gpmpc_c_generated_code_{current_time}'
-        # ocp.code_export_directory = self.output_dir + '/gpmpc_c_generated_code'
 
         self.ocp = ocp
         self.opti_dict = {'n_ind_points': n_ind_points}
@@ -859,7 +797,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
     # @timing
     def select_action_with_gp(self, obs):
-        time_before = time.time()
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
         ny_e = nx
@@ -884,9 +821,6 @@ class GPMPC_ACADOS_TP(GPMPC):
                         self.u_guess = np.zeros((nu, self.T))
             # set initial guess
             for idx in range(self.T + 1):
-                # if self.x_guess[:, idx].shape[0] != nx:
-                #     print(self.x_guess[:, idx].shape)
-                #     raise ValueError(f'x_guess[{idx}] has shape {self.x_guess[:, idx].shape}')
                 assert self.x_guess[:, idx].shape[0] == nx, f'x_guess[{idx}] has shape {self.x_guess[:, idx].shape}'
                 init_x = self.x_guess[:, idx]
                 self.acados_ocp_solver.set(idx, 'x', init_x)
@@ -966,16 +900,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.acados_ocp_solver.set(self.T, 'yref', y_ref_e)
 
         # solve the optimization problem
-        if self.use_RTI:
-            # preparation phase
-            self.acados_ocp_solver.options_set('rti_phase', 1)
-            status = self.acados_ocp_solver.solve()
-
-            # feedback phase
-            self.acados_ocp_solver.options_set('rti_phase', 2)
-            status = self.acados_ocp_solver.solve()
-        else:
-            status = self.acados_ocp_solver.solve()
+        status = self.acados_ocp_solver.solve()
         if status not in [0, 2]:
             self.acados_ocp_solver.print_statistics()
             print(colored(f'acados returned status {status}. ', 'red'))
@@ -997,10 +922,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.x_guess = self.x_prev
         self.u_guess = self.u_prev
 
-        time_after = time.time()
         # print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats("sqp_iter")}; qp iter {self.acados_ocp_solver.get_stats("qp_iter")}')
-        # if time_after - time_before > 1 / 60:
-        #     print(colored(f'========= Warning: GPMPC ACADOS took {time_after - time_before:.3f} seconds =========', 'yellow'))
         self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
         
         if hasattr(self, 'K'):
@@ -1017,9 +939,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         n_training_samples = self.train_data['train_targets'].shape[0]
         inputs = self.train_data['train_inputs']
         targets = self.train_data['train_targets']
-        # if self.normalize_training_data:
-        #     inputs = (inputs - self.gaussian_process.input_scaler_mean[self.input_mask]) / self.gaussian_process.input_scaler_std[self.input_mask]
-        #     targets = (targets - self.gaussian_process.output_scaler_mean[self.target_mask]) / self.gaussian_process.output_scaler_std[self.target_mask]
+
         mean_post_factor = np.zeros((dim_gp_outputs, n_training_samples))
         for i in range(dim_gp_outputs):
             K_z_z = self.gaussian_process[i].model.K_plus_noise_inv
@@ -1037,10 +957,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         dim_gp_outputs = len(self.gaussian_process)
         inputs = self.train_data['train_inputs']
         targets = self.train_data['train_targets']
-        # if self.normalize_training_data:
-        #     for i in range(inputs.shape[0]):
-        #         inputs[i, :] = (inputs[i, :] - self.gaussian_process.input_scaler_mean[self.input_mask]) / self.gaussian_process.input_scaler_std[self.input_mask]
-        #         targets[i, :] = (targets[i, :] - self.gaussian_process.output_scaler_mean[self.target_mask]) / self.gaussian_process.output_scaler_std[self.target_mask]
+
         # Get the inducing points.
         if False and self.x_prev is not None and self.u_prev is not None:
             # Use the previous MPC solution as in Hewing 2019.
@@ -1073,8 +990,8 @@ class GPMPC_ACADOS_TP(GPMPC):
             K_zind_zind_inv_T = torch.pinverse(K_zind_zind_T.evaluate().detach())
             K_zind_zind_inv_P = torch.pinverse(K_zind_zind_P.evaluate().detach())
         else:
-            K_zind_zind_inv_T = K_zind_zind_T.inv_matmul(torch.eye(n_ind_points).double()).detach()
-            K_zind_zind_inv_P = K_zind_zind_P.inv_matmul(torch.eye(n_ind_points).double()).detach()
+            K_zind_zind_inv_T = K_zind_zind_T.solve(torch.eye(n_ind_points).double()).detach()
+            K_zind_zind_inv_P = K_zind_zind_P.solve(torch.eye(n_ind_points).double()).detach()
         K_zind_zind_T = GP_T.model.covar_module(torch.from_numpy(z_ind[:,0]).double()).evaluate().detach()
         K_zind_zind_P = GP_P.model.covar_module(torch.from_numpy(z_ind[:,1:]).double()).evaluate().detach()
         K_zind_zind = torch.zeros((dim_gp_outputs, n_ind_points, n_ind_points))
@@ -1127,47 +1044,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         mean_post_factor[0] = mean_post_factor_T
         mean_post_factor[1] = mean_post_factor_P
 
-        # Gamma_T = torch.diagonal(K_plus_noise_T - Q_X_X_T)
-        # Gamma_T = torch.diag(Gamma_T)
-
-        # Gamma_P = torch.diagonal(K_plus_noise_P - Q_X_X_P)
-        # Gamma_P = torch.diag(Gamma_P)
-
-        # Sigma_inv_T = K_zind_zind_T + K_x_zind_T.T @ torch.linalg.solve(Gamma_T, K_x_zind_T)
-        # Sigma_inv_P = K_zind_zind_P + K_x_zind_P.T @ torch.linalg.solve(Gamma_P, K_x_zind_P)
-        # Sigma_inv = torch.zeros((dim_gp_outputs, n_ind_points, n_ind_points))
-        # Sigma_inv[0] = Sigma_inv_T
-        # Sigma_inv[1] = Sigma_inv_P
-
-        # Sigma_T = torch.pinverse(Sigma_inv_T)
-        # Sigma_P = torch.pinverse(Sigma_inv_P)
-        
-        # mean_post_factor_T = torch.linalg.solve(Sigma_inv_T, K_x_zind_T.T @ torch.linalg.solve(Gamma_T, torch.from_numpy(targets[:, 0]).double()))
-        # mean_post_factor_P = torch.linalg.solve(Sigma_inv_P, K_x_zind_P.T @ torch.linalg.solve(Gamma_P, torch.from_numpy(targets[:, 1]).double()))
-                                
-        # mean_post_factor = torch.zeros((dim_gp_outputs, n_ind_points))
-        # mean_post_factor[0] = mean_post_factor_T
-        # mean_post_factor[1] = mean_post_factor_P
-        # mean_post_factor[0] = Sigma_T @ K_x_zind_T.T @ torch.linalg.solve(Gamma_T, torch.from_numpy(targets[:,0]).double())
-        # mean_post_factor[1] = Sigma_P @ K_x_zind_P.T @ torch.linalg.solve(Gamma_P, torch.from_numpy(targets[:,1]).double())
-
-        # K_zind_zind = self.gaussian_process.kernel(torch.Tensor(z_ind).double())
-        # K_zind_zind_inv = self.gaussian_process.kernel_inv(torch.Tensor(z_ind).double())
-        # K_x_zind = self.gaussian_process.kernel(torch.from_numpy(inputs[:, self.input_mask]).double(),
-        #                                         torch.tensor(z_ind).double())
-        # Q_X_X = K_x_zind @ K_zind_zind_inv @ K_x_zind.transpose(1,2)
-        # Q_X_X = K_x_zind @ torch.linalg.solve(K_zind_zind, K_x_zind.transpose(1, 2))
-        # Gamma = torch.diagonal(K_plus_noise - Q_X_X, 0, 1, 2)
-        # Gamma_inv = torch.diag_embed(1 / Gamma)
-        # # TODO: Should inverse be used here instead? pinverse was more stable previsouly.
-        # Sigma_inv = K_zind_zind + K_x_zind.transpose(1, 2) @ Gamma_inv @ K_x_zind # (dim_gp_outputs, n_ind_points, n_ind_points)
-        # Sigma = torch.pinverse(K_zind_zind + K_x_zind.transpose(1, 2) @ Gamma_inv @ K_x_zind)  # For debugging
-        # mean_post_factor = torch.zeros((dim_gp_outputs, n_ind_points))
-        # mean_post_factor[0] = torch.linalg.solve(Sigma_inv[0, :, :], K_x_zind[0, :, :].T @ Gamma_inv[0, :, :] @
-        #                                             torch.from_numpy(targets[:, 0]).float()) # NOTE: transpose to match the shape of the targets
-        # mean_post_factor[1] = torch.linalg.solve(Sigma_inv[1, :, :], K_x_zind[1, :, :].T @ Gamma_inv[1, :, :] @
-        #                                             torch.from_numpy(targets[:, 1]).float()) # NOTE: transpose to match the shape of the targets
-            # mean_post_factor[i] = Sigma[i] @ K_x_zind[i].T @ Gamma_inv[i] @ torch.from_numpy(targets[:, self.target_mask[i]]).double()
         return mean_post_factor.detach().numpy(), Sigma_inv.detach().numpy(), K_zind_zind_inv.detach().numpy(), z_ind
 
     def create_sparse_GP_machinery(self, n_ind_points):
@@ -1267,44 +1143,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.K_z_zind_func_T = cs.Function('K_z_zind', [z1_T, z_ind], [K_z_zind_T], ['z1', 'z2'], ['K'])
         self.K_z_zind_func_P = cs.Function('K_z_zind', [z1_P, z_ind], [K_z_zind_P], ['z1', 'z2'], ['K'])
         # self.K_z_zind_func = cs.Function('K_z_zind', [z1_T, z1_P, z_ind], [K_z_zind], ['z1', 'z2'], ['K'])
-
-        # z1 = cs.SX.sym('z1', Nx)
-        # z2 = cs.SX.sym('z2', Nx)
-        # ell_s = cs.SX.sym('ell', Nx)
-        # sf2_s = cs.SX.sym('sf2')
-        # z_ind = cs.SX.sym('z_ind', n_ind_points, Nx)
-        # ks = cs.SX.zeros(1, n_ind_points)
-
-
-        # if self.kernel == 'Matern':
-        #     covMatern = cs.Function('covMatern', [z1, z2, ell_s, sf2_s],
-        #                             [covMatern52ard(z1, z2, ell_s, sf2_s)])
-        #     for i in range(n_ind_points):
-        #         ks[i] = covMatern(z1, z_ind[i, :], ell_s, sf2_s)
-        # elif self.kernel == 'RBF':
-        #     covSE = cs.Function('covSE', [z1, z2, ell_s, sf2_s],
-        #                         [covSEard(z1, z2, ell_s, sf2_s)])
-        #     for i in range(n_ind_points):
-        #         ks[i] = covSE(z1, z_ind[i, :], ell_s, sf2_s)
-        # elif self.kernel == 'RBF_single':
-        #     covSE = cs.Function('covSE', [z1, z2, ell_s, sf2_s],
-        #                         [covSE_single(z1, z2, ell_s, sf2_s)])
-        #     for i in range(n_ind_points):
-        #         ks[i] = covSE(z1, z_ind[i, :], ell_s, sf2_s)
-        # else:
-        #     raise NotImplementedError('Kernel type not implemented.')
-        # ks_func = cs.Function('K_s', [z1, z_ind, ell_s, sf2_s], [ks])
-        # K_z_zind = cs.SX.zeros(Ny, n_ind_points)
-        # for i in range(Ny):
-        #     if self.kernel == 'RBF_single':
-        #         K_z_zind[i, :] = ks_func(z1, z_ind, self.length_scales[i], self.signal_var[i])
-        #     else:
-        #         K_z_zind[i, :] = ks_func(z1, z_ind, self.length_scales[i, :], self.signal_var[i])
-
-        # # This will be mulitplied by the mean_post_factor computed at every time step to compute the approximate mean.
-        # self.K_z_zind_func = cs.Function('K_z_zind', [z1, z_ind], [K_z_zind], ['z1', 'z2'], ['K'])
-        # shape (dim_output, n_ind_points) 
-
     # @timing
     def precompute_probabilistic_limits(self,
                                         print_sets=False
