@@ -1324,6 +1324,10 @@ class Quadrotor(BaseAviary):
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+            self.params_roll_rate = params_roll_rate
+            self.params_pitch_rate = params_pitch_rate
+            self.params_yaw_rate = params_yaw_rate
+            self.params_acc = params_acc
             # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
             f_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
             # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
