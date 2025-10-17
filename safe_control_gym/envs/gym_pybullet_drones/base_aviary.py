@@ -1256,57 +1256,112 @@ class BaseAviary(BenchmarkEnv):
         R_c = cs.MX.sym('R')  # desired roll angle [rad]
         P_c = cs.MX.sym('P')  # desired pitch angle [rad]
         Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
-        U = cs.vertcat(T_c, R_c, P_c, Y_c)      
-    
-        params_acc = [0.0905, 0.8, 0.0814]
-        f_dot = (params_acc[1] *(T_c + params_acc[0]) - forces_motor) / params_acc[2]
-        # update rpy parameters (initial version)
-        params_roll_rate = [-238.1, -21.35, 179.65]
-        params_pitch_rate = [-238.1, -21.35, 179.65]
-        params_yaw_rate = [-170.4, -22.22, 280]        
-        X_dot = cs.vertcat(x_dot, 
+        U = cs.vertcat(T_c, R_c, P_c, Y_c)   
+        # model_choice = "quartic"  # options: linear, quadratic, quartic
+        # model_choice = "quadratic"  # options: linear, quadratic
+        model_choice = "linear"  # options: linear, quadratic
+        if model_choice == "quartic":
+            # params_acc = [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086]
+            # params_acc = [-0.00688355, 1.78338, -7.4426, 25.4651, -29.1181, 0.1086]
+            params_acc =  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086]
+            # params_acc = [-0.593776, 4.59805, -5.27109, 0.08]
+            # update rpy parameters (initial version)
+            params_roll_rate = [-238.1, -21.35, 179.65]
+            params_pitch_rate = [-238.1, -21.35, 179.65]
+            params_yaw_rate = [-170.4, -22.22, 280]    
+            force_motor_dot = 1 / params_acc[5] * (T_c - forces_motor)
+            thrust = forces_motor
+            forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2 + params_acc[3]*thrust**3 + params_acc[4]*thrust**4)  # [N]
+            X_dot = cs.vertcat(x_dot, 
+                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
+                            y_dot,
+                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
+                            z_dot,
+                            forces_motor_z * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                            force_motor_dot)
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        elif model_choice == "quadratic":
+            params_acc = [0.0905, 0.8, 0.0814]
+            # params_acc = [-1.02207, 6.42, -7.215, 0.12]
+            # params_acc = [-0.593776, 4.59805, -5.27109, 0.08]
+            # update rpy parameters (initial version)
+            params_roll_rate = [-286.2, -23.03, 225.6]
+            params_pitch_rate = [-286.2, -23.03, 225.6]
+            params_yaw_rate = [-192.9, -22.22, 323.5]        
+            force_motor_dot = 1 / params_acc[3] * (T_c - forces_motor)
+            thrust = forces_motor
+            forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2)  # [N]
+            X_dot = cs.vertcat(x_dot, 
+                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
+                            y_dot,
+                            forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
+                            z_dot,
+                            forces_motor_z * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                            force_motor_dot)
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        elif model_choice == "linear":
+            # Transformation parameters from sys_id with mode 3 
+            cmd_min = -1
+            cmd_max = 1
+            f_min = -1
+            f_max = 1 
+            
+            # Transform input command T from raw to normalized space (mode 3)
+            # T is expected to be in raw force units, normalize to [-1, 1]
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+            
+            # normalized forces_motor
+            df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
+
+            params_acc = [0.09, 0.77, 0.0814]
+            params_roll_rate = [-238.1, -21.35, 179.65]
+            params_pitch_rate = [-238.1, -21.35, 179.65]
+            params_yaw_rate = [-170.4, -22.22, 280]
+            
+            # Delay dynamics parameters (from MATLAB sys_id results)
+            # Based on estimated parameters: [bias, scale, tau]
+            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
+            # params_acc = [0.0905, 0.8, 0.0814]
+            # params_acc = [0.1052, 0.8, 0.120]
+            # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+            
+            # by definition, motor_forces_dot = 1/2 * df_dot
+            
+            # Transform normalized forces_motor to raw force for physics calculations
+            # self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
+            # update rpy parameters
+            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
+            # params_roll_rate = [-2.70609648e+02, -2.54831576e+01,  1.46664449e+02 ]
+            # params_pitch_rate = [-2.52706637e+02, -2.78661952e+01,  1.44880083e+02]
+            # params_yaw_rate = [-1.74858294e+02, -1.68371780e+01, 3.87810411e+02]
+
+            X_dot = cs.vertcat(x_dot, 
                             1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
-                           y_dot,
+                            y_dot,
                             1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
-                           z_dot,
+                            z_dot,
                             1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
-                           phi_dot,
-                           theta_dot,
-                           psi_dot,
-                           params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                           params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                           params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                           f_dot)
-        self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
-  
-        # MASS = overridden_mass
-        # # params_acc = [1.0591, 0, 0.1108]  # [N/rad, N]
-        # params_acc = [0.99, 0, 0.1039]  # [N/rad, N]
-        # # MASS = 0.037
-        # # params_acc = [0.5210, 0.1704, 0.0923]
-        # params_roll_rate = [-286.2, -23.03, 225.6]
-        # params_pitch_rate = [-286.2, -23.03, 225.6]
-        # params_yaw_rate = [-192.9, -22.22, 323.5]
-        # # params_roll_rate = [-295, -31, 230]
-        # # params_pitch_rate = [-295, -31, 230]
-        # # params_yaw_rate = [-158, -15, 275]
-        
-        # force_motor_dot = 1 / params_acc[2] * (T_c - forces_motor)
-        # forces_motor_z =1/MASS * (params_acc[0] * forces_motor + params_acc[1])  # [N]
-        # X_dot = cs.vertcat(x_dot, 
-        #                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
-        #                    y_dot,
-        #                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
-        #                    z_dot,
-        #                    forces_motor_z * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
-        #                    phi_dot,
-        #                    theta_dot,
-        #                    psi_dot,
-        #                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-        #                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-        #                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-        #                    force_motor_dot)
-        # self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                            (f_max - f_min)/2 * df_dot)
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
 
     def _show_drone_local_axes(self, nth_drone):
         '''Draws the local frame of the n-th drone in PyBullet's GUI.

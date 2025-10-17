@@ -154,13 +154,14 @@ class MLPActor(nn.Module):
 
     def __init__(self,
                  obs_dim,
-                 act_dim,
+                 action_space,
                  hidden_dims,
                  activation,
                  discrete=False,
                  exploration_init=-0.5
                  ):
         super().__init__()
+        act_dim = action_space.shape[0]
         self.pi_net = MLP(obs_dim, act_dim, hidden_dims, activation)
         # Construct output action distribution.
         self.discrete = discrete
@@ -170,11 +171,24 @@ class MLPActor(nn.Module):
             self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
+        # action rescaling
+        # self.action_scale = torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32)
+        # self.action_bias = torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32)
+        self.register_buffer(
+            "action_scale", torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
+        )
+        self.register_buffer(
+            "action_bias", torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
+        )
+
     def forward(self,
                 obs,
                 act=None
                 ):
-        dist = self.dist_fn(self.pi_net(obs))
+        x_t = self.pi_net(obs)
+        y_t = torch.tanh(x_t)
+        mean_act = y_t * self.action_scale + self.action_bias
+        dist = self.dist_fn(mean_act)
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)
@@ -222,7 +236,7 @@ class MLPActorCritic(nn.Module):
             act_dim = act_space.n
             discrete = True
         # Policy.
-        self.actor = MLPActor(obs_dim, act_dim, hidden_dims, activation, discrete, exploration_init)
+        self.actor = MLPActor(obs_dim, act_space, hidden_dims, activation, discrete, exploration_init)
         # Value function.
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
