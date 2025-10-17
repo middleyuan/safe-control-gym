@@ -318,7 +318,11 @@ class FlatMPC(BaseController):
 
         # flat input transformation: z and v to action u
         # Note: using z_horizon[:,0] yeilds really poor performance.
-        action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 1], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
+        # Note: using the feedforward v_horizon[:,1] works slightly better than v_horizon[:,0]
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 1], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
+        else:
+            action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 0], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
         self.results_dict['inference_time'].append(self.mpc.acados_ocp_solver.get_stats("time_tot"))
 
         # feed data into observer
