@@ -68,10 +68,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
-        # ALGO = 'fmpc'
+        ALGO = 'fmpc'
         # ALGO = 'ppo_mpc_acados'
-        ADDITIONAL = ''
-        CTRL_ADD = ''
+        #ADDITIONAL = ''
+        #CTRL_ADD = ''
         # gp_tag = 'safety'
         # ADDITIONAL = '_param'
         # ADDITIONAL = '_safety'
@@ -233,7 +233,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
             safety_filter.save(path=f'{script_path}/models/{config.safety_filter}_{SYS}_{TASK}_{PRIOR}.pkl')
             ctrl.reset()
             experiment = BaseExperiment(env=static_env, ctrl=ctrl, safety_filter=safety_filter)
-
+        print(f"N STEPS: {n_steps}")
         if n_steps is None:
             trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1)
         else:

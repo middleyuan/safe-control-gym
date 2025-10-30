@@ -7,6 +7,7 @@ Based on:
 
 import casadi as cs
 import numpy as np
+import os
 
 from safe_control_gym.controllers.base_controller import BaseController
 from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
@@ -132,6 +133,13 @@ class FlatMPC(BaseController):
             self.inertial_prop['alpha_1'] = self.env.alpha_1
             self.inertial_prop['alpha_2'] = self.env.alpha_2
             self.inertial_prop['alpha_3'] = self.env.alpha_3
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            model, action_from_flat_states, flat_state_from_x_and_u, dyn_params  = self.setup_3D_delay_model_transforms()
+            self.mpc.model = model
+            self.action_from_flat_states_func = action_from_flat_states
+            self.flat_state_from_x_and_u = flat_state_from_x_and_u
+            self.inertial_prop = dyn_params
+            self.transform_env_goal_to_flat_func = _transform_env_goal_to_flat_3D_delay 
         else:
             raise NotImplementedError
 
@@ -180,6 +188,40 @@ class FlatMPC(BaseController):
         # setup flat state observer
         self.fs_obs = FlatStateObserver(self.QUAD_TYPE, self.inertial_prop, self.mpc.env.GRAVITY_ACC, self.mpc.dt, self.mpc.T)
 
+    def setup_3D_delay_model_transforms(self):
+        # These functions were generated using Adam's Symfblin library.
+        # A description of how to use them is in fmpc_transforms/REAMME_scg_3d_functions.md
+        # TODO: Do we want to load this libary so people can see how the functions are created even though its a
+        #       out of scopt for SCG?
+    
+        dyn_pars = {
+            'c0': self.env.params_acc[0],
+            'c1': self.env.params_acc[1],
+            'tau_f': self.env.params_acc[2],
+            'alpha_phi': self.env.params_roll_rate[0],
+            'alpha_theta': self.env.params_pitch_rate[0],
+            'alpha_eta': self.env.params_yaw_rate[0],
+            'beta_phi': self.env.params_roll_rate[1],
+            'beta_theta': self.env.params_pitch_rate[1],
+            'beta_eta': self.env.params_yaw_rate[1],
+            'gamma_phi': self.env.params_roll_rate[2],
+            'gamma_theta': self.env.params_pitch_rate[2],
+            'gamma_eta': self.env.params_yaw_rate[2],
+            'm': self.env.MASS,
+            'g': self.env.GRAVITY_ACC,
+        }
+
+        model = _setup_flat_model_symbolic_3D_delay(self.mpc.dt)
+        action_from_flat_states = _make_u_map_3D_delay(dyn_pars)
+        flat_states_from_flat_states = _make_z_map_3D_delay(dyn_pars)
+        # Hover thrust computation based on f_dot = 1/Tau_f*(c1*(uf + c1) - f), with f = mg and f_dot = 0
+        u_hover = -dyn_pars['c0'] + dyn_pars['m']*dyn_pars['g']/dyn_pars['c1']
+
+        return model, action_from_flat_states, flat_states_from_flat_states, dyn_pars
+
+        
+
+
     # overwrite to input flat trajectory into reference and initialize flat state observer
     def reset(self):
         '''Prepares for training or evaluation.'''
@@ -205,6 +247,7 @@ class FlatMPC(BaseController):
             y_ini = self.mpc.env.__dict__.get('init_y'.upper(), 0)
             z_ini = self.mpc.env.__dict__['init_z'.upper()]
             self.fs_obs.set_initial_hovering(x_ini, y_ini, z_ini)
+        self.prev_action = self.fs_obs.u
 
 
         # self.setup_results_dict()
@@ -256,7 +299,15 @@ class FlatMPC(BaseController):
         '''
         # ts = time.time()
         # get flat state estimation from observer
-        z_obs = self.fs_obs.compute_observation(obs)
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            z_obs = self.fs_obs.compute_observation(obs)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            # The THREE_D_ATTITUDE_DELAY model doesn't need the observer because it doesn't require u_dot estimation due to
+            # the inclusion of yaw, yaw_dot, and motor force in the state.
+            #v_prev = self.mpc.u_prev[:, 1] if self.mpc.u_prev is not None else np.array([0,0,0,0])
+            z_obs = self.flat_state_from_x_and_u(obs, self.prev_action, self.inertial_prop, self.env.GRAVITY_ACC)
+            #u_prev = self.action_from_flat_states_func(z_obs, v_prev, self.inertial_prop, g=self.env.GRAVITY_ACC)
+            # print("z_obs", z_obs)
 
         # z_ref = self.get_references() # for debugging
 
@@ -266,12 +317,19 @@ class FlatMPC(BaseController):
         v_horizon = self.mpc.u_prev #2xN
 
         # flat input transformation: z and v to action u
-        action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 0], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
+        # Note: using z_horizon[:,0] yeilds really poor performance.
+        # Note: using the feedforward v_horizon[:,1] works slightly better than v_horizon[:,0]
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 1], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
+        else:
+            action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 0], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
         self.results_dict['inference_time'].append(self.mpc.acados_ocp_solver.get_stats("time_tot"))
 
         # feed data into observer
-        self.fs_obs.input_FMPC_result(z_horizon, v_horizon, action)
-
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            self.fs_obs.input_FMPC_result(z_horizon, v_horizon, action)
+        else:
+            self.prev_action = action
         # # log execution time
         # te = time.time()
 
@@ -315,6 +373,9 @@ class FlatStateObserver():
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
             self.action_from_flat_states_func = _get_u_from_flat_states_2D_att
             self.flat_states_from_reg_func = _get_z_from_regular_states_2D_att
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            self.action_from_flat_states_func = None # not needed
+            self.flat_states_from_reg_func = None # not needed
         else:
             raise NotImplementedError('FMPC flat state observer only implemented for 2D_attitude and 3D_attitude_10 model')
 
@@ -331,6 +392,16 @@ class FlatStateObserver():
             z_ini[0] = x_pos
             z_ini[4] = y_pos
             z_ini[8] = z_pos
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            # initializes u, z and v horizon for a hovering state
+            self.z_horizon = np.zeros([15, self.fmpc_horizon+1])
+            self.v_horizon = np.zeros([4, self.fmpc_horizon])
+            self.u = np.zeros(4)
+            self.u[0] = self.inertial_prop['m']*self.inertial_prop['g']/self.inertial_prop['c1'] - self.inertial_prop['c0']
+            z_ini = np.zeros(14)
+            z_ini[0] = x_pos
+            z_ini[4] = y_pos
+            z_ini[8] = z_pos
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
             self.z_horizon = np.zeros([8, self.fmpc_horizon+1])
             self.v_horizon = np.zeros([2, self.fmpc_horizon])
@@ -344,9 +415,6 @@ class FlatStateObserver():
 
 
         self.z_horizon = np.tile(z_ini.reshape(-1, 1), (1, self.fmpc_horizon + 1))
-
-
-
 
     def input_FMPC_result(self, z_horizon, v_horizon, u):
         # just save them away
@@ -374,6 +442,306 @@ class FlatStateObserver():
         # state estimation using system dynamics
         z_obs = self.flat_states_from_reg_func(x_obs, self.u[0], u0_dot, self.inertial_prop, self.GRAVITY)
         return z_obs
+
+#################################################################################################
+################## 3D Quadrotor Delay model and flatness transforms #############################
+#################################################################################################
+
+def _setup_flat_model_symbolic_3D_delay(dt):
+        '''Generates linear flat model for 3D SI 10 State model
+        Integrator chain for x y and z
+
+        Args:
+            dt: time step size of controller, 1/control frequency
+        '''
+        nx, nu = 14, 4
+
+        # Define states.
+        z = cs.MX.sym('z')
+        z_dot = cs.MX.sym('z_dot')
+        z_ddot = cs.MX.sym('z_ddot')
+        z_dddot = cs.MX.sym('z_dddot')
+
+        y = cs.MX.sym('y')
+        y_dot = cs.MX.sym('y_dot')
+        y_ddot = cs.MX.sym('y_ddot')
+        y_dddot = cs.MX.sym('y_dddot')
+
+        x = cs.MX.sym('x')
+        x_dot = cs.MX.sym('x_dot')
+        x_ddot = cs.MX.sym('x_ddot')
+        x_dddot = cs.MX.sym('x_dddot')
+
+        eta = cs.MX.sym('eta')
+        eta_dot = cs.MX.sym('eta_dot')
+
+        X = cs.vertcat(x, x_dot, x_ddot, x_dddot, y, y_dot, y_ddot, y_dddot, z, z_dot, z_ddot, z_dddot, eta, eta_dot)
+        # Define flat inputs
+        v1 = cs.MX.sym('v1')
+        v2 = cs.MX.sym('v2')
+        v3 = cs.MX.sym('v3')
+        v4 = cs.MX.sym('v4')
+        U = cs.vertcat(v1, v2, v3, v4)
+        # Define dynamics equations.
+        X_dot = cs.vertcat(x_dot, x_ddot, x_dddot, v1,
+                           y_dot, y_ddot, y_dddot, v2,
+                           z_dot, z_ddot, z_dddot, v3,
+                           eta_dot, v4)
+        # Define observation.
+        Y = cs.vertcat(x, x_dot, x_ddot, x_dddot, y, y_dot, y_ddot, y_dddot, z, z_dot, z_ddot, z_dddot, eta, eta_dot)
+
+        # Set the equilibrium values for linearizations.
+        X_EQ = np.zeros(nx)
+        U_EQ = np.zeros(nu)
+        # Define cost (quadratic form).
+        Q = cs.MX.sym('Q', nx, nx)
+        R = cs.MX.sym('R', nu, nu)
+        Xr = cs.MX.sym('Xr', nx, 1)
+        Ur = cs.MX.sym('Ur', nu, 1)
+        cost_func = 0.5 * (X - Xr).T @ Q @ (X - Xr) + 0.5 * (U - Ur).T @ R @ (U - Ur)
+        # Define dynamics and cost dictionaries.
+        dynamics = {'dyn_eqn': X_dot, 'obs_eqn': Y, 'vars': {'X': X, 'U': U}}
+        cost = {
+            'cost_func': cost_func,
+            'vars': {
+                'X': X,
+                'U': U,
+                'Xr': Xr,
+                'Ur': Ur,
+                'Q': Q,
+                'R': R
+            }
+        }
+        # Additional params to cache
+        params = {
+            # equilibrium point for linearization
+            'X_EQ': X_EQ,
+            'U_EQ': U_EQ,
+        }
+        return SymbolicModel(dynamics=dynamics, cost=cost, dt=dt, params=params)
+
+def _make_u_map_3D_delay(dyn_pars):
+    """
+    The order of the states in z is:
+    z = [x, x_dot, x_ddot, x_dddot, y, y_dot, y_ddot, y_dddot, z, z_dot, z_ddot, z_dddot, eta, eta_dot]
+    v = [x_ddddot, y_ddddot, z_ddddot, eta_ddot]
+    The order of the input to the prebuilt casadi functions is:
+    in_vars = [t, y, y, z, eta, 
+                 xd, xdd, xddd, v1,
+                 yd, ydd, yddd, v2,
+                 zd, zdd, zddd, v3,
+                 etad, v4,
+                 g, m, t_f, c0, c1,
+                beta_phi, beta_theta, beta_eta, 
+                alpha_phi, alpha_theta, alpha_eta,
+                gamma_phi, gamma_theta, gamma_eta]
+    
+    """
+
+    # for testing
+    #params_acc =[0.0905, 0.8, 0.0814]
+    #params_roll_rate = [-238.1, -21.35, 179.65]
+    #params_pitch_rate = [-238.1, -21.35, 179.65]
+    #params_yaw_rate = [-170.4, -22.22, 280]
+
+    #dyn_pars = {
+    #        'c0': params_acc[0],
+    #        'c1': params_acc[1],
+    #        'tau_f': params_acc[2],
+    #        'alpha_phi': params_roll_rate[0],
+    #        'alpha_theta': params_pitch_rate[0],
+    #        'alpha_eta': params_yaw_rate[0],
+    #        'beta_phi': params_roll_rate[1],
+    #        'beta_theta': params_pitch_rate[1],
+    #        'beta_eta': params_yaw_rate[1],
+    #        'gamma_phi': params_roll_rate[2],
+    #        'gamma_theta': params_pitch_rate[2],
+    #        'gamma_eta': params_yaw_rate[2],
+    #        'm': 1.0,
+    #        'g': 9.81,
+    #    }
+
+    c0 = dyn_pars['c0']
+    c1 = dyn_pars['c1']
+    tau_f = dyn_pars['tau_f']
+    alpha_phi = dyn_pars['alpha_phi']
+    alpha_theta = dyn_pars['alpha_theta']
+    alpha_eta = dyn_pars['alpha_eta']
+    beta_phi = dyn_pars['beta_phi']
+    beta_theta = dyn_pars['beta_theta']
+    beta_eta = dyn_pars['beta_eta']
+    gamma_phi = dyn_pars['gamma_phi']
+    gamma_theta = dyn_pars['gamma_theta']
+    gamma_eta = dyn_pars['gamma_eta']
+    m = dyn_pars['m']
+    g = dyn_pars['g']
+
+    t = 0 # placeholder, not actually used in function
+    
+    # Define states.
+    z = cs.MX.sym('z')
+    z_dot = cs.MX.sym('z_dot')
+    z_ddot = cs.MX.sym('z_ddot')
+    z_dddot = cs.MX.sym('z_dddot')
+
+    y = cs.MX.sym('y')
+    y_dot = cs.MX.sym('y_dot')
+    y_ddot = cs.MX.sym('y_ddot')
+    y_dddot = cs.MX.sym('y_dddot')
+
+    x = cs.MX.sym('x')
+    x_dot = cs.MX.sym('x_dot')
+    x_ddot = cs.MX.sym('x_ddot')
+    x_dddot = cs.MX.sym('x_dddot')
+
+    eta = cs.MX.sym('eta')
+    eta_dot = cs.MX.sym('eta_dot')
+
+    Z = cs.vertcat(x, x_dot, x_ddot, x_dddot, y, y_dot, y_ddot, y_dddot, z, z_dot, z_ddot, z_dddot, eta, eta_dot)
+    # Define flat inputs
+    v1 = cs.MX.sym('v1')
+    v2 = cs.MX.sym('v2')
+    v3 = cs.MX.sym('v3')
+    v4 = cs.MX.sym('v4')
+    V = cs.vertcat(v1, v2, v3, v4)
+
+    u_func = cs.Function.load(os.path.join(os.path.dirname(__file__), 'fmpc_transforms', 'scg_3d_delay_u_from_z_and_v.casadi'))
+    input = cs.vertcat(t, x, y, z, eta, 
+                       x_dot, x_ddot, x_dddot, v1,
+                       y_dot, y_ddot, y_dddot, v2,
+                       z_dot, z_ddot, z_dddot, v3,
+                       eta_dot, v4,
+                       g, m, tau_f, c0, c1,
+                       beta_phi, beta_theta, beta_eta, 
+                       alpha_phi, alpha_theta, alpha_eta,
+                       gamma_phi, gamma_theta, gamma_eta)
+                   
+    # Create function with given parameters
+    u_func_eval = u_func(input)
+    u_from_z_and_v = cs.Function('u_map', [Z, V], [u_func_eval],['Z', 'V'], ['u'])
+
+    def action_from_flat_states(z, v, inertial_prop, g=9.81):
+        u = u_from_z_and_v(z, v)
+        return np.array(u).squeeze()
+
+    return action_from_flat_states
+
+def _make_z_map_3D_delay(dyn_pars):
+    """
+    The order of the states are:
+    x = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, f]
+    u = [u_f, u_phi, u_theta, u_psi] 
+
+    The oder of the input to the prebuilt casadi functions is:
+    in_vars = [t, x, y, z, 
+               psi, theta, eta, f,
+               u_f, u_phi, u_theta, u_eta,
+               x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot,
+                g, m, t_f, c0, c1, 
+                beta_phi, beta_theta, beta_eta,
+                alpha_phi, alpha_theta, alpha_eta,
+                gamma_phi, gamma_theta, gamma_eta]
+    
+    """
+    # for testing
+    #params_acc =[0.0905, 0.8, 0.0814]
+    #params_roll_rate = [-238.1, -21.35, 179.65]
+    #params_pitch_rate = [-238.1, -21.35, 179.65]
+    #params_yaw_rate = [-170.4, -22.22, 280]
+
+    #dyn_pars = {
+    #        'c0': params_acc[0],
+    #        'c1': params_acc[1],
+    #        'tau_f': params_acc[2],
+    #        'alpha_phi': params_roll_rate[0],
+    #        'alpha_theta': params_pitch_rate[0],
+    #        'alpha_eta': params_yaw_rate[0],
+    #        'beta_phi': params_roll_rate[1],
+    #        'beta_theta': params_pitch_rate[1],
+    #        'beta_eta': params_yaw_rate[1],
+    #        'gamma_phi': params_roll_rate[2],
+    #        'gamma_theta': params_pitch_rate[2],
+    #        'gamma_eta': params_yaw_rate[2],
+    #        'm': 1.0,
+    #        'g': 9.81,
+    #    }
+
+    c0 = dyn_pars['c0']
+    c1 = dyn_pars['c1']
+    tau_f = dyn_pars['tau_f']
+    alpha_phi = dyn_pars['alpha_phi']
+    alpha_theta = dyn_pars['alpha_theta']
+    alpha_eta = dyn_pars['alpha_eta']
+    beta_phi = dyn_pars['beta_phi']
+    beta_theta = dyn_pars['beta_theta']
+    beta_eta = dyn_pars['beta_eta']
+    gamma_phi = dyn_pars['gamma_phi']
+    gamma_theta = dyn_pars['gamma_theta']
+    gamma_eta = dyn_pars['gamma_eta']
+    m = dyn_pars['m']
+    g = dyn_pars['g']
+
+    t = 0 # placeholder, not actually used in function
+    
+    # Define states.
+    z = cs.MX.sym('z')
+    z_dot = cs.MX.sym('z_dot')
+    y = cs.MX.sym('y')
+    y_dot = cs.MX.sym('y_dot')
+    x = cs.MX.sym('x')
+    x_dot = cs.MX.sym('x_dot')
+    phi = cs.MX.sym('phi')
+    theta = cs.MX.sym('theta')
+    eta = cs.MX.sym('eta')
+    phi_dot = cs.MX.sym('phi_dot')
+    theta_dot = cs.MX.sym('theta_dot')
+    eta_dot = cs.MX.sym('eta_dot')
+    f = cs.MX.sym('f')
+    X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, eta, phi_dot, theta_dot, eta_dot, f)
+
+    u_f = cs.MX.sym('u_f')
+    u_phi = cs.MX.sym('u_phi')
+    u_theta = cs.MX.sym('u_theta')
+    u_eta = cs.MX.sym('u_eta')
+    U = cs.vertcat(u_f, u_phi, u_theta, u_eta)
+
+    z_func = cs.Function.load(os.path.join(os.path.dirname(__file__), 'fmpc_transforms', 'scg_3d_delay_z_from_x.casadi'))
+    input = cs.vertcat(t, x, y, z, 
+                       phi, theta, eta, f,
+                       u_f, u_phi, u_theta, u_eta,
+                       x_dot, y_dot, z_dot, phi_dot, theta_dot, phi_dot,
+                       g, m, tau_f, c0, c1, 
+                       beta_phi, beta_theta, beta_eta,
+                       alpha_phi, alpha_theta, alpha_eta,
+                       gamma_phi, gamma_theta, gamma_eta)
+                   
+    # Create function with given parameters
+    z_func_eval = z_func(input)
+    z_from_x_and_u = cs.Function('z_map', [X, U], [z_func_eval],['X', 'U'], ['z'])
+
+    def z_from_regular_states(x, u, inertial_prop, g=9.81):
+        z = z_from_x_and_u(x, u)
+        return np.array(z).squeeze()
+
+    return z_from_regular_states
+
+def _transform_env_goal_to_flat_3D_delay(x, hover_force):
+    # This isn't totally correct, but we'll use it for now as stabilization isn't as 
+    # important for this model.
+    if x.ndim == 1:
+        l = 1
+    else:
+        l = np.shape(x)[1]
+    z = np.zeros((12, l) )
+    z[0, ...] = x[0, ...]
+    z[1, ...] = x[1, ...]
+    z[4, ...] = x[2, ...]
+    z[5, ...] = x[3, ...]
+    z[8, ...] = x[4, ...]
+    z[9, ...] = x[5, ...]
+    return z
+ 
+
 
 #################################################################################################
 ################## 3D Quadrotor 10 State model flatness transforms ##############################
@@ -715,8 +1083,25 @@ def get_full_reference_trajectory_FMPC(QUAD_TYPE: QuadType,
         z_ref[:,5] = vel_ref_traj[:, 2]
         z_ref[:,6] = acc_ref_traj[:, 2]
         z_ref[:,7] = jer_ref_traj[:, 2]
+    elif QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+        z_ref = np.zeros([num_times, 14])
+        z_ref[:,0] = pos_ref_traj[:, 0]
+        z_ref[:,1] = vel_ref_traj[:, 0]
+        z_ref[:,2] = acc_ref_traj[:, 0]
+        z_ref[:,3] = jer_ref_traj[:, 0]
+        z_ref[:,4] = pos_ref_traj[:, 1]
+        z_ref[:,5] = vel_ref_traj[:, 1]
+        z_ref[:,6] = acc_ref_traj[:, 1]
+        z_ref[:,7] = jer_ref_traj[:, 1]
+        z_ref[:,8] = pos_ref_traj[:, 2]
+        z_ref[:,9] = vel_ref_traj[:, 2]
+        z_ref[:,10] = acc_ref_traj[:, 2]
+        z_ref[:,11] = jer_ref_traj[:, 2]
+        # Assume that the yaw reference is 0 which may not be optimal but okay for now.
+        z_ref[:,12] = np.zeros((num_times)) # yaw
+        z_ref[:,13] = np.zeros((num_times)) # yaw_dot
     else:
-        raise NotImplementedError('Flat reference not implemented for this quadrotor type, only for 2D_attitude and 3D_attitude_10')
+        raise NotImplementedError('Flat reference not implemented for this quadrotor type, only for 2D_attitude and 3D_attitude_10, 3D_attitude_delay')
 
     return z_ref
 
@@ -902,3 +1287,7 @@ def _circle(t,
     coords_b_ddot = -scaling * traj_freq**2 * np.sin(traj_freq * t)
     coords_b_dddot = -scaling * traj_freq**3 * np.cos(traj_freq * t)
     return coords_a, coords_b, coords_a_dot, coords_b_dot, coords_a_ddot, coords_b_ddot, coords_a_dddot, coords_b_dddot
+
+if __name__ == "__main__":
+    _make_u_map_3D_delay()
+    _make_z_map_3D_delay()
