@@ -18,8 +18,3 @@ bash examples/hpo/risk_bo.sh ${localOrHost} erahbo ${algo} 1 70 6 24 10 2 averag
 bash examples/hpo/risk_bo.sh ${localOrHost} gpucb gp_mpc 1 50 6 24 10 2 average_rmse ${num_processes} ${run}
 bash examples/hpo/risk_bo.sh ${localOrHost} rahbo gp_mpc 1 50 6 24 10 2 average_rmse ${num_processes} ${run}
 bash examples/hpo/risk_bo.sh ${localOrHost} erahbo gp_mpc 1 50 6 24 10 2 average_rmse ${num_processes} ${run}
-
-
-
-
-

@@ -1,4 +1,4 @@
-"""TD3 Utils."""
+'''TD3 Utils.'''
 
 from collections import defaultdict
 from copy import deepcopy
@@ -6,10 +6,8 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from gymnasium.spaces import Box
 
-from safe_control_gym.math_and_models.distributions import Categorical, Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
 
 # -----------------------------------------------------------------------------------
@@ -18,7 +16,7 @@ from safe_control_gym.math_and_models.neural_networks import MLP
 
 
 class TD3Agent:
-    """A TD3 class that encapsulates model, optimizer and update functions."""
+    '''A TD3 class that encapsulates model, optimizer and update functions.'''
 
     def __init__(self,
                  obs_space,
@@ -59,20 +57,20 @@ class TD3Agent:
         self.critic_opt = torch.optim.Adam(list(self.ac.q1.parameters()) + list(self.ac.q2.parameters()), critic_lr)
 
     def to(self, device):
-        """Puts agent to device."""
+        '''Puts agent to device.'''
         self.ac.to(device)
         self.ac_targ.to(device)
 
     def train(self):
-        """Sets training mode."""
+        '''Sets training mode.'''
         self.ac.train()
 
     def eval(self):
-        """Sets evaluation mode."""
+        '''Sets evaluation mode.'''
         self.ac.eval()
 
     def state_dict(self):
-        """Snapshots agent state."""
+        '''Snapshots agent state.'''
         return {
             'ac': self.ac.state_dict(),
             'ac_targ': self.ac_targ.state_dict(),
@@ -81,14 +79,14 @@ class TD3Agent:
         }
 
     def load_state_dict(self, state_dict):
-        """Restores agent state."""
+        '''Restores agent state.'''
         self.ac.load_state_dict(state_dict['ac'])
         self.ac_targ.load_state_dict(state_dict['ac_targ'])
         self.actor_opt.load_state_dict(state_dict['actor_opt'])
         self.critic_opt.load_state_dict(state_dict['critic_opt'])
 
     def compute_policy_loss(self, batch):
-        """Returns policy loss(es) given batch of data."""
+        '''Returns policy loss(es) given batch of data.'''
         obs = batch['obs']
         act = self.ac.actor(obs)
         q1 = self.ac.q1(obs, act)
@@ -98,15 +96,15 @@ class TD3Agent:
         return policy_loss
 
     def compute_q_loss(self, batch):
-        """Returns q-value loss(es) given batch of data."""
+        '''Returns q-value loss(es) given batch of data.'''
         obs, act, rew, next_obs, mask = batch['obs'], batch['act'], batch['rew'], batch['next_obs'], batch['mask']
         q1 = self.ac.q1(obs, act)
         q2 = self.ac.q2(obs, act)
 
         with torch.no_grad():
             next_act = self.ac.actor(next_obs)
-            noise = (0.5*torch.randn_like(next_act)).clamp(-0.2, 0.2)
-            next_act = (next_act+noise).clamp(self.action_space_low, self.action_space_high)
+            noise = (0.5 * torch.randn_like(next_act)).clamp(-0.2, 0.2)
+            next_act = (next_act + noise).clamp(self.action_space_low, self.action_space_high)
             next_q1_targ = self.ac_targ.q1(next_obs, next_act)
             next_q2_targ = self.ac_targ.q2(next_obs, next_act)
             next_q_targ = torch.min(next_q1_targ, next_q2_targ)
@@ -119,7 +117,7 @@ class TD3Agent:
         return critic_loss
 
     def update(self, batch, device=None):
-        """Updates model parameters based on current training batch."""
+        '''Updates model parameters based on current training batch.'''
         results = defaultdict(list)
 
         # actor update
@@ -172,12 +170,12 @@ class MLPQFunction(nn.Module):
 
 
 class MLPActorCritic(nn.Module):
-    """Model for the actor-critic agent.
+    '''Model for the actor-critic agent.
 
     Attributes:
         actor (MLPActor): policy network.
         q1, q2 (MLPQFunction): q-value networks.
-    """
+    '''
 
     def __init__(self, obs_space, act_space, eps=0.01, hidden_dims=(64, 64), activation='relu'):
         super().__init__()
@@ -185,7 +183,6 @@ class MLPActorCritic(nn.Module):
         obs_dim = obs_space.shape[0]
         if isinstance(act_space, Box):
             act_dim = act_space.shape[0]
-            discrete = False
         else:
             raise NotImplementedError
 
@@ -213,14 +210,14 @@ class MLPActorCritic(nn.Module):
 
 
 class TD3Buffer(object):
-    """Storage for replay buffer during training.
+    '''Storage for replay buffer during training.
 
     Attributes:
         max_size (int): maximum size of the replay buffer.
         batch_size (int): number of samples (steps) per batch.
         scheme (dict): describes shape & other info of data to be stored.
         keys (list): names of all data from scheme.
-    """
+    '''
 
     def __init__(self, obs_space, act_space, max_size, batch_size=None):
         super().__init__()
@@ -256,7 +253,7 @@ class TD3Buffer(object):
         self.reset()
 
     def reset(self):
-        """Allocate space for containers."""
+        '''Allocate space for containers.'''
         for k, info in self.scheme.items():
             assert 'vshape' in info, f'Scheme must define vshape for {k}'
             vshape = info['vshape']
@@ -268,11 +265,11 @@ class TD3Buffer(object):
         self.buffer_size = 0
 
     def __len__(self):
-        """Returns current size of the buffer."""
+        '''Returns current size of the buffer.'''
         return self.buffer_size
 
     def state_dict(self):
-        """Returns a snapshot of current buffer."""
+        '''Returns a snapshot of current buffer.'''
         state = dict(
             pos=self.pos,
             buffer_size=self.buffer_size,
@@ -283,12 +280,12 @@ class TD3Buffer(object):
         return state
 
     def load_state_dict(self, state):
-        """Restores buffer from previous state."""
+        '''Restores buffer from previous state.'''
         for k, v in state.items():
             self.__dict__[k] = v
 
     def push(self, batch):
-        """Inserts transition step data (as dict) to storage."""
+        '''Inserts transition step data (as dict) to storage.'''
         # batch size
         k = list(batch.keys())[0]
         n = batch[k].shape[0]
@@ -311,7 +308,7 @@ class TD3Buffer(object):
         self.pos = (self.pos + n) % self.max_size
 
     def sample(self, batch_size=None, device=None):
-        """Returns data batch."""
+        '''Returns data batch.'''
         if not batch_size:
             batch_size = self.batch_size
 
@@ -333,12 +330,12 @@ class TD3Buffer(object):
 
 
 def soft_update(source, target, tau):
-    """Synchronizes target networks with exponential moving average."""
+    '''Synchronizes target networks with exponential moving average.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
 
 def hard_update(source, target):
-    """Synchronizes target networks by copying over parameters directly."""
+    '''Synchronizes target networks by copying over parameters directly.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)

@@ -1,25 +1,25 @@
 hpo_config:
-
-  load_if_exists: True # this should set to True if hpo is run in parallel
-  objective: [exponentiated_rmse, exponentiated_rms_action_change] # [other metrics defined in base_experiment.py]
-  objective_bounds: [[0.0, 1.0], [0.0, 1.0]] # [bounds for each objective]. Worse value will be assigned if objective evaluation is None
-  direction: [maximize, maximize] # [minimize, maximize]
-  repetitions: 1 # number of samples of performance for each objective query
-  n_episodes: 5 # number of episodes to evaluate each policy
+  load_if_exists: True # Should set to True if hpo is run in parallel
+  objective: [exponentiated_rmse, exponentiated_rms_action_change] # Other metrics defined in base_experiment.py
+  objective_bounds: [[0.0, 1.0], [0.0, 1.0]] # Bounds for each objective. Worse value will be assigned if objective evaluation is None
+  direction: [maximize, maximize] # Minimize or maximize
+  repetitions: 1 # Number of samples of performance for each objective query
+  n_episodes: 5 # Number of episodes to evaluate each policy
   use_gpu: True
   seed: 24
   save_n_best_hps: 1
-  # budget
+
+  # Budget
   trials: 60
   hp_eval_list: ['hps_config']
 
-  # hyperparameters
+  # Hyperparameters
   hps_config:
-    # model args
+    # Model args
     hidden_dim: 128
     activation: relu
 
-    # loss args
+    # Loss args
     gamma: 0.98
     gae_lambda: 0.92
     clip_param: 0.2
@@ -27,16 +27,16 @@ hpo_config:
     entropy_coef: 0.002
     exploration_init: -0.5
 
-    # optim args
+    # Optim args
     opt_epochs: 20
     mini_batch_size: 256
     actor_lr: 0.001
     critic_lr: 0.001
 
-    # runner args
+    # Runner args
     max_env_steps: 660000
     rollout_batch_size: 5
 
-    # objective
+    # Objective
     rew_state_weight: [3., .1, 3., .1, 3., .1, .1, .1, .1, 0.001, 0.001, 0.001]
     rew_act_weight: [.1, .1, .1, .1]

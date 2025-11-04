@@ -10,8 +10,7 @@ from matplotlib.ticker import FormatStrFormatter
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
-from safe_control_gym.utils.utils import mkdirs, set_dir_from_config, timing
-from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import QuadType
+from safe_control_gym.utils.utils import mkdirs, set_dir_from_config
 
 ALGO = 'mpc_acados'
 SYS = 'quadrotor_2D_attitude'
@@ -20,39 +19,38 @@ ADDITIONAL = ''
 PRIOR = '100'
 agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
 
-# check if the config file exists
+# Check if the config file exists
 assert os.path.exists(f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml'), f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml does not exist'
 assert os.path.exists(f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'), f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
 
 sys.argv[1:] = ['--algo', ALGO,
                 '--task', agent,
                 '--overrides',
-                    f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
-                    f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
+                f'./config_overrides/{SYS}_{TASK}{ADDITIONAL}.yaml',
+                f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
                 '--seed', '1',
                 '--use_gpu', 'True',
                 '--output_dir', f'./{ALGO}/results',
-                    ]
+                ]
 
 fac = ConfigFactory()
 fac.add_argument('--func', type=str, default='train', help='main function to run.')
 fac.add_argument('--n_episodes', type=int, default=1, help='number of episodes to run.')
-# merge config and create output directory
+# Merge config and create output directory
 config = fac.merge()
-if ALGO in ['gpmpc_acados', 'gp_mpc' , 'gpmpc_acados_TP']:
+if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP']:
     num_data_max = config.algo_config.num_epochs * config.algo_config.num_samples
     config.output_dir = os.path.join(config.output_dir, PRIOR + '_' + repr(num_data_max))
-# print('output_dir',  config.algo_config.output_dir)
 set_dir_from_config(config)
 config.algo_config.output_dir = config.output_dir
 mkdirs(config.output_dir)
 
 # Create an environment
 env_func = partial(make,
-                    config.task,
-                    seed=config.seed,
-                    **config.task_config
-                    )
+                   config.task,
+                   seed=config.seed,
+                   **config.task_config
+                   )
 env = env_func(gui=False)
 
 
@@ -72,7 +70,7 @@ ilqr_action_traj = ilqr_data['action'][0]
 mpc_action_constrained_traj = mpc_constrained_data['action'][0]
 mpc_action_unconstrained_traj = mpc_unconstrained_data['action'][0]
 
-# old ilqr reference
+# Old ilqr reference
 ilqr_old_data_dir = '/home/mingxuan/Repositories/scg_tsung/examples/lqr/ilqr_ref_traj.npy'
 ilqr_old_data = np.load(ilqr_old_data_dir, allow_pickle=True).item()
 ilqr_old_state_traj = ilqr_old_data['obs'][0]
@@ -97,8 +95,8 @@ if env.TASK == Task.STABILIZATION:
 
 nx = model.nx
 nu = model.nu
-# plot state traj
-fig, axs = plt.subplots(model.nx, figsize=(8, model.nx*1))
+# Plot state traj
+fig, axs = plt.subplots(model.nx, figsize=(8, model.nx * 1))
 for k in range(model.nx):
     axs[k].plot(times, np.array(ilqr_state_traj).transpose()[k, 0:plot_length], label='iLQR')
     axs[k].plot(times, np.array(mpc_state_constrained_traj).transpose()[k, 0:plot_length], label='MPC Constrained', linestyle='-.')
@@ -114,13 +112,13 @@ axs[-1].set(xlabel='time (sec)')
 fig.tight_layout()
 fig.savefig('./data/state_trajectories.png')
 
-# plot action traj
+# Plot action traj
 env_action_bound_high = env.action_space.high
 env_action_bound_low = env.action_space.low
 print('Action bounds:', env_action_bound_low, env_action_bound_high)
 
 
-fig, axs = plt.subplots(model.nu, figsize=(8, model.nu*2))
+fig, axs = plt.subplots(model.nu, figsize=(8, model.nu * 2))
 if model.nu == 1:
     axs = [axs]
 for k in range(model.nu):
@@ -137,17 +135,17 @@ axs[-1].legend(ncol=4, loc='best')
 fig.tight_layout()
 fig.savefig('./data/input_trajectories.png')
 
-# plot the figure-eight
+# Plot the figure-eight
 x_idx, z_idx = 0, 2
 fig, axs = plt.subplots(1)
 axs.plot(np.array(ilqr_state_traj).transpose()[x_idx, 0:plot_length],
-            np.array(ilqr_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR')
+         np.array(ilqr_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR')
 axs.plot(np.array(mpc_state_constrained_traj).transpose()[x_idx, 0:plot_length],
-            np.array(mpc_state_constrained_traj).transpose()[z_idx, 0:plot_length], label='MPC Constrained', linestyle='-.')
+         np.array(mpc_state_constrained_traj).transpose()[z_idx, 0:plot_length], label='MPC Constrained', linestyle='-.')
 axs.plot(np.array(mpc_state_unconstrained_traj).transpose()[x_idx, 0:plot_length],
-            np.array(mpc_state_unconstrained_traj).transpose()[z_idx, 0:plot_length], label='MPC Unconstrained', linestyle='--')
+         np.array(mpc_state_unconstrained_traj).transpose()[z_idx, 0:plot_length], label='MPC Unconstrained', linestyle='--')
 axs.plot(reference.transpose()[x_idx, 0:plot_length],
-            reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
+         reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
 axs.set_xlabel('x [m]')
 axs.set_ylabel('z [m]')
 axs.set_title('State path in x-z plane')
@@ -156,14 +154,14 @@ fig.tight_layout()
 fig.savefig('./data/state_xz_path.png')
 
 
-# compare ilqr and ilqr_old
+# Compare ilqr and ilqr_old
 fig, axs = plt.subplots(1)
 axs.plot(np.array(ilqr_state_traj).transpose()[x_idx, 0:plot_length],
-            np.array(ilqr_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR')
+         np.array(ilqr_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR')
 axs.plot(np.array(ilqr_old_state_traj).transpose()[x_idx, 0:plot_length],
-            np.array(ilqr_old_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR old', linestyle='-.', color='gray')
+         np.array(ilqr_old_state_traj).transpose()[z_idx, 0:plot_length], label='iLQR old', linestyle='-.', color='gray')
 axs.plot(reference.transpose()[x_idx, 0:plot_length],
-            reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
+         reference.transpose()[z_idx, 0:plot_length], color='r', label='desired')
 axs.set_xlabel('x [m]')
 axs.set_ylabel('z [m]')
 axs.set_title('State path in x-z plane')
@@ -172,7 +170,7 @@ fig.tight_layout()
 fig.savefig('./data/state_xz_path_ilqr_old.png')
 
 
-# calculate the accleeration and jerk of the full state trajectory
+# Calculate the accleeration and jerk of the full state trajectory
 ilqr_acc_traj = np.diff(ilqr_state_traj, axis=0) / stepsize
 ilqr_jerk_traj = np.diff(ilqr_acc_traj, axis=0) / stepsize
 
@@ -187,41 +185,31 @@ ref_jerk_traj = np.diff(ref_acc_traj, axis=0) / stepsize
 
 z_acc_bound = np.array([-0.7 * 9.81, 0.8 * 9.81])
 
-# plot the acceleration
-fig, axs = plt.subplots(3, figsize=(8, model.nx*1))
+# Plot the acceleration
+fig, axs = plt.subplots(3, figsize=(8, model.nx * 1))
 acc_label = ['x_ddot [$m/s^2$]', 'z_ddot [$m/s^2$]', 'theta_ddot [$rad/s^2$]']
 jerk_label = ['x_dddot [$m/s^3$]', 'z_dddot [$m/s^3$]', 'theta_dddot [$rad/s^3$]']
 for idx, k in enumerate([1, 3, 5]):
-    axs[idx].plot(times[1:], np.array(ilqr_acc_traj).transpose()[k, 0:plot_length-1], label='iLQR')
-    # axs[idx].plot(times[1:], np.array(mpc_acc_constrained_traj).transpose()[k, 0:plot_length-1], label='MPC Constrained', linestyle='-.')
-    # axs[idx].plot(times[1:], np.array(mpc_acc_unconstrained_traj).transpose()[k, 0:plot_length-1], label='MPC Unconstrained', linestyle='--')
-    axs[idx].plot(times[1:], np.array(ref_acc_traj).transpose()[k, 0:plot_length-1], color='r', label='fig 8')
-    # axs[k].set(ylabel=env.STATE_LABELS[k] + f'\n[{env.STATE_UNITS[k]}]')
-    axs[idx].set(ylabel=acc_label[int(k//2)])
+    axs[idx].plot(times[1:], np.array(ilqr_acc_traj).transpose()[k, 0:plot_length - 1], label='iLQR')
+    axs[idx].plot(times[1:], np.array(ref_acc_traj).transpose()[k, 0:plot_length - 1], color='r', label='fig 8')
+    axs[idx].set(ylabel=acc_label[int(k // 2)])
     axs[idx].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     if idx == 1:
         axs[idx].plot(times[1:], np.ones_like(times[1:]) * z_acc_bound[0], color='k', linestyle='--', label='acceleration bounds')
         axs[idx].plot(times[1:], np.ones_like(times[1:]) * z_acc_bound[1], color='k', linestyle='--')
-    # if k != model.nx - 1:
-    #     axs[k].set_xticks([])   
 axs[0].set_title('Acceleration Trajectories')
 axs[-1].legend(ncol=4, bbox_transform=fig.transFigure, bbox_to_anchor=(1, 0), loc='lower right')
 axs[-1].set(xlabel='time (sec)')
 fig.tight_layout()
 fig.savefig('./data/acceleration_trajectories.png')
 
-# plot the jerk
-fig, axs = plt.subplots(3, figsize=(8, model.nx*1))
+# Plot the jerk
+fig, axs = plt.subplots(3, figsize=(8, model.nx * 1))
 for idx, k in enumerate([1, 3, 5]):
-    axs[idx].plot(times[2:], np.array(ilqr_jerk_traj).transpose()[k, 0:plot_length-2], label='iLQR')
-    # axs[idx].plot(times[2:], np.array(mpc_jerk_constrained_traj).transpose()[k, 0:plot_length-2], label='MPC Constrained', linestyle='-.')
-    # axs[idx].plot(times[2:], np.array(mpc_jerk_unconstrained_traj).transpose()[k, 0:plot_length-2], label='MPC Unconstrained', linestyle='--')
-    axs[idx].plot(times[2:], np.array(ref_jerk_traj).transpose()[k, 0:plot_length-2], color='r', label='fig 8')
-    # axs[k].set(ylabel=env.STATE_LABELS[k] + f'\n[{env.STATE_UNITS[k]}]')
-    axs[idx].set(ylabel=jerk_label[int(k//2)])
+    axs[idx].plot(times[2:], np.array(ilqr_jerk_traj).transpose()[k, 0:plot_length - 2], label='iLQR')
+    axs[idx].plot(times[2:], np.array(ref_jerk_traj).transpose()[k, 0:plot_length - 2], color='r', label='fig 8')
+    axs[idx].set(ylabel=jerk_label[int(k // 2)])
     axs[idx].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    # if k != model.nx - 1:
-    #     axs[k].set_xticks([])
 axs[0].set_title('Jerk Trajectories')
 axs[-1].legend(ncol=4, bbox_transform=fig.transFigure, bbox_to_anchor=(1, 0), loc='lower right')
 axs[-1].set(xlabel='time (sec)')
@@ -229,6 +217,3 @@ fig.tight_layout()
 fig.savefig('./data/jerk_trajectories.png')
 
 env.close()
-
-
-###########################################################

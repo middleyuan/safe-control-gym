@@ -5,7 +5,6 @@ import pytest
 
 from examples.hpo.hpo_experiment import eval
 from safe_control_gym.utils.configuration import ConfigFactory
-from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
 
 
 @pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude', 'quadrotor_3D_attitude'])
@@ -69,9 +68,9 @@ def test_hpo_eval(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER):
         assert os.path.exists(TASK_CONFIG_PATH), f'{TASK_CONFIG_PATH} does not exist'
         assert os.path.exists(ALGO_CONFIG_PATH),  f'{ALGO_CONFIG_PATH} does not exist'
         assert os.path.exists(HPO_CONFIG_PATH),  f'{HPO_CONFIG_PATH} does not exist'
-        MPSC_COST='one_step_cost'
-        FILTER=True
-        SF_PEN=0.03
+        MPSC_COST = 'one_step_cost'
+        FILTER = True
+        SF_PEN = 0.03
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', SYS_NAME,
                         '--overrides',
@@ -79,7 +78,7 @@ def test_hpo_eval(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER):
                             ALGO_CONFIG_PATH,
                             HPO_CONFIG_PATH,
                             SAFETY_FILTER_CONFIG_PATH,
-                        '--kv_overrides', 
+                        '--kv_overrides',
                             f'sf_config.cost_function={MPSC_COST}',
                             'sf_config.soften_constraints=True',
                             f'algo_config.filter_train_actions={FILTER}',
@@ -108,6 +107,6 @@ def test_hpo_eval(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER):
 
     eval(config)
 
-    # delete output_dir
+    # Delete output_dir
     if os.path.exists(output_dir):
         os.system(f'rm -rf {output_dir}')

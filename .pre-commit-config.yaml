@@ -9,7 +9,7 @@
 
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
     -   id: check-ast
     -   id: check-yaml
@@ -26,7 +26,7 @@ repos:
     -   id: double-quote-string-fixer
 
 -   repo: https://github.com/pycqa/isort
-    rev: 6.0.1
+    rev: 7.0.0
     hooks:
       - id: isort
         name: isort
@@ -49,10 +49,10 @@ repos:
     hooks:
     -   id: flake8
         name: flake8_default
-        args: ['--ignore=E501']
+        args: ['--ignore=E501,W503']
         exclude: (^safe_control_gym/__init__.py|^tests/|^safe_control_gym/math_and_models/transformations.py)
     -   id: flake8
         name: flake8_tests
-        args: ['--ignore=E501,E201,E241,E127']
+        args: ['--ignore=E501,E201,E241,E127,W503']
         files: (^tests/|^safe_control_gym/math_and_models/transformations.py)
         exclude: ^tests/test_build.py

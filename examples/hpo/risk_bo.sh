@@ -57,5 +57,3 @@ SCG_FOLDER=".${FOLDER}"
 python ./examples/hpo/objective_interface.py \
         --output_dir ${SCG_FOLDER} \
         --tag "${bo_algo}" &
-
-

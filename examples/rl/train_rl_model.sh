@@ -63,7 +63,7 @@ for SEED in "${SEEDS[@]}"; do
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
-            task_config.normalized_rl_action_space=False 
+            task_config.normalized_rl_action_space=False
             # task_config.episode_len_sec=${SEED}
 done
 

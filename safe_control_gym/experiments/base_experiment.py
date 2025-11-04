@@ -42,7 +42,7 @@ class BaseExperiment:
         if isinstance(self.env.EPISODE_LEN_SEC, list):
             self.MAX_STEPS = int(self.env.CTRL_FREQ * max(self.env.EPISODE_LEN_SEC))
         else:
-            self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.EPISODE_LEN_SEC) 
+            self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.EPISODE_LEN_SEC)
         if not is_wrapped(self.env, RecordDataWrapper):
             self.env = RecordDataWrapper(self.env)
         self.ctrl = ctrl
@@ -256,7 +256,7 @@ class BaseExperiment:
             metrics (dict): The metrics calculated from the raw data.
         '''
 
-        metrics = self.metric_extractor.compute_metrics(data=trajs_data, 
+        metrics = self.metric_extractor.compute_metrics(data=trajs_data,
                                                         max_steps=self.MAX_STEPS,
                                                         verbose=self.verbose)
 
@@ -488,7 +488,7 @@ class MetricExtractor:
             episode_rewards (list): The total reward of each episode.
         '''
         return self.get_episode_data('reward', postprocess_func=sum)
-    
+
     def get_episode_rms_action_change(self):
         '''Total rms_action_change of episodes.
 
@@ -536,26 +536,26 @@ class MetricExtractor:
         '''
         return self.get_episode_data('constraint_violation',
                                      postprocess_func=sum)
-    
+
     def get_episode_inference_time(self):
         '''Average inference time of episodes.
-        
+
         Returns:
             episode_inference_time (double): The average inference time of all episodes.
         '''
-        # self.data['controller_data'] 
+        # self.data['controller_data']
         if hasattr(self.data['controller_data'][0], 'inference_time'):
-            return self.get_episode_data('controller_data', 
-                                        postprocess_func=lambda x: np.mean(x['inference_time'][0]))
+            return self.get_episode_data('controller_data',
+                                         postprocess_func=lambda x: np.mean(x['inference_time'][0]))
         else:
-            return self.get_episode_data('inference_time_data', 
-                                        postprocess_func=lambda x: np.mean(x))
-    
+            return self.get_episode_data('inference_time_data',
+                                         postprocess_func=lambda x: np.mean(x))
+
     def get_episode_early_stop(self):
         '''Occurence of early stop in episodes.
 
         Returns:
-            episode_early_stop (list): Whether each episode had an early stop. 
+            episode_early_stop (list): Whether each episode had an early stop.
             1 if early stop, 0 otherwise.
         '''
         episode_length = self.get_episode_data('length', postprocess_func=sum)

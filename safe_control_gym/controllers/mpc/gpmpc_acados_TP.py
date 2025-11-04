@@ -1,40 +1,33 @@
 
 
-import csv
 import os
-import shutil
 import time
-from copy import deepcopy
 from datetime import datetime
-from functools import partial
-# import threading
 
 import casadi as cs
 import gpytorch
-import munch
 import matplotlib.pyplot as plt
+import munch
 import numpy as np
 import scipy
 import torch
-from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from sklearn.metrics import pairwise_distances_argmin_min
 from sklearn.model_selection import train_test_split
-from skopt.sampler import Lhs
 from termcolor import colored
 
-from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
-from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcessCollection, ZeroMeanIndependentGPModel,
-                                                       covMatern52ard, covMatern52_single, covSEard, 
-                                                       covSE_single, covLinear,
-                                                       kmeans_centriods, GaussianProcess)
-from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
-from safe_control_gym.controllers.mpc.mpc import MPC
+from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcess, ZeroMeanIndependentGPModel, covLinear,
+                                                       covMatern52_single, covMatern52ard, covSE_single,
+                                                       covSEard, kmeans_centriods)
 from safe_control_gym.controllers.mpc.gpmpc_base import GPMPC
+from safe_control_gym.controllers.mpc.linear_mpc import LinearMPC
 from safe_control_gym.controllers.mpc.mpc_acados import MPC_ACADOS
 from safe_control_gym.envs.benchmark_env import Task
-from safe_control_gym.utils.utils import timing
 from safe_control_gym.experiments.base_experiment import BaseExperiment
-from scipy.signal import butter, filtfilt
+from safe_control_gym.utils.utils import timing
+
+# import threading
+
 
 class GPMPC_ACADOS_TP(GPMPC):
     '''Implements a GP-MPC controller with Acados optimization.'''
@@ -132,7 +125,7 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         if hasattr(self, 'prior_ctrl'):
             self.prior_ctrl.close()
-            
+
         if self.use_linear_prior:
             self.prior_ctrl = LinearMPC(
                 self.prior_env_func,
@@ -196,61 +189,61 @@ class GPMPC_ACADOS_TP(GPMPC):
         # Get the predicted dynamics. This is a linear prior, thus we need to account for the fact that
         # it is linearized about an eq using self.X_GOAL and self.U_GOAL.
         g = 9.81
-        dt = 1/60
+        dt = 1 / 60
         T_cmd = u_seq[:, self.action_labels.index('T_c')]
         T_prior_data = self.prior_ctrl.env.T_mapping_func(T_cmd).full().flatten()
         # numerical differentiation
-        x_dot_seq = [(x_next_seq[i, :] - x_seq[i, :])/dt for i in range(x_seq.shape[0])]
+        x_dot_seq = [(x_next_seq[i, :] - x_seq[i, :]) / dt for i in range(x_seq.shape[0])]
         x_dot_seq = np.array(x_dot_seq)
 
-        T_true_data = np.sqrt((x_dot_seq[:, self.state_labels.index('z_dot')] +  g) ** 2 \
-                            + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2))
+        T_true_data = np.sqrt((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2
+                              + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2))
         targets_T = (T_true_data - T_prior_data).reshape(-1, 1)
         input_T = u_seq[:, self.action_labels.index('T_c')].reshape(-1, 1)
 
         theta_dot_true = x_dot_seq[:, self.state_labels.index('theta_dot')]
         theta_dot_prior = self.prior_dynamics_func_c(x=x_seq.T, u=u_seq.T)['f'].toarray()[self.state_labels.index('theta_dot'), :]
         targets_theta_dot = (theta_dot_true - theta_dot_prior).reshape(-1, 1)
-        input_theta = np.concatenate([x_seq[:, self.state_labels.index('theta')].reshape(-1, 1), 
-                                      x_seq[:, self.state_labels.index('theta_dot')].reshape(-1, 1), 
-                                      u_seq[:, self.action_labels.index('P_c')].reshape(-1, 1)], axis=1) 
-        
+        input_theta = np.concatenate([x_seq[:, self.state_labels.index('theta')].reshape(-1, 1),
+                                      x_seq[:, self.state_labels.index('theta_dot')].reshape(-1, 1),
+                                      u_seq[:, self.action_labels.index('P_c')].reshape(-1, 1)], axis=1)
+
         train_input = np.concatenate([input_T, input_theta], axis=1)
         train_output = np.concatenate([targets_T, targets_theta_dot], axis=1)
-        
+
         # estimate the noise propogated into the thrust and pitch
         # thrust part noise is prior dynamics noise + true thrust data noise (linearized)
         # since the linearization is state independent, take the max of the noise
 
-        var_x_ddot = 2*self.obs_noise_std[self.state_labels.index('x_dot')]**2/dt**2
-        var_z_ddot = 2*self.obs_noise_std[self.state_labels.index('z_dot')]**2/dt**2
+        var_x_ddot = 2 * self.obs_noise_std[self.state_labels.index('x_dot')]**2 / dt**2
+        var_z_ddot = 2 * self.obs_noise_std[self.state_labels.index('z_dot')]**2 / dt**2
 
         thrust_noise_var = self.act_noise_std[0]**2 * np.abs(self.prior_ctrl.env.beta_1)**2 \
-                         + 1/((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
-                             +(x_dot_seq[:, self.state_labels.index('x_dot')]** 2)) * x_dot_seq[:, self.state_labels.index('x_dot')]**2 * var_x_ddot\
-                         + 1/((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2 \
-                             +(x_dot_seq[:, self.state_labels.index('x_dot')]** 2)) * (x_dot_seq[:, self.state_labels.index('z_dot')] + g)**2 * var_z_ddot\
-        
-        pitch_noise_var = 2*self.obs_noise_std[self.state_labels.index('theta_dot')]**2/dt**2 \
-                        + np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
-                        + np.abs(self.prior_ctrl.env.alpha_2)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 \
-                        + np.abs(self.prior_ctrl.env.alpha_3)**2 * self.act_noise_std[1]**2)
-        
+            + 1 / ((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2
+                   + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2)) * x_dot_seq[:, self.state_labels.index('x_dot')]**2 * var_x_ddot\
+            + 1 / ((x_dot_seq[:, self.state_labels.index('z_dot')] + g) ** 2
+                   + (x_dot_seq[:, self.state_labels.index('x_dot')] ** 2)) * (x_dot_seq[:, self.state_labels.index('z_dot')] + g)**2 * var_z_ddot\
+
+        pitch_noise_var = 2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2 / dt**2 \
+            + np.array(np.abs(self.prior_ctrl.env.alpha_1)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2
+                       + np.abs(self.prior_ctrl.env.alpha_2)**2 * self.obs_noise_std[self.state_labels.index('theta_dot')]**2
+                       + np.abs(self.prior_ctrl.env.alpha_3)**2 * self.act_noise_std[1]**2)
+
         # if domain randomization is used, add the propogated paramatric noise
         # similarly, max is taken
         if self.param_noise_std is not None:
-            thrust_noise_var += np.max(\
+            thrust_noise_var += np.max(
                 self.param_noise_std['beta_1'].scale**2 * T_cmd**2 + self.param_noise_std['beta_2'].scale**2
             )
-            pitch_noise_var += np.max(\
-                self.param_noise_std['alpha_1'].scale**2 * x_seq[:, self.state_labels.index('theta')]**2 + \
-                self.param_noise_std['alpha_2'].scale**2 * x_seq[:, self.state_labels.index('theta_dot')]**2 + \
-                self.param_noise_std['alpha_3'].scale**2 * u_seq[:, self.action_labels.index('P_c')**2]
-            ) 
-            
+            pitch_noise_var += np.max(
+                self.param_noise_std['alpha_1'].scale**2 * x_seq[:, self.state_labels.index('theta')]**2
+                + self.param_noise_std['alpha_2'].scale**2 * x_seq[:, self.state_labels.index('theta_dot')]**2
+                + self.param_noise_std['alpha_3'].scale**2 * u_seq[:, self.action_labels.index('P_c')**2]
+            )
+
         self.thrust_noise_var = np.array(np.max(thrust_noise_var))
         self.pitch_noise_var = np.array(np.max(pitch_noise_var))
-                        
+
         return train_input, train_output
 
     def learn(self, env=None):
@@ -259,8 +252,8 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         train_runs = {0: {}}
         test_runs = {0: {}}
-        
-        # epoch seed factor 
+
+        # epoch seed factor
         np.random.seed(self.seed)
         epoch_seeds = np.random.randint(1000, size=self.num_epochs, dtype=int) * self.seed
         epoch_seeds = [int(seed) for seed in epoch_seeds]
@@ -274,7 +267,7 @@ class GPMPC_ACADOS_TP(GPMPC):
             for epoch in range(self.num_epochs):
                 train_envs.append(self.env_func(randomized_init=True, seed=epoch_seeds[epoch]))
                 train_envs[epoch].action_space.seed(epoch_seeds[epoch])
-        
+
         test_envs = []
         if self.same_test_initial_state:
             for epoch in range(self.num_epochs):
@@ -300,7 +293,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         # first experiments are for the prior
         train_experiments.insert(0, BaseExperiment(env=train_envs[0], ctrl=self.prior_ctrl, reset_when_created=False))
         test_experiments.insert(0, BaseExperiment(env=test_envs[0], ctrl=self.prior_ctrl, reset_when_created=False))
-        
+
         for episode in range(self.num_train_episodes_per_epoch):
             self.env = train_envs[0]
             run_results = train_experiments[0].run_evaluation(n_episodes=1)
@@ -309,18 +302,18 @@ class GPMPC_ACADOS_TP(GPMPC):
             self.env = test_envs[0]
             run_results = test_experiments[0].run_evaluation(n_episodes=1)
             test_runs[0].update({test_ep: munch.munchify(run_results)})
-        
+
         training_results = None
         for epoch in range(1, self.num_epochs):
             # only take data from the last episode from the last epoch
             episode_length = train_runs[epoch - 1][self.num_train_episodes_per_epoch - 1][0]['obs'][0].shape[0]
             x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(train_runs, epoch - 1, self.num_samples, train_envs[epoch - 1].np_random)
-            train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq) # np.ndarray
+            train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq)  # np.ndarray
             training_results = self.train_gp(input_data=train_inputs, target_data=train_targets)
-            
+
             if self.plot_trained_gp:
                 self.plot_gp_TP(train_inputs, train_targets, title=f'epoch_{epoch}_train', output_dir=self.output_dir)
-            
+
             # Test new policy.
             test_runs[epoch] = {}
             for test_ep in range(self.num_test_episodes_per_epoch):
@@ -331,7 +324,7 @@ class GPMPC_ACADOS_TP(GPMPC):
                 test_runs[epoch].update({test_ep: munch.munchify(run_results)})
 
             x_seq, actions, x_next_seq, x_dot_seq = self.gather_training_samples(test_runs, epoch - 1, episode_length)
-            train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq) # np.ndarray
+            train_inputs, train_targets = self.preprocess_training_data(x_seq, actions, x_next_seq)  # np.ndarray
             if self.plot_trained_gp:
                 self.plot_gp_TP(train_inputs, train_targets, title=f'epoch_{epoch}_test', output_dir=self.output_dir)
 
@@ -355,27 +348,27 @@ class GPMPC_ACADOS_TP(GPMPC):
                 else:
                     domain_rand_info[keys] = values.disturbances[0].std
             env_dyn_params = {}
-            env_dyn_params['prop_values'] =  train_experiments[epoch].env.last_prop_values
+            env_dyn_params['prop_values'] = train_experiments[epoch].env.last_prop_values
             domain_rand_info['env_dyn_params'] = env_dyn_params
             self.rand_hist['domain_rand'].append(domain_rand_info)
             # TODO: fix data logging
             np.savez(os.path.join(self.output_dir, 'epoch_data'),
-                    data_inputs=training_results['train_inputs'],
-                    data_targets=training_results['train_targets'],
-                    train_runs=train_runs,
-                    test_runs=test_runs,
-                    num_epochs=self.num_epochs,
-                    num_train_episodes_per_epoch=self.num_train_episodes_per_epoch,
-                    num_test_episodes_per_epoch=self.num_test_episodes_per_epoch,
-                    num_samples=self.num_samples,
-                    train_data=self.train_data,
-                    test_data=self.test_data,
-                    )
+                     data_inputs=training_results['train_inputs'],
+                     data_targets=training_results['train_targets'],
+                     train_runs=train_runs,
+                     test_runs=test_runs,
+                     num_epochs=self.num_epochs,
+                     num_train_episodes_per_epoch=self.num_train_episodes_per_epoch,
+                     num_test_episodes_per_epoch=self.num_test_episodes_per_epoch,
+                     num_samples=self.num_samples,
+                     train_data=self.train_data,
+                     test_data=self.test_data,
+                     )
 
         if training_results:
             np.savez(os.path.join(self.output_dir, 'data'),
-                    data_inputs=training_results['train_inputs'],
-                    data_targets=training_results['train_targets'])
+                     data_inputs=training_results['train_inputs'],
+                     data_targets=training_results['train_targets'])
 
         # close environments
         for experiment in train_experiments:
@@ -390,7 +383,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.test_runs = test_runs
 
         return train_runs, test_runs
-    
+
     def load(self, model_path):
         '''Load the model from a file.
 
@@ -401,10 +394,10 @@ class GPMPC_ACADOS_TP(GPMPC):
         gp_model_path_T = f'{model_path}/best_model_T.pth'
         gp_model_path_P = f'{model_path}/best_model_P.pth'
         gp_model_path = [gp_model_path_T, gp_model_path_P]
-        self.train_gp(input_data=data['data_inputs'], 
-                        target_data=data['data_targets'],
-                        gp_model=gp_model_path,)
-    
+        self.train_gp(input_data=data['data_inputs'],
+                      target_data=data['data_targets'],
+                      gp_model=gp_model_path,)
+
     @timing
     def train_gp(self,
                  input_data, target_data,
@@ -457,7 +450,6 @@ class GPMPC_ACADOS_TP(GPMPC):
         test_targets = self.data_targets[test_idx, :]
         self.test_data = {'test_inputs': test_inputs, 'test_targets': test_targets}
 
-
         train_inputs_tensor = torch.Tensor(train_inputs).double()
         train_targets_tensor = torch.Tensor(train_targets).double()
         test_inputs_tensor = torch.Tensor(test_inputs).double()
@@ -480,7 +472,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         likelihood_P = gpytorch.likelihoods.GaussianLikelihood(
             noise_constraint=gpytorch.constraints.GreaterThan(1e-6),
         ).double()
-        
+
         GP_T = GaussianProcess(
             model_type=ZeroMeanIndependentGPModel,
             likelihood=likelihood_T,
@@ -499,14 +491,14 @@ class GPMPC_ACADOS_TP(GPMPC):
             GP_P.init_with_hyperparam(train_input_P, train_target_P, gp_model[1])
         else:
             GP_T.train(train_input_T, train_target_T, test_inputs_T, test_targets_T,
-                    n_train=self.optimization_iterations[0], learning_rate=self.learning_rate[0], 
-                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'),
-                    init_noise_var=self.thrust_noise_var)
+                       n_train=self.optimization_iterations[0], learning_rate=self.learning_rate[0],
+                       gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_T.pth'),
+                       init_noise_var=self.thrust_noise_var)
             GP_P.train(train_input_P, train_target_P, test_inputs_P, test_targets_P,
-                    n_train=self.optimization_iterations[1], learning_rate=self.learning_rate[1],
-                    gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'),
-                    init_noise_var=self.pitch_noise_var)
-            
+                       n_train=self.optimization_iterations[1], learning_rate=self.learning_rate[1],
+                       gpu=self.use_gpu, fname=os.path.join(self.output_dir, 'best_model_P.pth'),
+                       init_noise_var=self.pitch_noise_var)
+
         self.new_GP_model = True
         self.gaussian_process = [GP_T, GP_P]
 
@@ -532,12 +524,12 @@ class GPMPC_ACADOS_TP(GPMPC):
         acados_model.name = model_name + '_' + current_time
 
         # define GP prediction points
-        z = cs.vertcat(acados_model.x, acados_model.u)  
-        T_pred_point = z[self.model.nx+self.action_labels.index('T_c')]
+        z = cs.vertcat(acados_model.x, acados_model.u)
+        T_pred_point = z[self.model.nx + self.action_labels.index('T_c')]
         P_pred_point = z[[self.state_labels.index('theta'),
-                            self.state_labels.index('theta_dot'),
-                            self.model.nx+self.action_labels.index('P_c')]]
-        
+                          self.state_labels.index('theta_dot'),
+                          self.model.nx + self.action_labels.index('P_c')]]
+
         if self.sparse_gp:
             # sparse GP inducing points
             '''
@@ -563,9 +555,9 @@ class GPMPC_ACADOS_TP(GPMPC):
         augmented_dynamics[self.state_labels.index('z_dot')] = \
             cs.cos(acados_model.x[self.state_labels.index('theta')]) * T_pred
         augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
-        
+
         f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
-    
+
         acados_model.f_expl_expr = f_cont
 
         acados_model.x_labels = self.env.STATE_LABELS
@@ -732,8 +724,11 @@ class GPMPC_ACADOS_TP(GPMPC):
         # form of g(x, u) <= constraint_tol in safe-control-gym
 
         # lambda functions to set the upper and lower bounds of the chance constraints
-        def constraint_ub_chance(constraint): return -self.constraint_tol * np.ones(constraint.shape)
-        def constraint_lb_chance(constraint): return -1e8 * np.ones(constraint.shape)
+        def constraint_ub_chance(constraint):
+            return -self.constraint_tol * np.ones(constraint.shape)
+
+        def constraint_lb_chance(constraint):
+            return -1e8 * np.ones(constraint.shape)
         state_tighten_var = cs.vertcat(*state_tighten_list)
         input_tighten_var = cs.vertcat(*input_tighten_list)
 
@@ -788,8 +783,6 @@ class GPMPC_ACADOS_TP(GPMPC):
     # @timing
     def select_action_with_gp(self, obs):
         nx, nu = self.model.nx, self.model.nu
-        ny = nx + nu
-        ny_e = nx
         # TODO: replace this with something safer
         n_ind_points = self.opti_dict['n_ind_points']
 
@@ -835,7 +828,7 @@ class GPMPC_ACADOS_TP(GPMPC):
             mean_post_factor_val = self.mean_post_factor_val
             z_ind_val = self.z_ind_val
             self.results_dict['inducing_points'] = [z_ind_val]
-        
+
         # Set the probabilistic state and input constraint set limits.
         # Tightening at the first step is possible if self.compute_initial_guess is used
         state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
@@ -857,10 +850,10 @@ class GPMPC_ACADOS_TP(GPMPC):
                 tighten_value = np.concatenate((state_constraint_set, input_constraint_set))
                 # set the parameter values
                 parameter_values = np.concatenate((dyn_value, tighten_value))
-                # self.acados_ocp_solver.set(idx, "p", dyn_value)
+                # self.acados_ocp_solver.set(idx, 'p', dyn_value)
                 # check the shapes
                 assert self.ocp.model.p.shape[0] == parameter_values.shape[0], \
-                       f'parameter_values.shape: {parameter_values.shape}; model.p.shape: {self.ocp.model.p.shape}'
+                    f'parameter_values.shape: {parameter_values.shape}; model.p.shape: {self.ocp.model.p.shape}'
                 self.acados_ocp_solver.set(idx, 'p', parameter_values)
             # tighten terminal state constraints
             tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
@@ -877,7 +870,6 @@ class GPMPC_ACADOS_TP(GPMPC):
             # tighten terminal state constraints
             tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
             self.acados_ocp_solver.set(self.T, 'p', tighten_value)
-
 
         # set reference for the control horizon
         goal_states = self.get_references()
@@ -912,15 +904,14 @@ class GPMPC_ACADOS_TP(GPMPC):
         self.x_guess = self.x_prev
         self.u_guess = self.u_prev
 
-        # print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats("sqp_iter")}; qp iter {self.acados_ocp_solver.get_stats("qp_iter")}')
-        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
-        
+        # print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats('sqp_iter')}; qp iter {self.acados_ocp_solver.get_stats('qp_iter')}')
+        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats('time_tot'))
+
         if hasattr(self, 'K'):
             action += self.K @ (self.x_prev[:, 0] - obs)
 
         return action
 
-    
     def precompute_mean_post_factor_all_data(self):
         '''If the number of data points is less than the number of inducing points, use all the data
         as kernel points.
@@ -968,22 +959,22 @@ class GPMPC_ACADOS_TP(GPMPC):
                 z_ind = inputs[inds]
             else:
                 raise ValueError('[Error]: gp_mpc.precompute_sparse_gp_values: Only \'kmeans\' or \'random\' allowed.')
-        
+
         use_pinv = True
         # use_pinv = False
-        
+
         GP_T = self.gaussian_process[0]
         GP_P = self.gaussian_process[1]
-        K_zind_zind_T = GP_T.model.covar_module(torch.from_numpy(z_ind[:,0]).double())
-        K_zind_zind_P = GP_P.model.covar_module(torch.from_numpy(z_ind[:,1:]).double())
+        K_zind_zind_T = GP_T.model.covar_module(torch.from_numpy(z_ind[:, 0]).double())
+        K_zind_zind_P = GP_P.model.covar_module(torch.from_numpy(z_ind[:, 1:]).double())
         if use_pinv:
             K_zind_zind_inv_T = torch.pinverse(K_zind_zind_T.evaluate().detach())
             K_zind_zind_inv_P = torch.pinverse(K_zind_zind_P.evaluate().detach())
         else:
             K_zind_zind_inv_T = K_zind_zind_T.solve(torch.eye(n_ind_points).double()).detach()
             K_zind_zind_inv_P = K_zind_zind_P.solve(torch.eye(n_ind_points).double()).detach()
-        K_zind_zind_T = GP_T.model.covar_module(torch.from_numpy(z_ind[:,0]).double()).evaluate().detach()
-        K_zind_zind_P = GP_P.model.covar_module(torch.from_numpy(z_ind[:,1:]).double()).evaluate().detach()
+        K_zind_zind_T = GP_T.model.covar_module(torch.from_numpy(z_ind[:, 0]).double()).evaluate().detach()
+        K_zind_zind_P = GP_P.model.covar_module(torch.from_numpy(z_ind[:, 1:]).double()).evaluate().detach()
         K_zind_zind = torch.zeros((dim_gp_outputs, n_ind_points, n_ind_points))
         K_zind_zind[0] = K_zind_zind_T
         K_zind_zind[1] = K_zind_zind_P
@@ -991,12 +982,12 @@ class GPMPC_ACADOS_TP(GPMPC):
         K_zind_zind_inv = torch.zeros((dim_gp_outputs, n_ind_points, n_ind_points))
         K_zind_zind_inv[0] = K_zind_zind_inv_T
         K_zind_zind_inv[1] = K_zind_zind_inv_P
-        K_x_zind_T = GP_T.model.covar_module(torch.from_numpy(inputs[:,0]).double(), torch.from_numpy(z_ind[:,0]).double()).evaluate().detach()
-        K_x_zind_P = GP_P.model.covar_module(torch.from_numpy(inputs[:,1:]).double(), torch.from_numpy(z_ind[:,1:]).double()).evaluate().detach()
+        K_x_zind_T = GP_T.model.covar_module(torch.from_numpy(inputs[:, 0]).double(), torch.from_numpy(z_ind[:, 0]).double()).evaluate().detach()
+        K_x_zind_P = GP_P.model.covar_module(torch.from_numpy(inputs[:, 1:]).double(), torch.from_numpy(z_ind[:, 1:]).double()).evaluate().detach()
         K_x_zind = torch.zeros((dim_gp_outputs, n_data_points, n_ind_points))
         K_x_zind[0] = K_x_zind_T
         K_x_zind[1] = K_x_zind_P
-        
+
         K_plus_noise_T = GP_T.model.K_plus_noise.detach()
         K_plus_noise_P = GP_P.model.K_plus_noise.detach()
         K_plus_noise = torch.zeros((dim_gp_outputs, n_data_points, n_data_points))
@@ -1024,11 +1015,11 @@ class GPMPC_ACADOS_TP(GPMPC):
         if use_pinv:
             Sigma_T = torch.pinverse(Sigma_inv_T)
             Sigma_P = torch.pinverse(Sigma_inv_P)
-            mean_post_factor_T = Sigma_T @ K_x_zind_T.T @ Gamma_inv_T @ torch.from_numpy(targets[:,0]).double()
-            mean_post_factor_P = Sigma_P @ K_x_zind_P.T @ Gamma_inv_P @ torch.from_numpy(targets[:,1]).double()
+            mean_post_factor_T = Sigma_T @ K_x_zind_T.T @ Gamma_inv_T @ torch.from_numpy(targets[:, 0]).double()
+            mean_post_factor_P = Sigma_P @ K_x_zind_P.T @ Gamma_inv_P @ torch.from_numpy(targets[:, 1]).double()
         else:
-            mean_post_factor_T = torch.linalg.solve(Sigma_inv_T, K_x_zind_T.T @ Gamma_inv_T @ torch.from_numpy(targets[:,0]).double())
-            mean_post_factor_P = torch.linalg.solve(Sigma_inv_P, K_x_zind_P.T @ Gamma_inv_P @ torch.from_numpy(targets[:,1]).double())
+            mean_post_factor_T = torch.linalg.solve(Sigma_inv_T, K_x_zind_T.T @ Gamma_inv_T @ torch.from_numpy(targets[:, 0]).double())
+            mean_post_factor_P = torch.linalg.solve(Sigma_inv_P, K_x_zind_P.T @ Gamma_inv_P @ torch.from_numpy(targets[:, 1]).double())
 
         mean_post_factor = torch.zeros((dim_gp_outputs, n_ind_points))
         mean_post_factor[0] = mean_post_factor_T
@@ -1048,28 +1039,16 @@ class GPMPC_ACADOS_TP(GPMPC):
             signal_var_T = GP_T.model.covar_module.outputscale.detach().numpy()
         lengthscales_P = GP_P.model.covar_module.base_kernel.lengthscale.detach().numpy()
         signal_var_P = GP_P.model.covar_module.outputscale.detach().numpy()
-        
-        noise_var_T = GP_T.likelihood.noise.detach().numpy()
-        noise_var_P = GP_P.likelihood.noise.detach().numpy()
+
         gp_K_plus_noise_T = GP_T.model.K_plus_noise.detach().numpy()
         gp_K_plus_noise_P = GP_P.model.K_plus_noise.detach().numpy()
-        # gp_K_plus_noise_inv_T = GP_T.model.K_plus_noise_inv.detach().numpy()
-        # gp_K_plus_noise_inv_P = GP_P.model.K_plus_noise_inv.detach().numpy()
 
-        # stacking
-        # lengthscales = np.vstack((lengthscales_T, lengthscales_P))
-        # signal_var = np.array([signal_var_T, signal_var_P])
-        # noise_var = np.array([noise_var_T, noise_var_P])
         gp_K_plus_noise = np.zeros((2, gp_K_plus_noise_T.shape[0], gp_K_plus_noise_T.shape[1]))
         gp_K_plus_noise[0] = gp_K_plus_noise_T
         gp_K_plus_noise[1] = gp_K_plus_noise_P
-        
-        # self.length_scales = lengthscales.squeeze()
-        # self.signal_var = signal_var.squeeze()
-        # self.noise_var = noise_var.squeeze()
+
         self.gp_K_plus_noise = gp_K_plus_noise
-        Nx =self.train_data['train_inputs'].shape[1]
-        Ny =self.train_data['train_targets'].shape[1]
+        Nx = self.train_data['train_inputs'].shape[1]
         # Create CasADI function for computing the kernel K_z_zind with parameters for z, z_ind, length scales and signal variance.
         # We need the CasADI version of this so that it can by symbolically differentiated in in the MPC optimization.
         z1_T = cs.SX.sym('z1', 1)
@@ -1079,14 +1058,14 @@ class GPMPC_ACADOS_TP(GPMPC):
         ell_s_P = cs.SX.sym('ell', 1) if GP_P.kernel in ['RBF_single', 'Matern_single'] else cs.SX.sym('ell', 3)
         sf2_s_P = cs.SX.sym('sf2')
         z_ind = cs.SX.sym('z_ind', n_ind_points, Nx)
-        ks_T = cs.SX.zeros(1, n_ind_points) # kernel vector
-        ks_P = cs.SX.zeros(1, n_ind_points) # kernel vector
+        ks_T = cs.SX.zeros(1, n_ind_points)  # kernel vector
+        ks_P = cs.SX.zeros(1, n_ind_points)  # kernel vector
 
         if GP_T.kernel == 'Linear':
             v_T = cs.SX.sym('variance')
             c_T = cs.SX.sym('constant')
             cov_T = cs.Function('covLinear', [z1_T, z2_T, v_T, c_T],
-                                        [covLinear(z1_T, z2_T, v_T, c_T)])
+                                [covLinear(z1_T, z2_T, v_T, c_T)])
             for i in range(n_ind_points):
                 ks_T[i] = cov_T(z1_T, z_ind[i, 0], v_T, c_T)
             ks_func_T = cs.Function('K_s', [z1_T, z_ind, v_T, c_T], [ks_T])
@@ -1094,37 +1073,34 @@ class GPMPC_ACADOS_TP(GPMPC):
             ell_s_T = cs.SX.sym('ell', 1)
             sf2_s_T = cs.SX.sym('sf2')
             if GP_T.kernel == 'RBF_single':
-                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
-                                            [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T],
+                                    [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
             elif GP_T.kernel == 'Matern_single':
-                cov_T = cs.Function('covMatern', [z1_T, z2_T, ell_s_T, sf2_s_T], 
-                                            [covMatern52_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+                cov_T = cs.Function('covMatern', [z1_T, z2_T, ell_s_T, sf2_s_T],
+                                    [covMatern52_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
             else:
-                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T], 
-                                            [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
+                cov_T = cs.Function('covSE', [z1_T, z2_T, ell_s_T, sf2_s_T],
+                                    [covSE_single(z1_T, z2_T, ell_s_T, sf2_s_T)])
             for i in range(n_ind_points):
                 ks_T[i] = cov_T(z1_T, z_ind[i, 0], ell_s_T, sf2_s_T)
             ks_func_T = cs.Function('K_s', [z1_T, z_ind, ell_s_T, sf2_s_T], [ks_T])
 
         if GP_P.kernel == 'RBF':
             cov_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
-                                        [covSEard(z1_P, z2_P, ell_s_P, sf2_s_P)])
+                                [covSEard(z1_P, z2_P, ell_s_P, sf2_s_P)])
         elif GP_P.kernel == 'RBF_single':
             cov_P = cs.Function('covSE', [z1_P, z2_P, ell_s_P, sf2_s_P],
-                                        [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+                                [covSE_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
         elif GP_P.kernel == 'Matern':
             cov_P = cs.Function('covMatern', [z1_P, z2_P, ell_s_P, sf2_s_P],
-                                        [covMatern52ard(z1_P, z2_P, ell_s_P, sf2_s_P)])
+                                [covMatern52ard(z1_P, z2_P, ell_s_P, sf2_s_P)])
         elif GP_P.kernel == 'Matern_single':
             cov_P = cs.Function('covMatern', [z1_P, z2_P, ell_s_P, sf2_s_P],
-                                        [covMatern52_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
+                                [covMatern52_single(z1_P, z2_P, ell_s_P, sf2_s_P)])
         for i in range(n_ind_points):
             ks_P[i] = cov_P(z1_P, z_ind[i, 1:], ell_s_P, sf2_s_P)
         ks_func_P = cs.Function('K_s', [z1_P, z_ind, ell_s_P, sf2_s_P], [ks_P])
 
-        # K_z_zind = cs.SX.zeros(Ny, n_ind_points)
-        # K_z_zind_T = ks_func_T(z1_T, z_ind, self.length_scales[0], self.signal_var[0])
-        # K_z_zind_P = ks_func_P(z1_P, z_ind, self.length_scales[1], self.signal_var[1])
         if GP_T.kernel == 'Linear':
             K_z_zind_T = ks_func_T(z1_T, z_ind, variance_T, constant_T)
         else:
@@ -1132,8 +1108,7 @@ class GPMPC_ACADOS_TP(GPMPC):
         K_z_zind_P = ks_func_P(z1_P, z_ind, lengthscales_P, signal_var_P)
         self.K_z_zind_func_T = cs.Function('K_z_zind', [z1_T, z_ind], [K_z_zind_T], ['z1', 'z2'], ['K'])
         self.K_z_zind_func_P = cs.Function('K_z_zind', [z1_P, z_ind], [K_z_zind_P], ['z1', 'z2'], ['K'])
-        # self.K_z_zind_func = cs.Function('K_z_zind', [z1_T, z1_P, z_ind], [K_z_zind], ['z1', 'z2'], ['K'])
-    # @timing
+
     def precompute_probabilistic_limits(self,
                                         print_sets=False
                                         ):
@@ -1154,21 +1129,21 @@ class GPMPC_ACADOS_TP(GPMPC):
         for input_constraint in self.constraints.input_constraints:
             input_constraint_set.append(np.zeros((input_constraint.num_constraints, T)))
         if self.x_prev is not None and self.u_prev is not None:
-            # cov_x = np.zeros((nx, nx)) 
+            # cov_x = np.zeros((nx, nx))
             cov_x = np.diag(self.obs_noise_std**2)
             if nu == 1:
                 z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.reshape(1, -1).T))  # (T, input_dim)
             else:
-                z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.T)) # (T, input_dim)
-            
+                z_batch = np.hstack((self.x_prev[:, :-1].T, self.u_prev.T))  # (T, input_dim)
+
             # Compute the covariance of the dynamics at each time step.
             # _, cov_d_tensor_batch = self.gaussian_process.predict(z_batch, return_pred=False)
             GP_T = self.gaussian_process[0]
             GP_P = self.gaussian_process[1]
-            T_pred_point_batch = z_batch[:, self.model.nx+self.action_labels.index('T_c')]
+            T_pred_point_batch = z_batch[:, self.model.nx + self.action_labels.index('T_c')]
             P_pred_point_batch = z_batch[:, [self.state_labels.index('theta'),
-                                            self.state_labels.index('theta_dot'),
-                                            self.model.nx+self.action_labels.index('P_c')]]
+                                             self.state_labels.index('theta_dot'),
+                                             self.model.nx + self.action_labels.index('P_c')]]
 
             cov_d_batch_T = np.diag(GP_T.predict(T_pred_point_batch, return_pred=False)[1])
             cov_d_batch_P = np.diag(GP_P.predict(P_pred_point_batch, return_pred=False)[1])
@@ -1183,13 +1158,13 @@ class GPMPC_ACADOS_TP(GPMPC):
             cov_noise_batch[:, 0, 0] = np.sin(z_batch[:, self.state_labels.index('theta')])**2 * cov_noise_T
             cov_noise_batch[:, 1, 1] = np.cos(z_batch[:, self.state_labels.index('theta')])**2 * cov_noise_T
             cov_noise_batch[:, 2, 2] = cov_noise_P
-            # simple Euler discretization 
+            # simple Euler discretization
             cov_noise_batch = cov_noise_batch * self.dt**2
             cov_d_batch = cov_d_batch * self.dt**2
-            
+
             for i in range(T):
-                state_covariances[i] = cov_x # + np.diag(self.obs_noise_std**2)
-                cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T # + np.diag(self.act_noise_std**2)
+                state_covariances[i] = cov_x  # + np.diag(self.obs_noise_std**2)
+                cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T  # + np.diag(self.act_noise_std**2)
                 input_covariances[i] = cov_u
                 cov_xu = cov_x @ self.lqr_gain.T
                 if self.gp_approx == 'taylor':
@@ -1283,7 +1258,7 @@ class GPMPC_ACADOS_TP(GPMPC):
                 self.setup_acados_optimizer(n_ind_points)
                 # get time in $ymd_HMS format
                 current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-                self.acados_ocp_solver = AcadosOcpSolver(self.ocp, 
+                self.acados_ocp_solver = AcadosOcpSolver(self.ocp,
                                                          self.output_dir + f'/gpmpc_acados_ocp_solver_{current_time}.json')
                 self.new_GP_model = False
 
@@ -1320,11 +1295,11 @@ class GPMPC_ACADOS_TP(GPMPC):
         fig, ax = plt.subplots(3, 1, figsize=(10, 10))
         ax[0].scatter(t, train_targets[:, 0], label='Target', color='gray')
         ax[0].plot(t, mean_T, label='GP mean', color='blue')
-        ax[0].fill_between(t, lower_T, upper_T, alpha=0.5, color='skyblue', label='2-$\sigma$')
+        ax[0].fill_between(t, lower_T, upper_T, alpha=0.5, color='skyblue', label='2-$\\sigma$')
         ax[0].plot(t, residual_T, label='Residual (analytical)', color='green')
         ax[0].set_ylabel('T residual [$m/s^2$]')
         ax[0].set_xlabel('data points')
-        ax[0].set_title(f'T residual, {percentage_within_2std_T:.2f}% within 2-$\sigma$')
+        ax[0].set_title(f'T residual, {percentage_within_2std_T:.2f}% within 2-$\\sigma$')
         ax[0].set_xlim([0, num_data])
         ax[0].legend()
 
@@ -1332,22 +1307,22 @@ class GPMPC_ACADOS_TP(GPMPC):
         idx = np.argsort(train_inputs[:, 0])
         ax[1].scatter(train_inputs[idx][:, 0], train_targets[idx][:, 0], label='Target', color='gray')
         ax[1].plot(train_inputs[idx][:, 0], mean_T[idx], label='GP mean', color='blue')
-        ax[1].fill_between(train_inputs[idx][:, 0], lower_T[idx], upper_T[idx], alpha=0.5, color='skyblue', label='2-$\sigma$')
+        ax[1].fill_between(train_inputs[idx][:, 0], lower_T[idx], upper_T[idx], alpha=0.5, color='skyblue', label='2-$\\sigma$')
         ax[1].plot(train_inputs[idx][:, 0], residual_T[idx], label='Residual (analytical)', color='green')
         ax[1].legend()
         ax[1].set_ylabel('T residual [$m/s^2$]')
         ax[1].set_xlabel('$T_c$ [$N$]')
-        ax[1].set_title(f'Acc residual vs $T_c$')
+        ax[1].set_title('Acc residual vs $T_c$')
 
         ax[2].scatter(t, train_targets[:, 1], label='Target', color='gray')
         ax[2].plot(t, mean_P, label='GP mean', color='blue')
-        ax[2].fill_between(t, lower_P, upper_P, alpha=0.5, color='skyblue', label='2-$\sigma$')
+        ax[2].fill_between(t, lower_P, upper_P, alpha=0.5, color='skyblue', label='2-$\\sigma$')
         ax[2].plot(t, residual_P, label='Residual (analytical)', color='green')
         ax[2].set_title('P')
         ax[2].legend()
         ax[2].set_ylabel('P residual [$rad/s^2$]')
         ax[2].set_xlabel('data points')
-        ax[2].set_title(f'P residual, {percentage_within_2std_P:.2f}% within 2-$\sigma$')
+        ax[2].set_title(f'P residual, {percentage_within_2std_P:.2f}% within 2-$\\sigma$')
         ax[2].set_xlim([0, num_data])
         plt_title = f'GP_validation_{title}'
         plt.suptitle(plt_title)
@@ -1358,9 +1333,10 @@ class GPMPC_ACADOS_TP(GPMPC):
         ax2.set_xlim(ax[0].get_xlim())
         ax2.set_xticks(ax[0].get_xticks())
         ax2.set_xticklabels([f'{x:.2f}' for x in ax[0].get_xticks() / 60])
-        ax2.set_xlabel('time [s]')        
-        
+        ax2.set_xlabel('time [s]')
+
         fig.tight_layout()
-        fig.savefig(os.path.join(output_dir, f'{plt_title}.png'))
-        print(f'Plot saved at {os.path.join(output_dir, f"{plt_title}.png")}')
+        file_name = f'{plt_title}.png'
+        fig.savefig(os.path.join(output_dir, file_name))
+        print(f'Plot saved at {os.path.join(output_dir, file_name)}')
         plt.close()

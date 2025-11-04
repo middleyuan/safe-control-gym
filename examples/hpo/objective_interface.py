@@ -1,23 +1,23 @@
-import os
-import time
-import sys
-import yaml
-import matplotlib.pyplot as plt
-from filelock import FileLock
-from functools import partial
-from multiprocessing import Process, Manager
-from copy import deepcopy
-import numpy as np
 import math
+import os
+import sys
+import time
+from copy import deepcopy
+from functools import partial
+from multiprocessing import Manager, Process
+
+import matplotlib.pyplot as plt
+import numpy as np
+import yaml
+from filelock import FileLock
 
 from safe_control_gym.experiments.base_experiment import BaseExperiment
-from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
+from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import set_device_from_config, set_dir_from_config, set_seed_from_config
 
 
 def objective(config, result_metrics, result_paths, i):
-
     set_dir_from_config(config)
     set_seed_from_config(config)
     set_device_from_config(config)
@@ -66,7 +66,6 @@ def objective(config, result_metrics, result_paths, i):
 
 
 def main(config):
-
     # init protocol
     protocol = {'state': 'idle'}
     path = os.path.join(config.output_dir, config.tag)
@@ -76,8 +75,8 @@ def main(config):
             lock = FileLock(f'{path}/protocol.yaml.lock')
             with lock:
                 with open(f'{path}/protocol.yaml', 'r')as f:
-                    protocol = yaml.safe_load(f)    
-        except:
+                    protocol = yaml.safe_load(f)
+        except Exception:
             protocol = {'state': 'idle'}
         time.sleep(.5)
 
@@ -97,8 +96,8 @@ def main(config):
                     sys.argv[1:] = ['--algo', ALGO,
                                     '--task', 'quadrotor',
                                     '--overrides',
-                                        f'./examples/hpo/{ALGO}/config_overrides/{SYS}/{SYS}_track.yaml',
-                                        f'./examples/hpo/{ALGO}/config_overrides/{SYS}/{ALGO}_{SYS}_{PRIOR}.yaml',
+                                    f'./examples/hpo/{ALGO}/config_overrides/{SYS}/{SYS}_track.yaml',
+                                    f'./examples/hpo/{ALGO}/config_overrides/{SYS}/{ALGO}_{SYS}_{PRIOR}.yaml',
                                     '--output_dir', output_dir,
                                     '--tag', bo_algo,
                                     '--use_gpu', 'True'
@@ -106,14 +105,14 @@ def main(config):
                 else:
                     PRIOR = ''
                     sys.argv[1:] = ['--algo', ALGO,
-                                        '--task', 'quadrotor',
-                                        '--overrides',
-                                            f'./examples/hpo/rl/config_overrides/{SYS}/{SYS}_track.yaml',
-                                            f'./examples/hpo/rl/{ALGO}/config_overrides/{SYS}/{ALGO}_{SYS}_{PRIOR}.yaml',
-                                        '--output_dir', output_dir,
-                                        '--tag', bo_algo,
-                                        '--use_gpu', 'True'
-                                        ]
+                                    '--task', 'quadrotor',
+                                    '--overrides',
+                                    f'./examples/hpo/rl/config_overrides/{SYS}/{SYS}_track.yaml',
+                                    f'./examples/hpo/rl/{ALGO}/config_overrides/{SYS}/{ALGO}_{SYS}_{PRIOR}.yaml',
+                                    '--output_dir', output_dir,
+                                    '--tag', bo_algo,
+                                    '--use_gpu', 'True'
+                                    ]
                 fac = ConfigFactory()
                 config = fac.merge()
 
@@ -144,11 +143,11 @@ def main(config):
 
                         p = Process(target=objective, args=(deepcopy(config), result_metrics, result_paths, i))
                         processes.append(p)
-                
+
                     step = 0
                     while step < len(processes):
                         begin = int(step * max_processes)
-                        end = min(begin+max_processes, len(processes))
+                        end = min(begin + max_processes, len(processes))
                         for p in processes[begin:end]:
                             p.start()
                         for p in processes[begin:end]:
@@ -163,22 +162,21 @@ def main(config):
                         paths.append(result_paths[i])
                     aggregate_results.append(results)
                     aggregate_paths.append(paths)
-                    
+
                 protocol['y'] = aggregate_results
                 protocol['saved_paths'] = aggregate_paths
-                
+
                 protocol['state'] = 'done'
                 # create a lock
                 lock = FileLock(f'{path}/protocol.yaml.lock')
                 with lock:
                     with open(f'{path}/protocol.yaml', 'w')as f:
                         yaml.dump(protocol, f, default_flow_style=False, sort_keys=False)
-                
 
                 # with open(f'{path}/tmp.yaml', 'w')as f:
                 #     yaml.dump(protocol, f, default_flow_style=False, sort_keys=False)
                 # os.rename(f'{path}/tmp.yaml', f'{path}/protocol.yaml')
-            
+
             elif protocol['state'] == 'end':
                 break
         else:
@@ -188,9 +186,7 @@ def main(config):
 
 
 if __name__ == '__main__':
-    # Make config.
     fac = ConfigFactory()
-    # merge config
     config = fac.merge()
 
     main(config)

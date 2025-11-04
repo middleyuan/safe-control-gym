@@ -103,7 +103,7 @@ def set_acados_constraint_bound(constraint,
 
 
 def plot_open_loop_sol(ctrl):
-    ''' Plot the open loop predction of the MPC controller.
+    '''Plot the open loop predction of the MPC controller.
 
     Args:
         ctrl (MPC): MPC controller object.

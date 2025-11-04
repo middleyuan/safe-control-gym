@@ -13,6 +13,7 @@ algo_config:
   r_mpc:
   - 1.0e-10
   - 1.0e-10
+
   # Prior info
   prior_info:
     prior_prop: null
@@ -23,5 +24,4 @@ algo_config:
   use_full_flat_reference: False
   use_acados: True
   output_dir: ./fmpc/results
-  # apply_thrust_constraint_box: False
   apply_thrust_constraint_box: True

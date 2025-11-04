@@ -1,10 +1,8 @@
-import os
 import sys
 from pathlib import Path
-import glob
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
 
@@ -15,12 +13,14 @@ print(script_dir)
 output_path = script_dir / 'noise'
 output_path.mkdir(exist_ok=True)
 
+
 def get_key_by_value(d, value):
-    """Return the first key in dict d whose value matches the given value."""
+    '''Return the first key in dict d whose value matches the given value.'''
     for k, v in d.items():
         if v == value:
             return k
     return None
+
 
 max_seed = 10
 s = 2  # times std
@@ -29,7 +29,7 @@ s = 2  # times std
 rl_methods = ['ppo', 'sac', 'dppo', 'ppo_mpc']
 rl_method_names = {
     'ppo': 'PPO',
-    'sac': 'SAC', 
+    'sac': 'SAC',
     'dppo': 'DPPO',
     'ppo_mpc': 'PPO-MPC'
 }
@@ -51,7 +51,7 @@ assert controller in rl_methods, f'controller {controller} not supported'
 # Map noise types to their file prefixes
 noise_type_mapping = {
     'obs_noise': 'ob',
-    'proc_noise': 'ps', 
+    'proc_noise': 'ps',
     'param': 'pm'
 }
 
@@ -97,10 +97,10 @@ for seed_idx in range(max_seed):
     rmse_list = []
     early_stop_list = []
     noise_factor_list = []
-    
+
     seed_folder = seed_folders[seed_idx]
     print(f'Processing {seed_folder.name}')
-    
+
     # Process each noise scale
     for noise_scale in noise_scales:
         # Construct the filename based on noise type
@@ -108,25 +108,25 @@ for seed_idx in range(max_seed):
             filename = f'robust_metric_{noise_prefix}_{noise_scale}.npy'
         else:
             filename = f'robust_metric_{noise_prefix}_{int(noise_scale)}.npy'
-        
+
         file_path = seed_folder / filename
-        
+
         if file_path.exists():
             try:
                 data = np.load(file_path, allow_pickle=True).item()
-                
+
                 # Extract relevant metrics
                 average_rmse = data.get('average_rmse', np.nan)
                 early_stop = data.get('early_stop', [0] * 10)  # default to no early stop
                 noise_factor = data.get('noise_scale', noise_scale)
-                
+
                 # Handle early stop - check if any run had early stop
                 early_stop_flag = any(early_stop) if isinstance(early_stop, (list, np.ndarray)) else bool(early_stop)
-                
+
                 rmse_list.append(average_rmse)
                 early_stop_list.append(early_stop_flag)
                 noise_factor_list.append(noise_factor)
-                
+
             except Exception as e:
                 print(f'Error loading {file_path}: {e}')
                 # Append NaN values for missing data
@@ -139,7 +139,7 @@ for seed_idx in range(max_seed):
             rmse_list.append(np.nan)
             early_stop_list.append(True)  # Assume early stop if file doesn't exist
             noise_factor_list.append(noise_scale)
-    
+
     results[str(seed_idx)]['rmse'] = rmse_list
     results[str(seed_idx)]['early_stop'] = early_stop_list
     results[str(seed_idx)]['noise_factor'] = noise_factor_list
@@ -176,11 +176,11 @@ for seed_idx in range(max_seed):
     # Filter out NaN values for plotting
     rmse_vals = results[str(seed_idx)]['rmse']
     noise_vals = results[str(seed_idx)]['noise_factor']
-    
+
     valid_mask = ~np.isnan(rmse_vals)
     rmse_vals = np.array(rmse_vals)[valid_mask]
     noise_vals = np.array(noise_vals)[valid_mask]
-    
+
     if len(rmse_vals) > 0:
         ax.plot(noise_vals, rmse_vals, label=f'seed_{seed_idx+1}', alpha=0.7)
 
@@ -228,9 +228,9 @@ print(f'Early stop noise factor: {early_stop_noise_factor}')
 # Plot RMSE
 fig, ax = plt.subplots(figsize=(6, 2))
 controller_name = rl_method_names[controller]
-ax.plot(noise_factor, rmse_mean, 
+ax.plot(noise_factor, rmse_mean,
         label='mean', color=plot_colors.get(controller_name, 'tab:blue'))
-ax.fill_between(noise_factor, rmse_mean - s*rmse_std, rmse_mean + s*rmse_std, 
+ax.fill_between(noise_factor, rmse_mean - s * rmse_std, rmse_mean + s * rmse_std,
                 alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 
 # Add reference line
@@ -244,11 +244,11 @@ fig.savefig(output_path / f'{controller}_{noise_type}_rmse.png')
 plt.close()
 
 # Plot RMSE degradation
-fig, ax = plt.subplots(figsize=(6, 2)) 
-ax.plot(noise_factor, rmse_degradation_mean, 
-        label='mean', color=plot_colors.get(controller_name, 'tab:blue')) 
-ax.fill_between(noise_factor, rmse_degradation_mean - s*rmse_degradation_std, 
-                rmse_degradation_mean + s*rmse_degradation_std, 
+fig, ax = plt.subplots(figsize=(6, 2))
+ax.plot(noise_factor, rmse_degradation_mean,
+        label='mean', color=plot_colors.get(controller_name, 'tab:blue'))
+ax.fill_between(noise_factor, rmse_degradation_mean - s * rmse_degradation_std,
+                rmse_degradation_mean + s * rmse_degradation_std,
                 alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 
 ax.axhline(y=200, color='gray', linestyle='--', label='Relative Perf=200%')

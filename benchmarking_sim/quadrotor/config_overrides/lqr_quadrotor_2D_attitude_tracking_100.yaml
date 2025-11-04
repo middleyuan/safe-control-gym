@@ -1,8 +1,6 @@
 algo: lqr
 algo_config:
   # Cost parameters
-  # q_lqr: [20.0, 0.0001, 20.0, 9.642687551285645, 0.0001, 0.0001]
-  # r_lqr: [1, 1]
   q_lqr:
   - 20.0
   - 0.0001
@@ -19,4 +17,3 @@ algo_config:
   #       based on the continuous-time model
   discrete_dynamics: True
   output_dir: ./lqr/results
-

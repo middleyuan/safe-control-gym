@@ -1,7 +1,7 @@
 algo: linear_mpc_acados
 algo_config:
   horizon: 30
-  q_mpc:  
+  q_mpc:
   - 50
   - 0.5
   - 50
@@ -23,9 +23,4 @@ algo_config:
 
   warmstart: True
   soft_constraints: True
-  # use_r_term: True
-  # use_lqr_gain_and_terminal_cost: True
-  # use_RTI: True
   output_dir: ./linear_mpc_acados/results
-
-

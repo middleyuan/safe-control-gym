@@ -16,28 +16,14 @@ Implementation details:
        and the inducing points are the previous MPC solution.
     3. Each dimension of the learned error dynamics is an independent Zero Mean SE Kernel GP.
 '''
-import time, os
+import time
 from copy import deepcopy
-from functools import partial
-from termcolor import colored
 
-import casadi as cs
-import gpytorch
-import munch
 import numpy as np
-import scipy
-import torch
-from sklearn.metrics import pairwise_distances_argmin_min
-from sklearn.model_selection import train_test_split
-from skopt.sampler import Lhs
 
-from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcessCollection, ZeroMeanIndependentGPModel,
-                                                       covMatern52ard, covSEard, covSE_single, kmeans_centriods)
-from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
 from safe_control_gym.controllers.mpc.gpmpc_base import GPMPC
-from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
+from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
 from safe_control_gym.envs.benchmark_env import Task
-from safe_control_gym.utils.utils import timing
 
 
 class GPMPC_CASADI(GPMPC):
@@ -148,7 +134,7 @@ class GPMPC_CASADI(GPMPC):
             use_linear_prior=use_linear_prior,
             plot_trained_gp=plot_trained_gp,
             **kwargs)
-        
+
         # Initialize the method using linear MPC.
         if self.use_linear_prior:
             self.prior_ctrl = LinearMPC(
@@ -184,17 +170,15 @@ class GPMPC_CASADI(GPMPC):
                 prior_info=prior_info,
             )
             self.prior_ctrl.reset()
-        
+
         if self.use_linear_prior:
             self.prior_dynamics_func = self.prior_ctrl.linear_dynamics_func
         else:
             self.prior_dynamics_func = self.prior_ctrl.dynamics_func
             self.prior_dynamcis_func_c = self.prior_ctrl.model.fc_func
-    
+
         self.X_EQ = self.prior_ctrl.X_EQ
         self.U_EQ = self.prior_ctrl.U_EQ
-
-        
 
     def select_action_with_gp(self,
                               obs
@@ -322,7 +306,7 @@ class GPMPC_CASADI(GPMPC):
         self.prev_action = action,
         # use the ancillary gain
         if hasattr(self, 'K'):
-            action += self.K @ (x_val[:, 0] - obs) 
+            action += self.K @ (x_val[:, 0] - obs)
         return action
 
     def select_action(self,
@@ -381,4 +365,3 @@ class GPMPC_CASADI(GPMPC):
         # Previously solved states & inputs, useful for warm start.
         self.x_prev = None
         self.u_prev = None
-    

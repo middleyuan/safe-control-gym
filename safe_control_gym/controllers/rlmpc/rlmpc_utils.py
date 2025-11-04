@@ -52,7 +52,7 @@ def rk_discrete(f, n, m, k, dt):
 # Adam Optimizer (use the class from the previous response)
 class AdamOptimizer:
     def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8):
-        """
+        '''
         Constructor for the AdamOptimizer class.
 
         Parameters
@@ -69,7 +69,7 @@ class AdamOptimizer:
         Returns
         -------
         None.
-        """
+        '''
         self.learning_rate = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
@@ -79,7 +79,7 @@ class AdamOptimizer:
         self.t = 0
 
     def initialize_moments(self, params):
-        """
+        '''
         Initializes the first and second moment estimates.
 
         Parameters
@@ -90,12 +90,12 @@ class AdamOptimizer:
         Returns
         -------
         None.
-        """
+        '''
         self.m = {k: np.zeros_like(v) for k, v in params.items()}
         self.v = {k: np.zeros_like(v) for k, v in params.items()}
 
     def update_params(self, params, grads):
-        """
+        '''
         Updates the model parameters using the Adam optimizer.
 
         Parameters
@@ -109,7 +109,7 @@ class AdamOptimizer:
         -------
         updated_params : dict
             Dictionary containing the updated model parameters.
-        """
+        '''
         if self.m is None or self.v is None:
             self.initialize_moments(params)
 

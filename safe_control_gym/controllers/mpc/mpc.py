@@ -168,10 +168,10 @@ class MPC(BaseController):
                                                 ['xf'])
         # continuous linear dynamics
         self.linear_dynamics_func_c = cs.Function('linear_continuous_dynamics',
-                                                    [delta_x, delta_u],
-                                                    [dfdx @ delta_x + dfdu @ delta_u],
-                                                    ['x0', 'p'],
-                                                    ['xdot'])
+                                                  [delta_x, delta_u],
+                                                  [dfdx @ delta_x + dfdu @ delta_u],
+                                                  ['x0', 'p'],
+                                                  ['xdot'])
         self.dfdx = dfdx
         self.dfdu = dfdu
         # # check controlled system is stabilizable

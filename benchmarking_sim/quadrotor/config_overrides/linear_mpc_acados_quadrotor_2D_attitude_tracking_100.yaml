@@ -11,6 +11,6 @@ algo_config:
   r_mpc:
   - 2.832778836355402
   - 2.6629474047182358
-  
+
   warmstart: True
   output_dir: ./linear_mpc_acados/results

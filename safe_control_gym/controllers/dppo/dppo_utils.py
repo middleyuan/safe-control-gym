@@ -2,8 +2,7 @@
 
 from collections import defaultdict
 from copy import deepcopy
-# from importlib.metadata import distribution
-from typing import Dict, Tuple, Type, Union  # List,
+from typing import Type
 
 import numpy as np
 import torch
@@ -12,7 +11,7 @@ from gymnasium.spaces import Box
 
 from safe_control_gym.math_and_models.distributions import Categorical, Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
-from safe_control_gym.math_and_models.quantile_network import QuantileNetwork, QuantileDistribution
+from safe_control_gym.math_and_models.quantile_network import QuantileDistribution, QuantileNetwork
 
 
 class DPPOAgent:
@@ -62,8 +61,8 @@ class DPPOAgent:
         if value_loss_kwargs is None:
             value_loss_kwargs = {}
         if value_loss == self.value_loss_energy:
-            value_loss_kwargs["sample_count"] = (
-                value_loss_kwargs["sample_count"] if "sample_count" in value_loss_kwargs else 100
+            value_loss_kwargs['sample_count'] = (
+                value_loss_kwargs['sample_count'] if 'sample_count' in value_loss_kwargs else 100
             )
         if risk_measure_config is None:
             risk_measure_config = {}
@@ -133,7 +132,7 @@ class DPPOAgent:
 
     def process_quants(self, x):
         if self.value_loss_name == self.value_loss_energy:
-            quants, idx = QuantileDistribution(x).sample(self.value_loss_kwargs["sample_count"])
+            quants, idx = QuantileDistribution(x).sample(self.value_loss_kwargs['sample_count'])
         else:
             quants, idx = x, None
 

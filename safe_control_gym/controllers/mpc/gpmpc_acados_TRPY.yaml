@@ -30,18 +30,18 @@ deque_size: 10
 eval_batch_size: 10
 
 param_noise_std:
-  beta_1: 
+  beta_1:
     distrib: 'normal'
     scale: 0.
-  beta_2: 
+  beta_2:
     distrib: 'normal'
     scale: 0.
-  alpha_1: 
+  alpha_1:
     distrib: 'normal'
     scale: 0.
   alpha_2:
     distrib: 'normal'
     scale: 0.
-  alpha_3: 
+  alpha_3:
     distrib: 'normal'
     scale: 0.

@@ -6,7 +6,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from gymnasium.spaces import Box
 
 from safe_control_gym.math_and_models.distributions import Categorical, Normal
@@ -150,7 +149,7 @@ class SACAgent:
 
         # actor update
         policy_loss, entropy_loss = self.compute_policy_loss(batch)
-        if self.count%self.update_freq == 0:
+        if self.count % self.update_freq == 0:
             self.actor_opt.zero_grad()
             policy_loss.backward()
             self.actor_opt.step()
@@ -167,7 +166,7 @@ class SACAgent:
         self.critic_opt.step()
 
         # update target networks
-        if self.count%self.update_freq == 0:
+        if self.count % self.update_freq == 0:
             soft_update(self.ac, self.ac_targ, self.tau)
         self.count += 1
 
@@ -198,10 +197,10 @@ class MLPActor(nn.Module):
 
         # action rescaling (from cleanrl)
         self.register_buffer(
-            "action_scale", torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
+            'action_scale', torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
         )
         self.register_buffer(
-            "action_bias", torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
+            'action_bias', torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
         )
 
     def forward(self, obs, deterministic=False, with_logprob=True):
@@ -238,7 +237,7 @@ class MLPActor(nn.Module):
             logp = logp.sum(1, keepdim=True)
         else:
             logp = None
-    
+
         return action, logp
 
 

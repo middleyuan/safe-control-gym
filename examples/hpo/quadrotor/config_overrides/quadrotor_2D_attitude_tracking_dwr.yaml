@@ -3,7 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
-  # physics: pyb
   quad_type: 4
 
   init_state:

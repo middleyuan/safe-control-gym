@@ -1,34 +1,21 @@
 
 
-import csv
 import os
 import shutil
 import time
-from copy import deepcopy
-from datetime import datetime
-from functools import partial
 
 import casadi as cs
-import gpytorch
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
-import torch
-from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver, AcadosSimSolver
-from sklearn.metrics import pairwise_distances_argmin_min
-from sklearn.model_selection import train_test_split
-from skopt.sampler import Lhs
+from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from termcolor import colored
 
-from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
-from safe_control_gym.controllers.mpc.gp_utils import (GaussianProcessCollection, ZeroMeanIndependentGPModel,
-                                                       covSEard, kmeans_centriods)
-from safe_control_gym.controllers.mpc.linear_mpc import MPC, LinearMPC
-from safe_control_gym.controllers.mpc.mpc import MPC
 from safe_control_gym.controllers.mpc.gpmpc_base import GPMPC
+from safe_control_gym.controllers.mpc.linear_mpc import LinearMPC
 from safe_control_gym.controllers.mpc.mpc_acados import MPC_ACADOS
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.utils.utils import timing
+
 
 class GPMPC_ACADOS(GPMPC):
     '''Implements a GP-MPC controller with Acados optimization.'''
@@ -114,7 +101,7 @@ class GPMPC_ACADOS(GPMPC):
 
         if hasattr(self, 'prior_ctrl'):
             self.prior_ctrl.close()
-            
+
         if self.use_linear_prior:
             self.prior_ctrl = LinearMPC(
                 self.prior_env_func,
@@ -175,9 +162,6 @@ class GPMPC_ACADOS(GPMPC):
         acados_model.x = self.model.x_sym
         acados_model.u = self.model.u_sym
         acados_model.name = model_name
-
-        A_lin = self.discrete_dfdx
-        B_lin = self.discrete_dfdu
 
         z = cs.vertcat(acados_model.x, acados_model.u)  # GP prediction point
         z = z[self.input_mask]
@@ -380,8 +364,11 @@ class GPMPC_ACADOS(GPMPC):
         # form of g(x, u) <= constraint_tol in safe-control-gym
 
         # lambda functions to set the upper and lower bounds of the chance constraints
-        def constraint_ub_chance(constraint): return -self.constraint_tol * np.ones(constraint.shape)
-        def constraint_lb_chance(constraint): return -1e8 * np.ones(constraint.shape)
+        def constraint_ub_chance(constraint):
+            return -self.constraint_tol * np.ones(constraint.shape)
+
+        def constraint_lb_chance(constraint):
+            return -1e8 * np.ones(constraint.shape)
         state_tighten_var = cs.vertcat(*state_tighten_list)
         input_tighten_var = cs.vertcat(*input_tighten_list)
 
@@ -438,8 +425,6 @@ class GPMPC_ACADOS(GPMPC):
     def select_action_with_gp(self, obs):
         time_before = time.time()
         nx, nu = self.model.nx, self.model.nu
-        ny = nx + nu
-        ny_e = nx
         # TODO: replace this with something safer
         n_ind_points = self.opti_dict['n_ind_points']
 
@@ -506,14 +491,14 @@ class GPMPC_ACADOS(GPMPC):
                 tighten_value = np.concatenate((state_constraint_set, input_constraint_set))
                 # set the parameter values
                 parameter_values = np.concatenate((dyn_value, tighten_value))
-                # self.acados_ocp_solver.set(idx, "p", dyn_value)
+                # self.acados_ocp_solver.set(idx, 'p', dyn_value)
                 self.acados_ocp_solver.set(idx, 'p', parameter_values)
             # tighten terminal state constraints
             tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
             # set the parameter values
             parameter_values = np.concatenate((dyn_value, tighten_value))
             self.acados_ocp_solver.set(self.T, 'p', parameter_values)
-            # self.acados_ocp_solver.set(self.T, "p", dyn_value)
+            # self.acados_ocp_solver.set(self.T, 'p', dyn_value)
         else:
             for idx in range(self.T):
                 # tighten initial and path constraints
@@ -571,8 +556,8 @@ class GPMPC_ACADOS(GPMPC):
         print(f'gpmpc acados sol time: {time_after - time_before:.3f}; sol status {status}; nlp iter {self.acados_ocp_solver.get_stats("sqp_iter")}; qp iter {self.acados_ocp_solver.get_stats("qp_iter")}')
         if time_after - time_before > 1 / 60:
             print(colored(f'========= Warning: GPMPC ACADOS took {time_after - time_before:.3f} seconds =========', 'yellow'))
-        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
-        
+        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats('time_tot'))
+
         if hasattr(self, 'K'):
             action += self.K @ (self.x_prev[:, 0] - obs)
             # self.u_prev = self.u_prev + self.K @ (self.x_prev - obs)

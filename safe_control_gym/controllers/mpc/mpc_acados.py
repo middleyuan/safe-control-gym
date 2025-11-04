@@ -6,10 +6,9 @@ import numpy as np
 import scipy
 from termcolor import colored
 
-from safe_control_gym.controllers.mpc.mpc import MPC
 from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
+from safe_control_gym.controllers.mpc.mpc import MPC
 from safe_control_gym.controllers.mpc.mpc_utils import set_acados_constraint_bound
-from safe_control_gym.utils.utils import timing
 
 try:
     from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
@@ -69,7 +68,7 @@ class MPC_ACADOS(MPC):
         for k, v in locals().items():
             if k != 'self' and k != 'kwargs' and '__' not in k:
                 self.__dict__.update({k: v})
-                
+
         super().__init__(
             env_func,
             horizon=horizon,
@@ -93,7 +92,7 @@ class MPC_ACADOS(MPC):
         self.u_guess = None
         # acados settings
         self.use_RTI = use_RTI
-        
+
         self.Q_T = self.Q
         if qt_mpc is not None:
             self.Q_T = get_cost_weight_matrix(qt_mpc, self.model.nx)
@@ -103,7 +102,7 @@ class MPC_ACADOS(MPC):
         if not hasattr(self, 'acados_ocp_solver'):
             acados_model = self.setup_acados_model()
             acados_ocp = self.setup_acados_optimizer(acados_model)
-            self.acados_ocp_solver = AcadosOcpSolver(acados_ocp, 
+            self.acados_ocp_solver = AcadosOcpSolver(acados_ocp,
                                                      self.output_dir + '/mpc_acados_ocp_solver.json')
 
     # @timing
@@ -144,7 +143,7 @@ class MPC_ACADOS(MPC):
         k3 = fc_func(acados_model.x + self.dt / 2 * k2, acados_model.u)
         k4 = fc_func(acados_model.x + self.dt * k3, acados_model.u)
 
-        f_disc = acados_model.x + self.dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4) 
+        f_disc = acados_model.x + self.dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
         acados_model.disc_dyn_expr = f_disc
         '''
@@ -173,7 +172,7 @@ class MPC_ACADOS(MPC):
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
         ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
-        ocp.cost.W_e = self.Q_T # NOTE: temporarily used for hardware setup
+        ocp.cost.W_e = self.Q_T  # NOTE: temporarily used for hardware setup
         # ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
         # ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
         # ocp.cost.W_e = self.Q_T / self.dt
@@ -318,11 +317,6 @@ class MPC_ACADOS(MPC):
             if nu == 1:
                 self.u_prev = self.u_prev.flatten()
 
-            # get the solver status
-            n_sqp_iter = self.acados_ocp_solver.get_stats('sqp_iter')
-            n_qp_iter = self.acados_ocp_solver.get_stats('qp_iter')
-            # print(f'acados returned status {status}. SQP iterations: {n_sqp_iter}. QP iterations: {n_qp_iter}.')
-
         except Exception:
             print(colored('Infeasible MPC Problem', 'red'))
             # get the solver status
@@ -336,7 +330,7 @@ class MPC_ACADOS(MPC):
         self.results_dict['horizon_states'].append(deepcopy(self.x_prev))
         self.results_dict['horizon_inputs'].append(deepcopy(self.u_prev))
         self.results_dict['goal_states'].append(deepcopy(goal_states))
-        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
+        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats('time_tot'))
 
         self.prev_action = action
 

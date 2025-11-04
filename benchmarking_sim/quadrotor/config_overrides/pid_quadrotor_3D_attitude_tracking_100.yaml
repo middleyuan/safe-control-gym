@@ -3,59 +3,9 @@ algo_config:
   prior_info:
     prior_prop:
       M: 0.037
-  #     Iyy: 0.000014
-
-  # p_coeff_for: [0.4, 0.4, 1.25]
-  # i_coeff_for: [.05, .05, .05]
-  # d_coeff_for: [.2, .2, .5]
-
-  # p_coeff_for: [0.8, 0.8, 2.0]
-  # i_coeff_for: [.05, .05, .05]
-  # d_coeff_for: [.7, .7, 1.5]
-
-  # p_coeff_for: [1.5, 1.5, 2.0]
-  # i_coeff_for: [.05, .05, .05]
-  # d_coeff_for: [1.5, 1.5, 1.5]
-
-  # p_coeff_for: [0.75, 0.75, 2]
-  # i_coeff_for: [.025, .025, .05]
-  # d_coeff_for: [0.75, 0.75, 2]
-
-  # p_coeff_for: [0.2, 0.2, 0.2]
-  # i_coeff_for: [.005, .005, .01]
-  # d_coeff_for: [0.2, 0.2, 0.2]
-
-  # p_coeff_for: [1.2, 1.2, 1.3]
-  # i_coeff_for: [.00000, .00000, .00010]
-  # d_coeff_for: [1.7, 1.7, 1.3]
 
   p_coeff_for: [0.75, 0.75, 1.3]
   i_coeff_for: [.00000, .00000, .00010]
   d_coeff_for: [1.7, 1.7, 1.3]
 
-  # p_coeff_for: [0.75, 0.75, 2]
-  # i_coeff_for: [.025, .025, .05]
-  # d_coeff_for: [0.75, 0.75, 3]
-
-  # p_coeff_for: [0.69, 0.69, 2.5]
-  # i_coeff_for: [.05, .05, .15]
-  # d_coeff_for: [.38, .39, .92]
-
-  # p_coeff_for: [0.8, 0.8, 2.0]
-  # i_coeff_for: [.05, .05, .05]
-  # d_coeff_for: [.75, .75, 1.5]
-
-  # p_coeff_tor: [70000., 70000., 60000.]
-  # i_coeff_tor: [.0, .0, 500.]
-  # d_coeff_tor: [20000., 20000., 12000.]
-    
-  # p_coeff_for: [0.8, 0.8, 2]
-  # i_coeff_for: [.0005, .0005, .0005]
-  # d_coeff_for: [.3, .3, .5]
-
-  # p_coeff_tor: [70000., 70000., 60000.]
-  # i_coeff_tor: [.0, .0, 500.]
-  # d_coeff_tor: [20000., 20000., 12000.]
-
   output_dir: ./pid/results
-      

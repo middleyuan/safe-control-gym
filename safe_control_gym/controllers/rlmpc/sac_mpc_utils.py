@@ -359,7 +359,7 @@ class MPCActor(nn.Module):
         return theta
 
     def get_references(self, info_batch):
-        """Constructs reference states along mpc horizon.(nx, T+1)."""
+        '''Constructs reference states along mpc horizon.(nx, T+1).'''
         goal_states_batch = []
         for info in info_batch:
             traj_step = info['current_step']
@@ -487,20 +487,20 @@ class MPCPolicyFunction:
             self.traj_step = 0
 
     def add_constraints(self, constraints):
-        """Add the constraints (from a list) to the system.
+        '''Add the constraints (from a list) to the system.
 
         Args:
             constraints (list): List of constraints controller is subject too.
-        """
+        '''
         (self.constraints, self.state_constraints_sym,
          self.input_constraints_sym) = reset_constraints(constraints + self.constraints.constraints)
 
     def remove_constraints(self, constraints):
-        """Remove constraints from the current constraint list.
+        '''Remove constraints from the current constraint list.
 
         Args:
             constraints (list): list of constraints to be removed.
-        """
+        '''
         old_constraints_list = self.constraints.constraints
         for constraint in constraints:
             assert constraint in self.constraints.constraints, \
@@ -510,7 +510,7 @@ class MPCPolicyFunction:
             old_constraints_list)
 
     def set_dynamics_func(self):
-        """Updates symbolic dynamics with actual control frequency."""
+        '''Updates symbolic dynamics with actual control frequency.'''
         self.dynamics_func = rk_discrete(self.model.param_fc_func,
                                          self.model.nx,
                                          self.model.nu,
@@ -523,7 +523,7 @@ class MPCPolicyFunction:
         #                                     self.dt)
 
     def setup_optimizer(self):
-        """Sets up nonlinear optimization problem."""
+        '''Sets up nonlinear optimization problem.'''
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
         etau = 1e-5  # barrier parameter for interior point method
@@ -571,7 +571,7 @@ class MPCPolicyFunction:
         Q, th_q, nq = _create_semi_definite_matrix(nx)
         R, th_r, nr = _create_semi_definite_matrix(nu)
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
-        # theta_param = cs.MX.sym("theta_var", nq + nr)
+        # theta_param = cs.MX.sym('theta_var', nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
         back_off_param = cs.MX.sym('back_off_param', nx)
         # Model
@@ -763,7 +763,7 @@ class MPCPolicyFunction:
         }
 
     def get_references(self, traj_step=None, traj_ref=None):
-        """Constructs reference states along mpc horizon.(nx, T+1)."""
+        '''Constructs reference states along mpc horizon.(nx, T+1).'''
         if self.env.TASK == Task.STABILIZATION:
             # Repeat goal state for horizon steps.
             goal_states = np.tile(self.env.X_GOAL.reshape(-1, 1), (1, self.T + 1))
@@ -785,7 +785,7 @@ class MPCPolicyFunction:
         return goal_states  # (nx, T+1).
 
     def select_action(self, obs, theta, traj_ref, info=None, mode='eval'):
-        """Solves nonlinear mpc problem to get next action.
+        '''Solves nonlinear mpc problem to get next action.
 
         Args:
             obs (ndarray): Current state/observation.
@@ -796,7 +796,7 @@ class MPCPolicyFunction:
 
         Returns:
             action (ndarray): Input/action to the task/env.
-        """
+        '''
         solver_dict = self.solver_dict
         solver = solver_dict['solver']
         opt_vars_fn = solver_dict['opt_vars_fn']
@@ -862,8 +862,6 @@ class MPCPolicyFunction:
         xus_fn = solver_dict['xus_fn']
         lang_mult_fn = solver_dict['lang_mult_fn_parallel']
         rkkt_fn = solver_dict['rkkt_fn_parallel']
-        traj_step = self.traj_step
-        # goal_states = self.get_references(traj_step, traj_ref)
         if self.mode == 'tracking':
             self.traj_step += 1
 
@@ -1147,11 +1145,11 @@ def update_initial_guess(x_prev, u_prev, sigma_prev, opt_vars_fn):
 
 
 def _create_semi_definite_matrix(n):
-    # U = cs.SX.sym("U", cs.Sparsity.lower(n))
+    # U = cs.SX.sym('U', cs.Sparsity.lower(n))
     # u = cs.vertcat(*U.nonzeros())
-    # W_upper = cs.Function("Lower_tri_W", [u], [U])
+    # W_upper = cs.Function('Lower_tri_W', [u], [U])
     # np = int(n * (n + 1) / 2)
-    # p = cs.MX.sym("p", np)
+    # p = cs.MX.sym('p', np)
     # W = W_upper(p)
     # WW = W.T @ W
 

@@ -1,10 +1,10 @@
-""" The implementation of HPO class using Optuna
+'''The implementation of HPO class using Optuna
 
 Reference:
     * stable baselines3 https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/rl_zoo3/hyperparams_opt.py
     * Optuna: https://optuna.org
+'''
 
-"""
 import os
 
 import matplotlib.pyplot as plt
@@ -17,8 +17,8 @@ from optuna.trial import FrozenTrial, TrialState
 from optuna.visualization.matplotlib import plot_optimization_history, plot_param_importances
 
 from safe_control_gym.hyperparameters.base_hpo import BaseHPO
-from safe_control_gym.hyperparameters.optuna.hpo_optuna_utils import HYPERPARAMS_SAMPLER, get_distributions
 from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
+from safe_control_gym.hyperparameters.optuna.hpo_optuna_utils import HYPERPARAMS_SAMPLER, get_distributions
 
 
 class HPO_Optuna(BaseHPO):
@@ -34,8 +34,7 @@ class HPO_Optuna(BaseHPO):
                  sf_config=None,
                  load_study=False,
                  resume=False):
-        """
-        Hyperparameter Optimization (HPO) class using package Optuna.
+        '''Hyperparameter Optimization (HPO) class using package Optuna.
 
         Args:
             hpo_config: Configuration specific to hyperparameter optimization.
@@ -48,23 +47,22 @@ class HPO_Optuna(BaseHPO):
             sf_config: Safety filter configuration (optional).
             load_study (bool): Load existing study if True.
             resume (bool): Resume trials if True.
-        """
+        '''
         super().__init__(hpo_config, task_config, algo_config, algo, task, output_dir, safety_filter, sf_config, load_study, resume)
         self.setup_problem()
 
     def setup_problem(self):
-        """ Setup hyperparameter optimization, e.g., search space, study, algorithm, etc."""
+        '''Setup hyperparameter optimization, e.g., search space, study, algorithm, etc.'''
 
         # init sampler
         self.sampler = TPESampler(seed=self.hpo_config.seed)
 
     def objective(self, trial: optuna.Trial) -> float:
-        """ The stochastic objective function for a HPO tool to optimize over
+        '''The stochastic objective function for a HPO tool to optimize over
 
-        args:
+        Args:
             trial: A single trial object that contains the hyperparameters to be evaluated
-
-        """
+        '''
 
         # sample candidate hyperparameters
         sampled_hyperparams = HYPERPARAMS_SAMPLER[self.search_space_key](trial, self.state_dim, self.action_dim, self.task, self.algo)
@@ -96,8 +94,7 @@ class HPO_Optuna(BaseHPO):
         return Gss
 
     def hyperparameter_optimization(self) -> None:
-        """ Hyperparameter optimization.
-        """
+        '''Hyperparameter optimization.'''
         if self.load_study:
             if self.resume:
                 dir = os.path.dirname(self.output_dir)
@@ -143,12 +140,11 @@ class HPO_Optuna(BaseHPO):
         return
 
     def warm_start(self, params):
-        """
-        Warm start the study.
+        '''Warm start the study.
 
         Args:
             params (dict): Specified hyperparameters to be evaluated.
-        """
+        '''
         if hasattr(self, 'study'):
             # self.study.enqueue_trial(params, skip_if_exists=True)
             res = self.evaluate(params)
@@ -171,15 +167,11 @@ class HPO_Optuna(BaseHPO):
             self.warmstart_trial_value = res
 
     def resume_trials(self):
-        """
-        Dummy function.
-        """
+        '''Dummy function.'''
         raise NotImplementedError
 
     def checkpoint(self):
-        """
-        Save checkpoints, results, and logs during optimization.
-        """
+        '''Save checkpoints, results, and logs during optimization.'''
         output_dir = os.path.join(self.output_dir, 'hpo')
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -255,9 +247,7 @@ class HPO_Optuna(BaseHPO):
             print('Plotting failed.')
 
     def _value_key(self, trial: FrozenTrial) -> float:
-        """ Returns value of trial object for sorting
-
-        """
+        '''Returns value of trial object for sorting'''
         if trial.value is None:
             if self.hpo_config.direction[0] == 'minimize':
                 return self.objective_bounds[0][1]
@@ -267,9 +257,7 @@ class HPO_Optuna(BaseHPO):
             return trial.value
 
     def _compute_cvar(self, returns: np.ndarray, alpha: float = 0.2) -> float:
-        """ Compute CVaR
-
-        """
+        '''Compute CVaR'''
         assert returns.ndim == 1, 'returns must be 1D array'
         sorted_returns = np.sort(returns)
         n = len(sorted_returns)
@@ -285,7 +273,7 @@ class HPO_Optuna(BaseHPO):
         return CVaR
 
     def _warn_unused_parameter_callback(self, study: optuna.Study, trial: FrozenTrial) -> None:
-        """User-defined callback to warn unused parameters."""
+        '''User-defined callback to warn unused parameters.'''
         fixed_params = trial.system_attrs.get('fixed_params')
         if fixed_params is None:
             return
@@ -294,10 +282,10 @@ class HPO_Optuna(BaseHPO):
             distribution = trial.distributions.get(param_name)
             if distribution is None:
                 # Or you can raise a something exception here.
-                self.logger.info(f"Parameter '{param_name}' is not used at trial {trial.number}.")
+                self.logger.info(f'Parameter "{param_name}" is not used at trial {trial.number}.')
                 continue
 
             param_value_internal_repr = distribution.to_internal_repr(param_value)
             if not distribution._contains(param_value_internal_repr):
                 # Or you can raise a something exception here.
-                self.logger.info(f"Parameter '{param_name}' is not used at trial {trial.number}.")
+                self.logger.info(f'Parameter "{param_name}" is not used at trial {trial.number}.')

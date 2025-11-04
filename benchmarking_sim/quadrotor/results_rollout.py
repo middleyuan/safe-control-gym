@@ -1,9 +1,9 @@
-import numpy as np
 import os
 import sys
-import matplotlib.pyplot as plt
-import munch
 from multiprocessing import Pool
+
+import munch
+
 from benchmarking_sim.quadrotor.benchmark_util.utils import run_rollouts
 
 notebook_dir = os.path.dirname(os.path.abspath('__file__'))
@@ -12,7 +12,6 @@ print('notebook_dir', notebook_dir)
 additional = sys.argv[1]
 algo = sys.argv[2]
 gp_model_tag = sys.argv[3] if len(sys.argv) > 3 else ''
-# parallel = True
 parallel = False
 
 num_seed = 10
@@ -32,7 +31,7 @@ if parallel:
                 'num_seed': 1,
                 'SYS': 'quadrotor_2D_attitude',
                 'gp_model_tag': gp_model_tag,
-                }),)
+            }),)
             )
             for seed in seeds
         ]
@@ -46,8 +45,7 @@ else:
             'eval_task': 'rollout',
             'start_seed': seed,
             'num_seed': 1,
-            # 'SYS': 'quadrotor_3D_attitude',
             'SYS': 'quadrotor_2D_attitude',
             'gp_model_tag': gp_model_tag,
-            })
+        })
         run_rollouts(task_description)

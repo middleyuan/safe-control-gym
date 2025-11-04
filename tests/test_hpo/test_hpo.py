@@ -4,8 +4,8 @@ import sys
 import pytest
 
 from examples.hpo.hpo_experiment import hpo
-from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
+from safe_control_gym.utils.configuration import ConfigFactory
 
 
 @pytest.mark.parametrize('SYS', ['cartpole'])
@@ -178,9 +178,9 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
         assert os.path.exists(TASK_CONFIG_PATH), f'{TASK_CONFIG_PATH} does not exist'
         assert os.path.exists(ALGO_CONFIG_PATH),  f'{ALGO_CONFIG_PATH} does not exist'
         assert os.path.exists(HPO_CONFIG_PATH),  f'{HPO_CONFIG_PATH} does not exist'
-        MPSC_COST='one_step_cost'
-        FILTER=True
-        SF_PEN=0.03
+        MPSC_COST = 'one_step_cost'
+        FILTER = True
+        SF_PEN = 0.03
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', SYS_NAME,
                         '--overrides',
@@ -188,7 +188,7 @@ def test_hpo_quadrotor(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
                             ALGO_CONFIG_PATH,
                             HPO_CONFIG_PATH,
                             SAFETY_FILTER_CONFIG_PATH,
-                        '--kv_overrides', 
+                        '--kv_overrides',
                             f'sf_config.cost_function={MPSC_COST}',
                             'sf_config.soften_constraints=True',
                             f'algo_config.filter_train_actions={FILTER}',

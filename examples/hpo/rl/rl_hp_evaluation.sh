@@ -45,31 +45,28 @@ done
 done
 
 # 20 training unseen seeds that are unseen during hpo (hpo only saw seeds in [0, 10000])
-seeds=(22403 84244 98825 40417 58454 47838 56715 77833 19880 59009 
+seeds=(22403 84244 98825 40417 58454 47838 56715 77833 19880 59009
        47722 81354 63825 13296 10779 98122 86221 89144 35192 24759)
 
 for seed in "${seeds[@]}"; do
+    for hps in "${hp_kind[@]}"; do
+        if [ "$hps" == "default" ]; then
+            hp_path=''
+        elif [ "$hps" == "optimized" ]; then
+            hp_path="${best_hp_file}"
+        fi
 
-for hps in "${hp_kind[@]}"; do
-
-    if [ "$hps" == "default" ]; then
-        hp_path=''
-    elif [ "$hps" == "optimized" ]; then
-        hp_path="${best_hp_file}"
-    fi
-
-    echo "Training in ${hps} config"
-    python ./examples/hpo/hpo_experiment.py \
-        --algo ${algo} \
-        --task "${sys}" \
-        --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
-                    ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
-        --output_dir "${OUTPUT_DIR}" \
-        --opt_hps "${hp_path}" \
-        --n_episodes 10 \
-        --seed "${seed}" \
-        --tag "${hps}" \
-        --use_gpu True
-done
-
+        echo "Training in ${hps} config"
+        python ./examples/hpo/hpo_experiment.py \
+            --algo ${algo} \
+            --task "${sys}" \
+            --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
+                        ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
+            --output_dir "${OUTPUT_DIR}" \
+            --opt_hps "${hp_path}" \
+            --n_episodes 10 \
+            --seed "${seed}" \
+            --tag "${hps}" \
+            --use_gpu True
+    done
 done

@@ -1,6 +1,8 @@
 import os
 from datetime import datetime
+
 import pandas as pd
+
 
 # Function to get the seed folder with the smallest seed number
 def get_smallest_seed_folder(algorithm, package, base_dir):
@@ -12,6 +14,7 @@ def get_smallest_seed_folder(algorithm, package, base_dir):
     smallest_seed_folder = min(seed_numbers, key=lambda x: x[1])[0] if seed_numbers else None
 
     return smallest_seed_folder
+
 
 def get_smallest_and_latest_seed_folder(output_dir):
     dir = os.path.dirname(output_dir)
@@ -38,7 +41,7 @@ def get_smallest_and_latest_seed_folder(output_dir):
     # From the smallest seed folders, find the one with the latest timestamp
     smallest_and_latest_folder = max(
         smallest_seed_folders,
-        key=lambda x: datetime.strptime(x[2], "%b-%d-%H-%M-%S")
+        key=lambda x: datetime.strptime(x[2], '%b-%d-%H-%M-%S')
     )[0]
 
     # combine the seed folder with the base directory
@@ -47,6 +50,8 @@ def get_smallest_and_latest_seed_folder(output_dir):
     return smallest_and_latest_folder
 
 # Function to load trials data from the smallest seed folder
+
+
 def load_trials_data(algorithm, package, base_dir):
     seed_folder = get_smallest_seed_folder(algorithm, package, base_dir)
     if seed_folder:

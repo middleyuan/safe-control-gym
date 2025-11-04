@@ -9,7 +9,8 @@ hpo_config:
   use_gpu: True
   seed: 24
   save_n_best_hps: 1
-  # budget
+
+  # Budget
   trials: 50
   hp_eval_list: ['hps_config']
 
@@ -44,7 +45,7 @@ hpo_config:
     eval_interval: 13200
     eval_save_best: True
     tensorboard: True
-    
+
   # init HPs
   basic_init:
     # model args
@@ -111,9 +112,7 @@ hpo_config:
     eval_interval: 66000
     eval_save_best: True
     tensorboard: True
-  
+
     # objective
     rew_state_weight: [1.,.1,1.,.1,.1,0.001]
     rew_act_weight: [.1, .1]
-
-

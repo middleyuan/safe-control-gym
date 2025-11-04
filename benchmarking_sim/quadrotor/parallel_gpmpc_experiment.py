@@ -1,10 +1,13 @@
 import os
 import sys
-import numpy as np
 from multiprocessing import Pool
+
+import numpy as np
+
 from benchmarking_sim.quadrotor.mb_experiment import run
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+
 
 def run_experiment(seed, algo, gp_tag, additional, control_add=''):
     try:
@@ -21,6 +24,7 @@ def run_experiment(seed, algo, gp_tag, additional, control_add=''):
             f.write(error_message)
         return (seed, None, error_message)  # Return seed, no runtime, and error message
 
+
 if __name__ == '__main__':
     ALGO = sys.argv[1]
     GP_TAG = sys.argv[2] if len(sys.argv) > 2 else 'handtuned'
@@ -32,8 +36,7 @@ if __name__ == '__main__':
     seeds = range(start_seed, start_seed + num_seed)
 
     results = []
-    
-    # parallel = True
+
     parallel = False  # Set to True to run in parallel
     if parallel:
         # Run experiments in parallel

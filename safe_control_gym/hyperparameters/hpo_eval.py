@@ -1,9 +1,10 @@
-"""Evaluation of hyperparameter optimization results."""
+'''Evaluation of hyperparameter optimization results.'''
 
 import numpy as np
 from matplotlib.colors import to_rgba
 
 from safe_control_gym.hyperparameters.base_hpo import BaseHPO
+
 
 class HPOEval(BaseHPO):
 
@@ -57,7 +58,7 @@ class HPOEval(BaseHPO):
             self.plot_results(trajs_data_list, metrics_list, self.output_dir, f'({hp_name})')
 
             trajs_dict[hp_name] = trajs_data_list
-            metrics_dict[hp_name] = metrics_list        
+            metrics_dict[hp_name] = metrics_list
 
         # Remove None values
         trajs_dict = {k: v for k, v in trajs_dict.items() if v is not None}
@@ -66,31 +67,31 @@ class HPOEval(BaseHPO):
         self.plot_results_grid(trajs_dict, metrics_dict, self.output_dir)
 
     def setup_problem(self):
-        """
+        '''
         Dummy function.
-        """
+        '''
         raise NotImplementedError
 
     def warm_start(self, params):
-        """
+        '''
         Dummy function.
-        """
+        '''
         raise NotImplementedError
-    
+
     def resume_trials(self):
-        """
+        '''
         Dummy function.
-        """
+        '''
         raise NotImplementedError
 
     def hyperparameter_optimization(self):
-        """
+        '''
         Dummy function.
-        """
+        '''
         raise NotImplementedError
 
     def checkpoint(self):
-        """
+        '''
         Dummy function.
-        """
+        '''
         raise NotImplementedError

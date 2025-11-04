@@ -1,24 +1,24 @@
-""" Utils for Optuna hyperparameter optimization. """
+'''Utils for Optuna hyperparameter optimization.'''
 
 from typing import Any, Dict
 
 import optuna
 
-from safe_control_gym.hyperparameters.hpo_search_space import (GPMPC_dict, GPMPC_TP_dict, LMPC_dict, MPC_dict, PPO_dict,
-                                                               DPPO_dict, SAC_dict, LQR_dict, iLQR_dict, iLQR_SF_dict,
-                                                               PID_dict, FMPC_dict, is_log_scale)
+from safe_control_gym.hyperparameters.hpo_search_space import (DPPO_dict, FMPC_dict, GPMPC_dict,
+                                                               GPMPC_TP_dict, LMPC_dict, LQR_dict, MPC_dict,
+                                                               PID_dict, PPO_dict, SAC_dict, iLQR_dict,
+                                                               iLQR_SF_dict, is_log_scale)
 
 
 def ppo_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for PPO hyperparameters.
+    '''Sampler for PPO hyperparameters.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-
-    """
+    '''
 
     # TODO: conditional hyperparameters
 
@@ -74,17 +74,17 @@ def ppo_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
 
     return hps_suggestion
 
-def dppo_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for DPPO hyperparameters.
 
-    args:
+def dppo_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for DPPO hyperparameters.
+
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
+    '''
 
-    """
-    
     # model args
     hidden_dim = trial.suggest_categorical('hidden_dim', DPPO_dict['hidden_dim']['values'])
     activation = trial.suggest_categorical('activation', DPPO_dict['activation']['values'])
@@ -140,15 +140,16 @@ def dppo_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str
 
     return hps_suggestion
 
-def sac_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for SAC hyperparameters.
 
-    args:
+def sac_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for SAC hyperparameters.
+
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     # TODO: conditional hyperparameters
 
@@ -198,14 +199,14 @@ def sac_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
 
 
 def gpmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for PPO hyperparameters.
+    '''Sampler for PPO hyperparameters.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     horizon = trial.suggest_categorical('horizon', GPMPC_dict['horizon']['values'])
     kernel = trial.suggest_categorical('kernel', GPMPC_dict['kernel']['values'])
@@ -240,15 +241,16 @@ def gpmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: st
 
     return hps_suggestion
 
-def gpmpc_tp_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for PPO hyperparameters.
 
-    args:
+def gpmpc_tp_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for PPO hyperparameters.
+
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     horizon = trial.suggest_categorical('horizon', GPMPC_TP_dict['horizon']['values'])
     n_ind_points = trial.suggest_categorical('n_ind_points', GPMPC_TP_dict['n_ind_points']['values'])
@@ -283,14 +285,14 @@ def gpmpc_tp_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task:
 
 
 def lmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for LMPC hyperparameters.
+    '''Sampler for LMPC hyperparameters.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     horizon = trial.suggest_categorical('horizon', LMPC_dict['horizon']['values'])
 
@@ -314,14 +316,14 @@ def lmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str
 
 
 def mpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for MPC hyperparameters.
+    '''Sampler for MPC hyperparameters.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     horizon = trial.suggest_categorical('horizon', MPC_dict['horizon']['values'])
 
@@ -343,15 +345,16 @@ def mpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
 
     return hps_suggestion
 
-def fmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for FMPC hyperparameters.
 
-    args:
+def fmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for FMPC hyperparameters.
+
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     horizon = trial.suggest_categorical('horizon', FMPC_dict['horizon']['values'])
 
@@ -379,15 +382,16 @@ def fmpc_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str
 
     return hps_suggestion
 
-def lqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for LQR hyperparameters.
 
-    args:
+def lqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for LQR hyperparameters.
+
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     # cost parameters
     state_weight = [
@@ -408,14 +412,14 @@ def lqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
 
 
 def ilqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for iLQR hyperparameters.
+    '''Sampler for iLQR hyperparameters.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     max_iterations = trial.suggest_categorical('max_iterations', iLQR_dict['max_iterations']['values'])
     lamb_factor = trial.suggest_categorical('lamb_factor', iLQR_dict['lamb_factor']['values'])
@@ -445,14 +449,14 @@ def ilqr_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str
 
 
 def ilqr_sf_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for iLQR hyperparameters with safety filter.
+    '''Sampler for iLQR hyperparameters with safety filter.
 
-    args:
+    Args:
         hps_dict: the dict of hyperparameters that will be optimized over
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
-    """
+    '''
 
     max_iterations = trial.suggest_categorical('max_iterations', iLQR_SF_dict['max_iterations']['values'])
     lamb_factor = trial.suggest_categorical('lamb_factor', iLQR_SF_dict['lamb_factor']['values'])
@@ -499,17 +503,18 @@ def ilqr_sf_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: 
 
     return hps_suggestion
 
-def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
-    """Sampler for PID hyperparameters.
 
-    args:
+def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str = None, algo: str = None) -> Dict[str, Any]:
+    '''Sampler for PID hyperparameters.
+
+    Args:
         trial: budget variable
         state_dim: dimension of the state space
         action_dim: dimension of the action space
         task: task name (e.g., 'quadrotor_2D_attitude')
         algo: algorithm name (e.g., 'pid')
-    """
-    
+    '''
+
     # Determine if this is a 2D attitude task that requires constraint
     is_2d_attitude = (task == 'quadrotor_2D_attitude')
 
@@ -518,19 +523,19 @@ def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
         # For 2D attitude, only sample x and z axes (indices 0 and 2)
         # y-axis (index 1) will be set equal to x-axis by constraint logic
         p_coeff_for = [
-            trial.suggest_float(f'p_coeff_for_0', PID_dict['p_coeff_for']['values'][0], PID_dict['p_coeff_for']['values'][1], log=is_log_scale(PID_dict['p_coeff_for'])),
+            trial.suggest_float('p_coeff_for_0', PID_dict['p_coeff_for']['values'][0], PID_dict['p_coeff_for']['values'][1], log=is_log_scale(PID_dict['p_coeff_for'])),
             0.0,  # Placeholder for y-axis (will be overridden by constraint)
-            trial.suggest_float(f'p_coeff_for_2', PID_dict['p_coeff_for']['values'][0], PID_dict['p_coeff_for']['values'][1], log=is_log_scale(PID_dict['p_coeff_for']))
+            trial.suggest_float('p_coeff_for_2', PID_dict['p_coeff_for']['values'][0], PID_dict['p_coeff_for']['values'][1], log=is_log_scale(PID_dict['p_coeff_for']))
         ]
         i_coeff_for = [
-            trial.suggest_float(f'i_coeff_for_0', PID_dict['i_coeff_for']['values'][0], PID_dict['i_coeff_for']['values'][1], log=is_log_scale(PID_dict['i_coeff_for'])),
+            trial.suggest_float('i_coeff_for_0', PID_dict['i_coeff_for']['values'][0], PID_dict['i_coeff_for']['values'][1], log=is_log_scale(PID_dict['i_coeff_for'])),
             0.0,  # Placeholder for y-axis (will be overridden by constraint)
-            trial.suggest_float(f'i_coeff_for_2', PID_dict['i_coeff_for']['values'][0], PID_dict['i_coeff_for']['values'][1], log=is_log_scale(PID_dict['i_coeff_for']))
+            trial.suggest_float('i_coeff_for_2', PID_dict['i_coeff_for']['values'][0], PID_dict['i_coeff_for']['values'][1], log=is_log_scale(PID_dict['i_coeff_for']))
         ]
         d_coeff_for = [
-            trial.suggest_float(f'd_coeff_for_0', PID_dict['d_coeff_for']['values'][0], PID_dict['d_coeff_for']['values'][1], log=is_log_scale(PID_dict['d_coeff_for'])),
+            trial.suggest_float('d_coeff_for_0', PID_dict['d_coeff_for']['values'][0], PID_dict['d_coeff_for']['values'][1], log=is_log_scale(PID_dict['d_coeff_for'])),
             0.0,  # Placeholder for y-axis (will be overridden by constraint)
-            trial.suggest_float(f'd_coeff_for_2', PID_dict['d_coeff_for']['values'][0], PID_dict['d_coeff_for']['values'][1], log=is_log_scale(PID_dict['d_coeff_for']))
+            trial.suggest_float('d_coeff_for_2', PID_dict['d_coeff_for']['values'][0], PID_dict['d_coeff_for']['values'][1], log=is_log_scale(PID_dict['d_coeff_for']))
         ]
     else:
         # For 3D tasks, sample all three axes independently
@@ -546,21 +551,21 @@ def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
             trial.suggest_float(f'd_coeff_for_{i}', PID_dict['d_coeff_for']['values'][0], PID_dict['d_coeff_for']['values'][1], log=is_log_scale(PID_dict['d_coeff_for']))
             for i in range(3)
         ]
-    
+
     # Only include torque coefficients if they are defined in the search space
     hps_suggestion = {
         'p_coeff_for': p_coeff_for,
         'i_coeff_for': i_coeff_for,
         'd_coeff_for': d_coeff_for,
     }
-    
+
     # Add torque coefficients if they exist in PID_dict
     if 'p_coeff_tor' in PID_dict:
         if is_2d_attitude:
             p_coeff_tor = [
-                trial.suggest_float(f'p_coeff_tor_0', PID_dict['p_coeff_tor']['values'][0], PID_dict['p_coeff_tor']['values'][1], log=is_log_scale(PID_dict['p_coeff_tor'])),
+                trial.suggest_float('p_coeff_tor_0', PID_dict['p_coeff_tor']['values'][0], PID_dict['p_coeff_tor']['values'][1], log=is_log_scale(PID_dict['p_coeff_tor'])),
                 0.0,  # Placeholder for y-axis
-                trial.suggest_float(f'p_coeff_tor_2', PID_dict['p_coeff_tor']['values'][0], PID_dict['p_coeff_tor']['values'][1], log=is_log_scale(PID_dict['p_coeff_tor']))
+                trial.suggest_float('p_coeff_tor_2', PID_dict['p_coeff_tor']['values'][0], PID_dict['p_coeff_tor']['values'][1], log=is_log_scale(PID_dict['p_coeff_tor']))
             ]
         else:
             p_coeff_tor = [
@@ -568,13 +573,13 @@ def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
                 for i in range(3)
             ]
         hps_suggestion['p_coeff_tor'] = p_coeff_tor
-    
+
     if 'i_coeff_tor' in PID_dict:
         if is_2d_attitude:
             i_coeff_tor = [
-                trial.suggest_float(f'i_coeff_tor_0', PID_dict['i_coeff_tor']['values'][0], PID_dict['i_coeff_tor']['values'][1], log=is_log_scale(PID_dict['i_coeff_tor'])),
+                trial.suggest_float('i_coeff_tor_0', PID_dict['i_coeff_tor']['values'][0], PID_dict['i_coeff_tor']['values'][1], log=is_log_scale(PID_dict['i_coeff_tor'])),
                 0.0,  # Placeholder for y-axis
-                trial.suggest_float(f'i_coeff_tor_2', PID_dict['i_coeff_tor']['values'][0], PID_dict['i_coeff_tor']['values'][1], log=is_log_scale(PID_dict['i_coeff_tor']))
+                trial.suggest_float('i_coeff_tor_2', PID_dict['i_coeff_tor']['values'][0], PID_dict['i_coeff_tor']['values'][1], log=is_log_scale(PID_dict['i_coeff_tor']))
             ]
         else:
             i_coeff_tor = [
@@ -582,13 +587,13 @@ def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
                 for i in range(3)
             ]
         hps_suggestion['i_coeff_tor'] = i_coeff_tor
-    
+
     if 'd_coeff_tor' in PID_dict:
         if is_2d_attitude:
             d_coeff_tor = [
-                trial.suggest_float(f'd_coeff_tor_0', PID_dict['d_coeff_tor']['values'][0], PID_dict['d_coeff_tor']['values'][1], log=is_log_scale(PID_dict['d_coeff_tor'])),
+                trial.suggest_float('d_coeff_tor_0', PID_dict['d_coeff_tor']['values'][0], PID_dict['d_coeff_tor']['values'][1], log=is_log_scale(PID_dict['d_coeff_tor'])),
                 0.0,  # Placeholder for y-axis
-                trial.suggest_float(f'd_coeff_tor_2', PID_dict['d_coeff_tor']['values'][0], PID_dict['d_coeff_tor']['values'][1], log=is_log_scale(PID_dict['d_coeff_tor']))
+                trial.suggest_float('d_coeff_tor_2', PID_dict['d_coeff_tor']['values'][0], PID_dict['d_coeff_tor']['values'][1], log=is_log_scale(PID_dict['d_coeff_tor']))
             ]
         else:
             d_coeff_tor = [
@@ -599,8 +604,9 @@ def pid_sampler(trial: optuna.Trial, state_dim: int, action_dim: int, task: str 
 
     return hps_suggestion
 
+
 def get_distributions(hyperparameter_dict, hps_config):
-    """
+    '''
     Generalized function to create a mapping of Optuna distributions based on a hyperparameter dictionary.
 
     Args:
@@ -609,7 +615,7 @@ def get_distributions(hyperparameter_dict, hps_config):
 
     Returns:
         dict: A dictionary mapping hyperparameter names to their respective Optuna distributions.
-    """
+    '''
     distributions = {}
 
     for hp_name, hp_info in hyperparameter_dict.items():
@@ -638,7 +644,7 @@ def get_distributions(hyperparameter_dict, hps_config):
             distributions[hp_name] = optuna.distributions.CategoricalDistribution(hp_values)
         else:
             raise ValueError('Invalid hyperparameter category')
-    
+
     return distributions
 
 

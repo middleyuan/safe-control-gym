@@ -406,20 +406,20 @@ class MPCPolicyFunction:
             self.traj_step = 0
 
     def add_constraints(self, constraints):
-        """Add the constraints (from a list) to the system.
+        '''Add the constraints (from a list) to the system.
 
         Args:
             constraints (list): List of constraints controller is subject too.
-        """
+        '''
         (self.constraints, self.state_constraints_sym,
          self.input_constraints_sym) = reset_constraints(constraints + self.constraints.constraints)
 
     def remove_constraints(self, constraints):
-        """Remove constraints from the current constraint list.
+        '''Remove constraints from the current constraint list.
 
         Args:
             constraints (list): list of constraints to be removed.
-        """
+        '''
         old_constraints_list = self.constraints.constraints
         for constraint in constraints:
             assert constraint in self.constraints.constraints, \
@@ -429,7 +429,7 @@ class MPCPolicyFunction:
             old_constraints_list)
 
     def set_dynamics_func(self):
-        """Updates symbolic dynamics with actual control frequency."""
+        '''Updates symbolic dynamics with actual control frequency.'''
         # self.dynamics_func = rk_discrete(self.model.fc_func,
         #                                  self.model.nx,
         #                                  self.model.nu,
@@ -441,7 +441,7 @@ class MPCPolicyFunction:
                                             self.dt)
 
     def setup_optimizer(self):
-        """Sets up nonlinear optimization problem."""
+        '''Sets up nonlinear optimization problem.'''
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
         etau = 1e-4
@@ -472,7 +472,7 @@ class MPCPolicyFunction:
         Q, th_q, nq = _create_semi_definite_matrix(nx)
         R, th_r, nr = _create_semi_definite_matrix(nu)
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
-        # theta_param = cs.MX.sym("theta_var", nq + nr)
+        # theta_param = cs.MX.sym('theta_var', nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
         # Model
         model_param = cs.MX.sym('f_param', npl)
@@ -556,7 +556,6 @@ class MPCPolicyFunction:
         mu_u = cs.MX.sym('muu', Hu.shape[0])
         mu_x = cs.MX.sym('mux', Hx.shape[0])
         mu_s = cs.MX.sym('mus', Hs.shape[0])
-        mult = cs.vertcat(lamb, mu_u, mu_x, mu_s)
 
         # Build Lagrangian
         lagrangian = (
@@ -624,7 +623,7 @@ class MPCPolicyFunction:
         }
 
     def get_references(self, traj_step=None, traj_ref=None):
-        """Constructs reference states along mpc horizon.(nx, T+1)."""
+        '''Constructs reference states along mpc horizon.(nx, T+1).'''
         if self.env.TASK == Task.STABILIZATION:
             # Repeat goal state for horizon steps.
             goal_states = np.tile(self.env.X_GOAL.reshape(-1, 1), (1, self.T + 1))
@@ -650,7 +649,7 @@ class MPCPolicyFunction:
         return goal_states  # (nx, T+1).
 
     def select_action(self, obs, theta, traj_change, info=None, mode='eval'):
-        """Solves nonlinear mpc problem to get next action.
+        '''Solves nonlinear mpc problem to get next action.
 
         Args:
             obs (ndarray): Current state/observation.
@@ -661,7 +660,7 @@ class MPCPolicyFunction:
 
         Returns:
             action (ndarray): Input/action to the task/env.
-        """
+        '''
         solver_dict = self.solver_dict
         solver = solver_dict['solver']
 
@@ -705,27 +704,14 @@ class MPCPolicyFunction:
         else:
             action = np.array([self.u_prev[0]])
 
-        # test
-        print(obs)
-        mult = soln['lam_g'].full()
-        z = np.concatenate((opt_vars, mult), axis=0)
-        # nabla_pi = solver_dict['dpi_fn'](z, fixed_param, ref_param, theta[:, None]).full()
-        # nabla_pi_ref = nabla_pi[:, :ref_param.shape[0]]
-        # nabla_pi_cost = nabla_pi[:, ref_param.shape[0]:ref_param.shape[0] + cost_param.shape[0]]
-        # nabla_pi_model = nabla_pi[:, ref_param.shape[0] + cost_param.shape[0]:]
-        print(optimal)
-        print(action)
-        # print(nabla_pi_model)
-        p()
-
         # additional info
         info = {
             'success': optimal,
             'soln': deepcopy(soln),
             'fixed_param': deepcopy(fixed_param),
             'ref_param': deepcopy(ref_param),
-            'cost_param': deepcopy(cost_param),
-            'model_param': deepcopy(model_param),
+            # 'cost_param': deepcopy(cost_param),  # Not defined - commented out
+            # 'model_param': deepcopy(model_param),  # Not defined - commented out
             'traj_step': deepcopy(self.traj_step) - 1
         }
         return action, info, results_dict, optimal
@@ -1050,11 +1036,11 @@ def _select_action_train(eval_data):
 
 
 def _create_semi_definite_matrix(n):
-    # U = cs.SX.sym("U", cs.Sparsity.lower(n))
+    # U = cs.SX.sym('U', cs.Sparsity.lower(n))
     # u = cs.vertcat(*U.nonzeros())
-    # W_upper = cs.Function("Lower_tri_W", [u], [U])
+    # W_upper = cs.Function('Lower_tri_W', [u], [U])
     # np = int(n * (n + 1) / 2)
-    # p = cs.MX.sym("p", np)
+    # p = cs.MX.sym('p', np)
     # W = W_upper(p)
     # WW = W.T @ W
 
@@ -1066,13 +1052,13 @@ def _create_semi_definite_matrix(n):
 
 
 def soft_update(source, target, tau):
-    """Synchronizes target networks with exponential moving average."""
+    '''Synchronizes target networks with exponential moving average.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
 
 def hard_update(source, target):
-    """Synchronizes target networks by copying over parameters directly."""
+    '''Synchronizes target networks by copying over parameters directly.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)
 

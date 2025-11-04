@@ -1,8 +1,8 @@
-"""Twin-Delayed DDPG (TD3)
+'''Twin-Delayed DDPG (TD3)
 
 References papers & code:
     * [Addressing Function Approximation Error in Actor-Critic Methods](https://arxiv.org/abs/1802.09477)
-"""
+'''
 
 import os
 import time
@@ -24,7 +24,7 @@ from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_rando
 
 
 class TD3(BaseController):
-    """Twin-delayed DDPG"""
+    '''Twin-delayed DDPG'''
 
     def __init__(self,
                  env_func,
@@ -80,7 +80,7 @@ class TD3(BaseController):
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
     def reset(self):
-        """Prepares for training or testing."""
+        '''Prepares for training or testing.'''
         if self.training:
             # set up stats tracking
             self.env.add_tracker('constraint_violation', 0)
@@ -99,14 +99,14 @@ class TD3(BaseController):
             self.env.add_tracker('mse', 0, mode='queue')
 
     def close(self):
-        """Shuts down and cleans up lingering resources."""
+        '''Shuts down and cleans up lingering resources.'''
         self.env.close()
         if self.training:
             self.eval_env.close()
         self.logger.close()
 
     def save(self, path, save_buffer=False):
-        """Saves model params and experiment state to checkpoint path."""
+        '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
 
@@ -130,7 +130,7 @@ class TD3(BaseController):
         torch.save(state_dict, path)
 
     def load(self, path):
-        """Restores model and experiment given checkpoint path."""
+        '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path, weights_only=False)
 
         # restore params
@@ -149,7 +149,7 @@ class TD3(BaseController):
             self.logger.load(self.total_steps)
 
     def learn(self, env=None, **kwargs):
-        """Performs learning (pre-training, training, fine-tuning, etc.)."""
+        '''Performs learning (pre-training, training, fine-tuning, etc.).'''
         while self.total_steps < self.max_env_steps:
             results = self.train_step()
 
@@ -183,7 +183,7 @@ class TD3(BaseController):
                 self.log_step(results)
 
     def select_action(self, obs, info=None):
-        """Determine the action to take at the current timestep.
+        '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
@@ -191,7 +191,7 @@ class TD3(BaseController):
 
         Returns:
             action (ndarray): The action chosen by the controller.
-        """
+        '''
 
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
@@ -200,7 +200,7 @@ class TD3(BaseController):
         return action
 
     def train_step(self, **kwargs):
-        """Performs a training step."""
+        '''Performs a training step.'''
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         obs = self.obs
@@ -268,7 +268,7 @@ class TD3(BaseController):
         return results
 
     def run(self, env=None, render=False, n_episodes=10, verbose=False, **kwargs):
-        """Runs evaluation with current policy."""
+        '''Runs evaluation with current policy.'''
         self.agent.eval()
         self.obs_normalizer.set_read_only()
         if env is None:
@@ -289,7 +289,7 @@ class TD3(BaseController):
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
             obs, _, done, info = env.step(action)
-            mse.append(info["mse"])
+            mse.append(info['mse'])
             if render:
                 env.render()
                 frames.append(env.render('rgb_array'))
@@ -319,7 +319,7 @@ class TD3(BaseController):
         return eval_results
 
     def log_step(self, results):
-        """Does logging after a training step."""
+        '''Does logging after a training step.'''
         step = results['step']
         # runner stats
         self.logger.add_scalars(

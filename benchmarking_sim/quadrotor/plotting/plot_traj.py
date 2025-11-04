@@ -1,14 +1,13 @@
 import os
 import sys
-
-import munch
-import numpy as np
-import matplotlib.pyplot as plt
-
-from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
-from safe_control_gym.utils.registration import make
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 from benchmarking_sim.quadrotor.benchmark_util.utils import load_gym_data
+from safe_control_gym.utils.configuration import ConfigFactory
+from safe_control_gym.utils.registration import make
 
 # # get the default matplotlib color cycle
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -117,25 +116,25 @@ elif ref_type == 'ilqr':
 mpc_traj_data = load_gym_data(mpc_data)
 ilqr_traj_data = load_gym_data(ilqr_data)
 total_steps = mpc_traj_data['action'].shape[0]
-time_axis = np.arange(0, mpc_traj_data['action'].shape[0]) * 1/60
+time_axis = np.arange(0, mpc_traj_data['action'].shape[0]) * 1 / 60
 
 nx = 6
 nu = 2
 fig, ax = plt.subplots(2, 1, figsize=(8, 6))
-ax[0].plot(X_GOAL[:, 0], X_GOAL[:, 2], 
-      color='k', linestyle=':', label='Figure-8')
+ax[0].plot(X_GOAL[:, 0], X_GOAL[:, 2],
+           color='k', linestyle=':', label='Figure-8')
 ax[0].plot(mpc_traj_data['ref'][:, 0], mpc_traj_data['ref'][:, 2],
-      color='red', linestyle='--', label='Feasible Ref.')
-ax[0].plot(mpc_traj_data['obs'][:, 0], mpc_traj_data['obs'][:, 2], 
-      color=colors[0], label='MPC') 
+           color='red', linestyle='--', label='Feasible Ref.')
+ax[0].plot(mpc_traj_data['obs'][:, 0], mpc_traj_data['obs'][:, 2],
+           color=colors[0], label='MPC')
 ax[0].plot(ilqr_traj_data['obs'][:, 0], ilqr_traj_data['obs'][:, 2],
-      color=colors[1], label='iLQR')
+           color=colors[1], label='iLQR')
 ax[0].set_xlabel('x [m]')
 ax[0].set_ylabel('z [m]')
 ax[0].legend()
 ax[0].set_title(f'Trajectory path x-z \n MPC RMSE {mpc_traj_data["rmse"]:.3f} [m], iLQR RMSE {ilqr_traj_data["rmse"]:.3f} [m]')
 
-# plot tracking error
+# Plot tracking error
 ax[1].plot(time_axis, mpc_traj_data['error'], color=colors[0])
 ax[1].plot(time_axis, ilqr_traj_data['error'], color=colors[1])
 ax[1].set_xlabel('Time [s]')
@@ -145,45 +144,3 @@ fig.tight_layout()
 fig.savefig(os.path.join(script_path, f'{ref_type}_ref_traj_{episode_len}.png'), bbox_inches='tight')
 
 print(f'length sec: {episode_len}, MPC RMSE: {mpc_traj_data["rmse"]:.3f}, iLQR RMSE: {ilqr_traj_data["rmse"]:.3f}')
-# # plot a table
-# time = [int(i) for i in range(9, 16)]
-# rmse_mpc_mpc_ref = [0.047, 0.047, 0.047, 0.047, 0.047, 0.047, 0.047]
-# rmse_ilqr_mpc_ref = [0.047, 0.047, 0.047, 0.047, 0.047, 0.047, 0.047]
-# # mpc_ref = {
-# #     'ilqr': rmse_ilqr_mpc_ref,
-# #     'mpc': rmse_mpc_mpc_ref,
-# # }
-
-# import pandas as pd
-# # ilqr_ref_table
-# df = pd.DataFrame()
-# df['Traj. Time'] = time
-# df['RMSE iLQR'] = rmse_mpc_mpc_ref
-# df['RMSE MPC'] = rmse_ilqr_mpc_ref
-# # table supertitle 'MPC ref'
-
-# df = df.round(3)
-# df.style.set_caption('MPC ref')
-
-# print(df)
-
-
-
-# rmse_mpc_ilqr_ref = [0.047, 0.047, 0.047, 0.047, 0.047, 0.047, 0.047]
-# rmse_ilqr_ilqr_ref = [0.047, 0.047, 0.047, 0.047, 0.047, 0.047, 0.047]
-# # ilqr_ref = {
-# #     'ilqr': rmse_ilqr_ilqr_ref,
-# #     'mpc': rmse_mpc_ilqr_ref,
-# # }
-
-# # Create a table
-# df = pd.DataFrame()
-# df['Traj. Time'] = time
-# df['RMSE iLQR'] = rmse_mpc_ilqr_ref
-# df['RMSE MPC'] = rmse_ilqr_ilqr_ref
-# # table supertitle 'iLQR ref'
-
-# df = df.round(3)
-# df.style.set_caption('iLQR ref')
-
-# print(df)

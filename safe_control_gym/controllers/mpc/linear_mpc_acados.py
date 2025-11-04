@@ -4,16 +4,12 @@ from copy import deepcopy
 import casadi as cs
 import numpy as np
 import scipy
-import matplotlib.pyplot as plt
 from termcolor import colored
 
 from safe_control_gym.controllers.mpc.mpc_acados import MPC_ACADOS
-from safe_control_gym.controllers.mpc.mpc_utils import set_acados_constraint_bound
-from safe_control_gym.utils.utils import timing
-from safe_control_gym.envs.constraints import BoundedConstraint
 
 try:
-    from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
+    from acados_template import AcadosModel, AcadosOcp
 except ImportError as e:
     print(colored(f'Error: {e}', 'red'))
     print(colored('acados not installed, cannot use acados-based controller. Exiting.', 'red'))
@@ -21,6 +17,7 @@ except ImportError as e:
     print(colored('- To set up the acados python interface, follow the instructions at https://docs.acados.org/python_interface/index.html', 'yellow'))
     print()
     exit()
+
 
 class LinearMPC_ACADOS(MPC_ACADOS):
     '''MPC with linear time-invariant (LIT) model.'''
@@ -43,7 +40,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             use_gpu: bool = False,
             seed: int = 0,
             use_RTI: bool = False,
-            compute_initial_guess_method = 'lqr',
+            compute_initial_guess_method='lqr',
             use_lqr_gain_and_terminal_cost: bool = False,
             use_r_term: bool = False,
             **kwargs
@@ -100,23 +97,23 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     def setup_acados_model(self) -> AcadosModel:
         '''Sets up symbolic model for acados.'''
         acados_model = super().setup_acados_model()
-        
+
         # Linear dynamics: Δx_{i,k+1} = A_{i,k}Δx_{i,k} + B_{i,k}Δu_{i,k}
         f_linear = self.linear_dynamics_func(acados_model.x, acados_model.u)
-        
+
         if self.use_r_term:
             # Set up parameters for reference trajectory when using r term
             nx, nu = self.model.nx, self.model.nu
-            
+
             # Parameters: [x_ref_k, u_ref_k, x_ref_k+1]
             # We need both current and next reference states to compute r term
             x_ref_k = cs.MX.sym('x_ref_k', nx)
             u_ref_k = cs.MX.sym('u_ref_k', nu)
             x_ref_k_plus_1 = cs.MX.sym('x_ref_k_plus_1', nx)
-            
+
             # Concatenate all parameters
             acados_model.p = cs.vertcat(x_ref_k, u_ref_k, x_ref_k_plus_1)
-            
+
             # Compute r term: r_i,k = f(x_ref_i,k, u_ref_i,k) - x_ref_i,k+1
             # Use the original nonlinear discrete dynamics
             fc_func = self.model.fc_func
@@ -125,23 +122,23 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             k3 = fc_func(x_ref_k + self.dt / 2 * k2, u_ref_k)
             k4 = fc_func(x_ref_k + self.dt * k3, u_ref_k)
             f_nonlinear_ref = x_ref_k + self.dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-            
+
             # Compute r term: difference between nonlinear dynamics and reference trajectory
             r_term = f_nonlinear_ref - x_ref_k_plus_1
-            
+
             # Complete dynamics with r term: Δx_{i,k+1} = A_{i,k}Δx_{i,k} + B_{i,k}Δu_{i,k} + r_{i,k}
             acados_model.disc_dyn_expr = f_linear + r_term
         else:
             # Standard linear dynamics without r term
             acados_model.disc_dyn_expr = f_linear
-        
+
         return acados_model
 
     def setup_acados_optimizer(self, acados_model: AcadosModel) -> AcadosOcp:
         '''Sets up linearized optimization problem.'''
         # do not use the parent class method for debugging
         # ocp = super().setup_acados_optimizer(acados_model)
-        
+
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
         ny_e = nx
@@ -171,9 +168,9 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         state_constraint_expr_list = []
         input_constraint_expr_list = []
         for sc_i, state_constraint in enumerate(self.state_constraints_sym):
-            state_constraint_expr_list.append(state_constraint(ocp.model.x+self.x_lin))
+            state_constraint_expr_list.append(state_constraint(ocp.model.x + self.x_lin))
         for ic_i, input_constraint in enumerate(self.input_constraints_sym):
-            input_constraint_expr_list.append(input_constraint(ocp.model.u+self.u_lin))
+            input_constraint_expr_list.append(input_constraint(ocp.model.u + self.u_lin))
 
         h_expr_list = state_constraint_expr_list + input_constraint_expr_list
         h_expr = cs.vertcat(*h_expr_list)
@@ -238,7 +235,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
         Returns:
             action (ndarray): Input/action to the task/env.
-        
+
         '''
         nx, nu = self.model.nx, self.model.nu
         # set initial condition (0-th state)
@@ -282,7 +279,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
                 x_ref_k = goal_states[:, idx]  # Current reference state (absolute)
                 u_ref_k = self.U_EQ.reshape(-1)  # Current reference input (absolute)
                 x_ref_k_plus_1 = goal_states[:, idx + 1]  # Next reference state (absolute)
-                
+
                 # Combine parameters: [x_ref_k, u_ref_k, x_ref_k+1]
                 p_values = np.concatenate([x_ref_k, u_ref_k, x_ref_k_plus_1])
                 self.acados_ocp_solver.set(idx, 'p', p_values)
@@ -313,11 +310,6 @@ class LinearMPC_ACADOS(MPC_ACADOS):
             if nu == 1:
                 self.u_prev = self.u_prev.flatten()
 
-            # get the solver status
-            n_sqp_iter = self.acados_ocp_solver.get_stats('sqp_iter')
-            n_qp_iter = self.acados_ocp_solver.get_stats('qp_iter')
-            # print(f'acados returned status {status}. SQP iterations: {n_sqp_iter}. QP iterations: {n_qp_iter}.')
-
         except Exception:
             print(colored('Infeasible MPC Problem', 'red'))
             # get the solver status
@@ -332,7 +324,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         self.results_dict['horizon_states'].append(deepcopy(self.x_prev))
         self.results_dict['horizon_inputs'].append(deepcopy(self.u_prev))
         self.results_dict['goal_states'].append(deepcopy(goal_states))
-        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats("time_tot"))
+        self.results_dict['inference_time'].append(self.acados_ocp_solver.get_stats('time_tot'))
 
         self.prev_action = action
 
@@ -357,7 +349,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
         # recover the action
         action += self.u_lin.flatten()
-        
+
         # self._compute_open_loop_prediction()
         # self.plot_open_loop_prediction()
 
@@ -366,18 +358,17 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
         return action
 
-
     # def _compute_open_loop_prediction(self):
-    #     """
+    #     '''
     #     Compute the open-loop prediction from the current MPC solution.
     #     Stores the prediction in self.open_loop_states and self.open_loop_inputs.
-    #     """
+    #     '''
     #     if self.x_prev is None or self.u_prev is None:
     #         return
-        
+
     #     # Convert delta states/inputs back to absolute states/inputs
     #     self.open_loop_states = self.x_prev + np.repeat(self.x_lin.reshape(-1, 1), self.T + 1, axis=1)
-        
+
     #     if self.model.nu == 1:
     #         # Handle 1D input case
     #         u_prev_reshaped = self.u_prev.reshape(1, -1) if self.u_prev.ndim == 1 else self.u_prev
@@ -385,53 +376,53 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     #     else:
     #         self.open_loop_inputs = self.u_prev + np.repeat(self.u_lin.reshape(-1, 1), self.T, axis=1)
 
-    # def plot_open_loop_prediction(self, fig=None, show_states=True, show_inputs=True, 
+    # def plot_open_loop_prediction(self, fig=None, show_states=True, show_inputs=True,
     #                              state_labels=None, input_labels=None):
-    #     """
+    #     '''
     #     Plot the open-loop prediction from the MPC solution.
-        
+
     #     Args:
     #         fig: matplotlib figure to plot on (creates new if None)
     #         show_states (bool): whether to plot predicted states
-    #         show_inputs (bool): whether to plot predicted inputs  
+    #         show_inputs (bool): whether to plot predicted inputs
     #         state_labels (list): labels for state variables
     #         input_labels (list): labels for input variables
-            
+
     #     Returns:
     #         fig: matplotlib figure object
-    #     """
-        
+    #     '''
+
     #     if not hasattr(self, 'open_loop_states') or self.open_loop_states is None:
-    #         print("No open-loop prediction available yet. Run select_action first.")
+    #         print('No open-loop prediction available yet. Run select_action first.')
     #         return None
-        
+
     #     if fig is None:
     #         fig = plt.figure(figsize=(12, 8))
-        
+
     #     nx, nu = self.model.nx, self.model.nu
     #     time_horizon = np.arange(self.T + 1)
     #     input_time_horizon = np.arange(self.T)
-        
+
     #     # Use environment state labels if none provided
     #     if state_labels is None and hasattr(self.env, 'STATE_LABELS'):
     #         state_labels = self.env.STATE_LABELS
-        
-    #     # Use environment action labels if none provided  
+
+    #     # Use environment action labels if none provided
     #     if input_labels is None and hasattr(self.env, 'ACTION_LABELS'):
     #         input_labels = self.env.ACTION_LABELS
-        
+
     #     # Determine subplot layout
     #     n_plots = 0
     #     if show_states and nx > 0:
     #         n_plots += 1
     #     if show_inputs and nu > 0:
     #         n_plots += 1
-            
+
     #     if n_plots == 0:
     #         return fig
-        
+
     #     plot_idx = 1
-        
+
     #     # Plot states
     #     if show_states and nx > 0:
     #         ax_states = fig.add_subplot(n_plots, 1, plot_idx)
@@ -444,7 +435,7 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     #         ax_states.legend()
     #         ax_states.grid(True)
     #         plot_idx += 1
-        
+
     #     # Plot inputs
     #     if show_inputs and nu > 0:
     #         ax_inputs = fig.add_subplot(n_plots, 1, plot_idx)
@@ -460,9 +451,9 @@ class LinearMPC_ACADOS(MPC_ACADOS):
     #         ax_inputs.set_title('Open-Loop Input Prediction')
     #         ax_inputs.legend()
     #         ax_inputs.grid(True)
-        
+
     #     plt.tight_layout()
     #     # plt.show()
     #     plt.savefig('./linear_mpc_open_loop_prediction.png')
     #     plt.close()
-    #     print("Saved open-loop prediction figure to './linear_mpc_open_loop_prediction.png'")
+    #     print('Saved open-loop prediction figure to './linear_mpc_open_loop_prediction.png'')

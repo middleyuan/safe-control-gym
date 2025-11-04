@@ -13,7 +13,6 @@ task_config:
     init_theta: 0
     init_theta_dot: 0
     init_tau: 0.36
-  # randomized_init: True
   randomized_init: False
   randomized_inertial_prop: False
 

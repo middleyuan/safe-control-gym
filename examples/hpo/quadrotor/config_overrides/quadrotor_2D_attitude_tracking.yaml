@@ -3,7 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
-  # physics: pyb
   quad_type: 4
 
   init_state:
@@ -110,7 +109,7 @@ task_config:
     #     duration: 1
     #     decary_rate: 1
     downwash:
-      - disturbance_func: uniform 
+      - disturbance_func: uniform
         low:  1.
         high: 1.
         mode: fix

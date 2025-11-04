@@ -11,11 +11,7 @@ algo_config:
   r_mpc:
   - 4.562295474416492
   - 1.1669720843270919
-# constraint_tol: 0.05
-# soft_constraints: True
 
   warmstart: True
   soft_constraints: True
   output_dir: ./mpc_acados/results
-
-

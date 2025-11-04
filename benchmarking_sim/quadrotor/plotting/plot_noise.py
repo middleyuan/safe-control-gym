@@ -1,13 +1,11 @@
-import os
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import plot_colors, tag_ctrl_list
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, tag_ctrl_list
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
@@ -16,16 +14,18 @@ print(script_dir)
 output_path = script_dir / 'noise'
 output_path.mkdir(exist_ok=True)
 
+
 def get_key_by_value(d, value):
-    """Return the first key in dict d whose value matches the given value."""
+    '''Return the first key in dict d whose value matches the given value.'''
     for k, v in d.items():
         if v == value:
             return k
     return None
 
+
 max_seed = 10
 metric_name = 'metrics.txt'
-s = 2 # times std
+s = 2  # times std
 
 
 if len(sys.argv) > 1:
@@ -68,7 +68,7 @@ SYS = 'quadrotor_2D_attitude'
 print(f'INFO: controller: {controller}, noise_type: {noise_type}, gp_tag: {gp_tag}, id_type: {id_type}')
 
 assert noise_type in ['obs_noise', 'proc_noise', 'param'], f'noise_type {noise_type} not supported'
-assert controller in ['mpc_acados', 'linear_mpc_acados', 'fmpc',\
+assert controller in ['mpc_acados', 'linear_mpc_acados', 'fmpc',
                       'ilqr', 'lqr', 'pid', 'gpmpc_acados_TP'], f'controller {controller} not supported'
 
 if controller in ['gpmpc_acados_TP']:
@@ -127,7 +127,7 @@ for seed in range(0, max_seed):
         traj_data_list.append(traj_data)
         traj_steps = len(traj_data)
         traj_steps_list.append(traj_steps)
-    
+
     results[repr(seed)]['rmse'] = rmse_list
     results[repr(seed)]['early_stop'] = early_stop_list
     results[repr(seed)]['noise_factor'] = noise_factor_list
@@ -188,18 +188,18 @@ rmse_degradation_std = np.std(rmse_degradation, axis=0)
 # print('rmse_mean', rmse_mean)
 # print('rmse_degradation_mean', rmse_degradation_mean)
 
-# max_noise_factor = 100 
+# max_noise_factor = 100
 # max_noise_factor = 1.5
 # max_noise_facc
-################################## plot rmse ##################################
+# ################################## Plot rmse ##################################
 fig, ax = plt.subplots(figsize=(6, 2))
 controller_name = get_key_by_value(tag_ctrl_list, controller)
-ax.plot(noise_factor, rmse_mean, 
+ax.plot(noise_factor, rmse_mean,
         label='mean', color=plot_colors.get(controller_name, 'tab:blue'))
-ax.fill_between(noise_factor, rmse_mean- s*rmse_std, rmse_mean+ s*rmse_std, 
+ax.fill_between(noise_factor, rmse_mean - s * rmse_std, rmse_mean + s * rmse_std,
                 alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 
-# plot shaded area for the first early stop
+# Plot shaded area for the first early stop
 # ax.axvspan(early_stop_noise_factor, max_noise_factor, color='red', alpha=0.1, label='early stop')
 
 # ax.set_xlim([1, max_noise_factor])
@@ -209,7 +209,7 @@ ax.fill_between(noise_factor, rmse_mean- s*rmse_std, rmse_mean+ s*rmse_std,
 # # append 1 at the beginning
 # noise_ticks = [1] + noise_ticks
 # ax.set_xticks(noise_ticks)
-# plot y line at 0.1
+# Plot y line at 0.1
 ax.axhline(y=0.1, color='gray', linestyle='--', label='RMSE = 0.1')
 ax.legend(ncol=2)
 ax.set_xlabel('Noise amplification factor')
@@ -223,12 +223,12 @@ fig.savefig(output_path / f'{controller}_{noise_type}_rmse.png')
 # plt.savefig(plot_file_name)
 
 
-################################ plot rmse degradation ################################
-fig, ax = plt.subplots(figsize=(6, 2)) 
-ax.plot(noise_factor, rmse_degradation_mean, 
-        label='mean', color=plot_colors.get(controller_name, 'tab:blue')) 
-ax.fill_between(noise_factor, rmse_degradation_mean- s*rmse_degradation_std, 
-                rmse_degradation_mean+ s*rmse_degradation_std, alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
+# ################################ Plot rmse degradation ################################
+fig, ax = plt.subplots(figsize=(6, 2))
+ax.plot(noise_factor, rmse_degradation_mean,
+        label='mean', color=plot_colors.get(controller_name, 'tab:blue'))
+ax.fill_between(noise_factor, rmse_degradation_mean - s * rmse_degradation_std,
+                rmse_degradation_mean + s * rmse_degradation_std, alpha=0.2, label=f'{s} std', color=plot_colors.get(controller_name, 'tab:blue'))
 # ax.set_xlim([0.0, max_noise_factor]) if noise_type == 'param' else ax.set_xlim([1, max_noise_factor])
 # ax.set_ylim([0, 1000])
 # ax.set_ylim([0, 150])

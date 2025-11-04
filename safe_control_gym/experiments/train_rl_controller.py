@@ -1,9 +1,7 @@
 '''Template training/plotting/testing script.'''
 
 import os
-import shutil
 from functools import partial
-import time
 
 import munch
 import yaml

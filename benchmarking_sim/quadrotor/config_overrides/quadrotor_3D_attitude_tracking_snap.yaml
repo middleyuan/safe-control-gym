@@ -4,17 +4,11 @@ task_config:
   pyb_freq: 60
   physics: dyn_si_3d
   quad_type: 6
-  # quad_type: 9
-  # normalized_rl_action_space: False
   init_state:
     init_x: 0
     init_x_dot: 0
     init_z: 1.0
     init_z_dot: 0
-  # obstacle course should be within
-  # x: [-3, 3]
-  # y: [-2, 2]
-  # z: [0, 2.5]
   task: traj_tracking
   task_info:
     trajectory_type: snap_custom
@@ -22,15 +16,6 @@ task_config:
     trajectory_plane: 'xy'
     trajectory_position_offset: [ 0., 0.]
     trajectory_scale: 1.
-    # strings:
-    #   - start: [1.0, 0.0, 1.4]
-    #     end: [1.0, 0.0, 0.05]
-    #   - start: [0.5, -1.0, 1.4]
-    #     end: [0.5, -1.0, 0.05]
-    #   - start: [0.0, 1.5, 1.4]
-    #     end: [0.0, 1.5, 0.05]
-    #   - start: [0.0, 1.5, 1.4]
-    #     end: [0.0, 1.5, 0.05]
 
     waypoints:
       - time: 0
@@ -58,7 +43,6 @@ task_config:
     M: 0.033
 
   episode_len_sec: 11
-  # cost: rl_reward
   cost: quadratic
   constraints:
     - constraint_form: default_constraint

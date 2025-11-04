@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Callable, Tuple, Union
 
 import torch
@@ -13,14 +13,14 @@ eps = torch.finfo(torch.float32).eps
 def reshape_measure_parameters(
         qn: MLP, *params: Union[torch.Tensor, float]
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
-    """Reshapes the parameters of a measure function to match the shape of the quantile network.
+    '''Reshapes the parameters of a measure function to match the shape of the quantile network.
 
     Args:
         qn (Network): The quantile network.
         *params (Union[torch.Tensor, float]): The parameters of the measure function.
     Returns:
         Union[torch.Tensor, Tuple[torch.Tensor, ...]]: The reshaped parameters.
-    """
+    '''
     if not params:
         return qn._tau.to(qn.device), *params
 
@@ -40,13 +40,13 @@ def reshape_measure_parameters(
 
 
 def make_distorted_measure(distorted_tau: torch.Tensor) -> Callable:
-    """Creates a measure function for the distorted expectation under some distortion function.
+    '''Creates a measure function for the distorted expectation under some distortion function.
 
     The distorted expectation for some distortion function g(tau) is given by the integral w.r.t. tau
-    "int_0^1 g'(tau) * F_Z^{-1}(tau) dtau" where g'(tau) is the derivative of g w.r.t. tau and F_Z^{-1} is the inverse
+    'int_0^1 g'(tau) * F_Z^{-1}(tau) dtau' where g'(tau) is the derivative of g w.r.t. tau and F_Z^{-1} is the inverse
     cumulative distribution function of the value distribution.
     See https://arxiv.org/pdf/2004.14547.pdf and https://arxiv.org/pdf/1806.06923.pdf for details.
-    """
+    '''
     distorted_tau = distorted_tau.reshape(-1, distorted_tau.shape[-1])
     distortion = (distorted_tau[:, 1:] - distorted_tau[:, :-1]).squeeze(0)
 
@@ -63,7 +63,7 @@ def make_distorted_measure(distorted_tau: torch.Tensor) -> Callable:
 
 
 def risk_measure_cvar(qn: MLP, beta: float = 1.0) -> Callable:
-    """Conditional value at risk measure.
+    '''Conditional value at risk measure.
 
     TODO: Handle confidence_level being a tensor.
 
@@ -72,7 +72,7 @@ def risk_measure_cvar(qn: MLP, beta: float = 1.0) -> Callable:
         beta (float): Confidence level of the risk measure. Must be between 0 and 1.
     Returns:
         A risk measure function.
-    """
+    '''
     confidence_level = beta
     tau, confidence_level = reshape_measure_parameters(qn, confidence_level)
     distorted_tau = torch.min(tau / confidence_level, torch.ones(*tau.shape).to(tau.device))
@@ -81,13 +81,13 @@ def risk_measure_cvar(qn: MLP, beta: float = 1.0) -> Callable:
 
 
 def risk_measure_neutral(_: MLP) -> Callable:
-    """Neutral risk measure (expected value).
+    '''Neutral risk measure (expected value).
 
     Args:
         _ (QuantileNetwork): Quantile network to compute the risk measure for.
     Returns:
         A risk measure function.
-    """
+    '''
 
     def measure(quantiles):
         values = squeeze_preserve_batch(quantiles.mean(-1))
@@ -97,14 +97,14 @@ def risk_measure_neutral(_: MLP) -> Callable:
 
 
 def risk_measure_percentile(_: MLP, beta: float = 1.0) -> Callable:
-    """Value at risk measure.
+    '''Value at risk measure.
 
     Args:
         _ (QuantileNetwork): Quantile network to compute the risk measure for.
         beta (float): Confidence level of the risk measure. Must be between 0 and 1.
     Returns:
         A risk measure function.
-    """
+    '''
     confidence_level = beta
 
     def measure(quantiles):
@@ -120,7 +120,7 @@ def risk_measure_percentile(_: MLP, beta: float = 1.0) -> Callable:
 
 
 def risk_measure_wang(qn: MLP, beta: Union[float, torch.Tensor] = 0.0) -> Callable:
-    """Wang's risk measure.
+    '''Wang's risk measure.
 
     The risk measure computes the distorted expectation under Wang's risk distortion function
     g(tau) = Phi(Phi^-1(tau) + beta) where Phi and Phi^-1 are the standard normal CDF and its inverse.
@@ -131,7 +131,7 @@ def risk_measure_wang(qn: MLP, beta: Union[float, torch.Tensor] = 0.0) -> Callab
         beta (float): Parameter of the risk distortion function.
     Returns:
         A risk measure function.
-    """
+    '''
     tau, beta = reshape_measure_parameters(qn, beta)
 
     distorted_tau = Normal(0, 1).cdf(Normal(0, 1).icdf(tau) + beta)
@@ -140,7 +140,7 @@ def risk_measure_wang(qn: MLP, beta: Union[float, torch.Tensor] = 0.0) -> Callab
 
 
 def energy_loss(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-    """Computes sample energy loss between predictions and targets.
+    '''Computes sample energy loss between predictions and targets.
 
     The energy loss is computed as 2*E[||X - Y||_2] - E[||X - X'||_2] - E[||Y - Y'||_2], where X, X' and Y, Y' are
     random variables and ||.||_2 is the L2-norm. X, X' are the predictions and Y, Y' are the targets.
@@ -150,7 +150,7 @@ def energy_loss(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tenso
         targets (torch.Tensor): Targets to compare predictions against.
     Returns:
         A torch.Tensor of shape (1,) containing the loss.
-    """
+    '''
     dims = [-1 for _ in range(predictions.dim())]
     prediction_mat = predictions.unsqueeze(-1).expand(*dims, predictions.shape[-1])
     target_mat = targets.unsqueeze(-1).expand(*dims, predictions.shape[-1])
@@ -165,7 +165,7 @@ def energy_loss(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tenso
 
 
 def squeeze_preserve_batch(tensor):
-    """Squeezes a tensor, but preserves the batch dimension"""
+    '''Squeezes a tensor, but preserves the batch dimension'''
     single_batch = tensor.shape[0] == 1
 
     squeezed_tensor = tensor.squeeze()
@@ -250,13 +250,13 @@ class QuantileNetwork(MLP):
         return self._last_quantiles
 
     def make_diracs(self, values: torch.Tensor) -> torch.Tensor:
-        """Generates value distributions that have a single spike at the given values.
+        '''Generates value distributions that have a single spike at the given values.
 
         Args:
             values (torch.Tensor): Values to generate dirac distributions for.
         Returns:
             A torch.Tensor of shape (*values.shape, quantile_count) containing the dirac distributions.
-        """
+        '''
         dirac = values.unsqueeze(-1).expand(*[-1 for _ in range(values.dim())], self._quantile_count)
 
         return dirac
@@ -266,7 +266,7 @@ class QuantileNetwork(MLP):
         return self._quantile_count
 
     def quantiles_to_values(self, quantiles: torch.Tensor, *measure_args) -> torch.Tensor:
-        """Computes values from quantiles.
+        '''Computes values from quantiles.
 
         Args:
             quantiles (torch.Tensor): Quantiles to compute values from.
@@ -274,7 +274,7 @@ class QuantileNetwork(MLP):
                 passed when creating the network.
         Returns:
             A torch.Tensor of shape (1,) containing the values.
-        """
+        '''
         if measure_args:
             values = self._measure_func(self, *[squeeze_preserve_batch(m) for m in measure_args])(quantiles)
         else:
@@ -283,7 +283,7 @@ class QuantileNetwork(MLP):
         return values
 
     def quantile_l1_loss(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Computes quantile-wise l1 loss between predictions and targets.
+        '''Computes quantile-wise l1 loss between predictions and targets.
 
         TODO: This function is a bottleneck.
 
@@ -292,12 +292,12 @@ class QuantileNetwork(MLP):
             targets (torch.Tensor): Targets to compare predictions against.
         Returns:
             A torch.Tensor of shape (1,) containing the loss.
-        """
+        '''
         assert (
-                predictions.dim() == 2 or predictions.dim() == 3
+            predictions.dim() == 2 or predictions.dim() == 3
         ), f'Predictions must be 2D or 3D. Got {predictions.dim()}.'
         assert (
-                predictions.shape == targets.shape
+            predictions.shape == targets.shape
         ), f'The shapes of predictions and targets must match. Got {predictions.shape} and {targets.shape}.'
 
         pre_dims = [-1] if predictions.dim() == 3 else []
@@ -312,7 +312,7 @@ class QuantileNetwork(MLP):
         return loss
 
     def quantile_huber_loss(self, predictions: torch.Tensor, targets: torch.Tensor, kappa: float = 1.0) -> torch.Tensor:
-        """Computes quantile huber loss between predictions and targets.
+        '''Computes quantile huber loss between predictions and targets.
 
         TODO: This function is a bottleneck.
 
@@ -322,7 +322,7 @@ class QuantileNetwork(MLP):
             kappa (float): Defines the interval [-kappa, kappa] around zero where squared loss is used. Defaults to 1.
         Returns:
             A torch.tensor of shape (1,) containing the loss.
-        """
+        '''
         pre_dims = [-1] if predictions.dim() == 3 else []
 
         prediction_mat = predictions.unsqueeze(-3).expand(*pre_dims, self._quantile_count, -1, -1)

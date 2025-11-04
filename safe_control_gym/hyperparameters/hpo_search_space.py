@@ -1,4 +1,4 @@
-"""Defines the hyperparameter search space for each algorithm."""
+'''Defines the hyperparameter search space for each algorithm.'''
 
 from typing import Any, Dict
 
@@ -62,8 +62,8 @@ PPO_SF_dict = {
     'sf_penalty': {'values': [0.001, 10.0], 'scale': 'uniform', 'type': float, 'cat': 'float'},
     # mpc related
     'horizon': {'values': [15, 20, 25, 30, 35, 40, 45, 50], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
-	'slack_cost': {'values': [10.0, 1000.0], 'scale': 'uniform', 'type': float, 'cat': 'float'},
-	'max_w': {'values': [0.0, 0.01], 'scale': 'uniform', 'type': float, 'cat': 'float'}
+    'slack_cost': {'values': [10.0, 1000.0], 'scale': 'uniform', 'type': float, 'cat': 'float'},
+    'max_w': {'values': [0.0, 0.01], 'scale': 'uniform', 'type': float, 'cat': 'float'}
 }
 
 # SAC_dict = {
@@ -129,7 +129,7 @@ DPPO_dict = {
     # 'gamma': {'values': [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
     'gae_lambda': {'values': [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
     'clip_param': {'values': [0.1, 0.2, 0.3, 0.4, 0.5], 'scale': 'uniform', 'type': float, 'cat': 'discrete'},
-    'opt_epochs': {'values': [5, 10, 20, 25,  30, 35], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
+    'opt_epochs': {'values': [5, 10, 20, 25, 30, 35], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     # 'mini_batch_size': {'values': [32, 64, 128, 256], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     # 'max_env_steps': {'values': [30000, 72000, 114000, 156000, 216000, 336000, 456000, 540000, 660000], 'scale': 'uniform', 'type': int, 'cat': 'discrete'},
     'activation': {'values': ['tanh', 'relu', 'leaky_relu'], 'scale': 'uniform', 'type': str, 'cat': 'categorical'},
@@ -247,14 +247,14 @@ HYPERPARAMS_DICT = {
 
 
 def is_log_scale(param: Dict[str, Any]) -> bool:
-    """Check if the hyperparameter log scale.
+    '''Check if the hyperparameter log scale.
 
-    args:
+    Args:
         param (dict): the hyperparameter dictionary
 
-    returns:
+    Returns:
         bool: True if the hyperparameter is log-scaled, False otherwise
 
-    """
+    '''
 
     return param['scale'] == 'log'

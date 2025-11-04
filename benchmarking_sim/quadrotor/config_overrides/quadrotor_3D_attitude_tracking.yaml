@@ -3,8 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
 
-  # physics: dyn_si_3d
-  # quad_type: 6
   physics: dyn_si_3d_delay
   quad_type: 9
 
@@ -16,14 +14,8 @@ task_config:
     init_theta: 0
     init_theta_dot: 0
     init_tau: 0.3626
-    # init_psi: 1.0
-  # randomized_init: True
   randomized_init: False
   randomized_inertial_prop: False
-
-
-# yaw: std: 0.0023822834889102923
-# yaw_rate: std: 0.03123258323211547
 
   task: traj_tracking
   task_info:
@@ -32,19 +24,9 @@ task_config:
     trajectory_plane: 'xy'
     trajectory_position_offset: [0, 0., 1]
     trajectory_scale: 1.0
-    # ilqr_ref: True
-    # ilqr_traj_data: /home/mingxuan/Repositories/scg_tsung/examples/lqr/ilqr_ref_traj.npy
 
   inertial_prop:
     M: 0.037
-  #   Iyy: 1.4e-05
-  #   beta_1: 18.11
-  #   beta_2: 3.68
-  #   beta_3: 0.0
-  #   alpha_1: -140.8
-  #   alpha_2: -13.4
-  #   alpha_3: 124.8
-  #   pitch_bias: 0.0 # in radian
 
   episode_len_sec: 7
   cost: quadratic
@@ -57,19 +39,3 @@ task_config:
 
   done_on_out_of_bound: True
   done_on_violation: False
-  # disturbances:
-    # dynamics: # disturbance force in newton
-    #   - disturbance_func: uniform
-    #     low:  1.
-    #     high: 1.
-    #     mask: [1, 0, 0, 0]
-    # observation:
-    #   - disturbance_func: white_noise
-    #     std: [5.6e-05, 1.5e-02, 
-    #           5.6e-05, 1.5e-02,
-    #           2.9e-05, 8.0e-03,
-    #           1.3e-03, 1.3e-03, 
-    #           3.5e-03, 3.5e-03]
-    # dynamics:
-    #   - disturbance_func: white_noise
-    #     std: 0.05

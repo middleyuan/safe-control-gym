@@ -1,9 +1,6 @@
-
 import os
-import sys
-import yaml
-import munch
 import pickle
+import sys
 from collections import defaultdict
 from functools import partial
 
@@ -12,15 +9,15 @@ import numpy as np
 from matplotlib.ticker import FormatStrFormatter
 
 from safe_control_gym.envs.benchmark_env import Task
+from safe_control_gym.envs.gym_control.cartpole import CartPole
 from safe_control_gym.experiments.base_experiment import BaseExperiment
-from safe_control_gym.experiments.epoch_experiments import EpochExperiment
 from safe_control_gym.utils.configuration import ConfigFactory
+from safe_control_gym.utils.gpmpc_plotting import make_plots
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import mkdirs, set_dir_from_config
-from safe_control_gym.envs.gym_control.cartpole import CartPole
-from safe_control_gym.utils.gpmpc_plotting import make_plots
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+
 
 def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
     '''The main function running experiments for model-based methods.
@@ -41,42 +38,41 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
     # PRIOR = '100'
     agent = 'quadrotor' if SYS == 'quadrotor_2D' or SYS == 'quadrotor_2D_attitude' else SYS
     # SAFETY_FILTER = None
-    SAFETY_FILTER='linear_mpsc'
+    SAFETY_FILTER = 'linear_mpsc'
 
-    
-    # check if the config file exists
+    # Check if the config file exists
     assert os.path.exists(f'./config_overrides/{SYS}_{TASK}.yaml'), f'./config_overrides/{SYS}_{TASK}.yaml does not exist'
     assert os.path.exists(f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml'), f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
     if SAFETY_FILTER is None:
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', agent,
                         '--overrides',
-                            f'./config_overrides/{SYS}_{TASK}.yaml',
-                            f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
+                        f'./config_overrides/{SYS}_{TASK}.yaml',
+                        f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
                         '--seed', '2',
                         '--use_gpu', 'True',
                         '--output_dir', f'./{ALGO}/results',
-                            ]
+                        ]
     else:
-        MPSC_COST='one_step_cost'
+        MPSC_COST = 'one_step_cost'
         assert ALGO != 'gp_mpc', 'Safety filter is not supported for gp_mpc'
         assert os.path.exists(f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml'), f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml does not exist'
         sys.argv[1:] = ['--algo', ALGO,
                         '--task', agent,
                         '--safety_filter', SAFETY_FILTER,
                         '--overrides',
-                            f'./config_overrides/{SYS}_{TASK}.yaml',
-                            f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
-                            f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml',
+                        f'./config_overrides/{SYS}_{TASK}.yaml',
+                        f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
+                        f'./config_overrides/{SAFETY_FILTER}_{SYS}_{TASK}_{PRIOR}.yaml',
                         '--kv_overrides', f'sf_config.cost_function={MPSC_COST}',
                         '--seed', '2',
                         '--use_gpu', 'True',
                         '--output_dir', f'./{ALGO}/results',
-                            ]
+                        ]
     fac = ConfigFactory()
     fac.add_argument('--func', type=str, default='train', help='main function to run.')
     fac.add_argument('--n_episodes', type=int, default=1, help='number of episodes to run.')
-    # merge config and create output directory
+    # Merge config and create output directory
     config = fac.merge()
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
@@ -96,17 +92,17 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
                 seed=config.seed,
                 **config.algo_config
                 )
-    
+
     # Setup safety filter
     if SAFETY_FILTER is not None:
         env_func_filter = partial(make,
-                                config.task,
-                                seed=config.seed,
-                                **config.task_config)
+                                  config.task,
+                                  seed=config.seed,
+                                  **config.task_config)
         safety_filter = make(config.safety_filter,
-                            env_func_filter,
-                            seed=config.seed,
-                            **config.sf_config)
+                             env_func_filter,
+                             seed=config.seed,
+                             **config.sf_config)
         safety_filter.reset()
 
     all_trajs = defaultdict(list)
@@ -122,18 +118,18 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
 
         # Create experiment, train, and run evaluation
         if SAFETY_FILTER is None:
-            if ALGO in ['gpmpc_acados', 'gp_mpc'] :
+            if ALGO in ['gpmpc_acados', 'gp_mpc']:
                 experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
                 if config.algo_config.num_epochs == 1:
                     print('Evaluating prior controller')
                 elif config.algo_config.gp_model_path is not None:
                     ctrl.load(config.algo_config.gp_model_path)
                 else:
-                    # manually launch training 
+                    # Manually launch training
                     # (NOTE: not using launch_training method since calling plotting before eval will break the eval)
                     experiment.reset()
                     train_runs, test_runs = ctrl.learn(env=static_train_env)
-            else:   
+            else:
                 experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
                 experiment.launch_training()
         else:
@@ -148,16 +144,16 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
         else:
             trajs_data, _ = experiment.run_evaluation(training=True, n_steps=n_steps)
 
-        # plotting training and evaluation results
-        # training
+        # Plotting training and evaluation results
+        # Training
         if ALGO in ['gpmpc_acados', 'gp_mpc'] and \
            config.algo_config.gp_model_path is None and \
            config.algo_config.num_epochs > 1:
             if isinstance(static_env, CartPole):
-                make_plots(test_runs=test_runs, 
-                        train_runs=train_runs, 
-                            dir=ctrl.output_dir)
-        # evaluation
+                make_plots(test_runs=test_runs,
+                           train_runs=train_runs,
+                           dir=ctrl.output_dir)
+        # Evaluation
         plot_eval(trajs_data['obs'][0], trajs_data['action'][0], ctrl.env, config.output_dir)
 
         # Close environments
@@ -168,21 +164,6 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=False):
         for key, value in trajs_data.items():
             all_trajs[key] += value
 
-    # # calculate the cost of the trajectory
-    # if ALGO in ['ilqr', 'lqr']:
-    #     Q = np.diag(config.algo_config.q_lqr)
-    #     R = np.diag(config.algo_config.r_lqr)
-    # else:
-    #     Q = np.diag(config.algo_config.q_mpc)
-    #     R = np.diag(config.algo_config.r_mpc)
-    # cost = 0
-    # for i in range(len(all_trajs['obs'][0])-1):
-    #     obs = all_trajs['obs'][0][i]
-    #     action = all_trajs['action'][0][i]
-    #     cost += obs.T @ Q @ obs + action.T @ R @ action
-    # cost += all_trajs['obs'][0][-1].T @ Q @ all_trajs['obs'][0][-1]
-    # print(f'Total cost of the trajectory: {cost}')
-    
     ctrl.close()
     random_env.close()
     metrics = experiment.compute_metrics(all_trajs)
@@ -245,7 +226,6 @@ def plot_eval(state_stack, input_stack, env, save_path=None):
 
     if save_path is not None:
         plt.savefig(os.path.join(save_path, 'input_trajectories.png'))
-
 
 
 def wrap2pi_vec(angle_vec):

@@ -21,11 +21,6 @@ else
     SYS_NAME='quadrotor'
 fi
 
-# Removed the temporary data used to train the new unsafe model.
-# rm -r -f ./${ALGO}_data_2/
-
-
-
 # Train the unsafe controller/agent.
 python ./hpo_experiment.py \
                     --algo ${ALGO} \
@@ -37,6 +32,3 @@ python ./hpo_experiment.py \
                     --opt_hps ./rl/${ALGO}/config_overrides/${SYS}/optimized_hyperparameters.yaml \
                     --task ${SYS} --seed 2 \
                     --use_gpu True
-
-# Removed the temporary data used to train the new unsafe model.
-#rm -r -f ./unsafe_rl_temp_data/

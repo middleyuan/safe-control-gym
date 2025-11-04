@@ -1,19 +1,19 @@
-""" The implementation of HPO class using Vizier
+'''The implementation of HPO class using Vizier
 
 Reference:
     * https://oss-vizier.readthedocs.io/en/latest/
     * https://arxiv.org/pdf/0912.3995
-
-"""
+'''
 
 import csv
+import json
 import os
 import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import yaml, json
+import yaml
 from vizier.service import clients
 from vizier.service import pyvizier as vz
 from vizier.service import servers
@@ -36,8 +36,7 @@ class HPO_Vizier(BaseHPO):
                  sf_config=None,
                  load_study=False,
                  resume=False):
-        """
-        Hyperparameter Optimization (HPO) class using package Vizier.
+        '''Hyperparameter Optimization (HPO) class using package Vizier.
 
         Args:
             hpo_config: Configuration specific to hyperparameter optimization.
@@ -50,14 +49,14 @@ class HPO_Vizier(BaseHPO):
             sf_config: Safety filter configuration (optional).
             load_study (bool): Load existing study if True.
             resume (bool): if resume from a trial file.
-        """
+        '''
         super().__init__(hpo_config, task_config, algo_config, algo, task, output_dir, safety_filter, sf_config, load_study, resume)
 
         self.client_id = f'client_{os.getpid()}'  # use process id as client id
         self.setup_problem()
 
     def setup_problem(self):
-        """ Setup hyperparameter optimization, e.g., search space, study, algorithm, etc. """
+        '''Setup hyperparameter optimization, e.g., search space, study, algorithm, etc.'''
 
         # define the problem statement
         self.problem = vz.ProblemStatement()
@@ -120,8 +119,7 @@ class HPO_Vizier(BaseHPO):
                 raise ValueError('Invalid direction, must be either maximize or minimize')
 
     def hyperparameter_optimization(self) -> None:
-        """ Hyperparameter optimization.
-        """
+        '''Hyperparameter optimization.'''
         if self.load_study:
             # try to load the study from the endpoint file periodically
             while not os.path.exists(f'{self.study_name}_vizier_endpoint.yaml'):
@@ -205,12 +203,11 @@ class HPO_Vizier(BaseHPO):
         self.logger.close()
 
     def warm_start(self, params):
-        """
-        Warm start the study.
+        '''Warmstart the study.
 
         Args:
             params (dict): Specified hyperparameters to be evaluated.
-        """
+        '''
         if hasattr(self, 'study_client'):
             res = self.evaluate(params, seed_list=[num for num in range(self.hpo_config.repetitions)])
             if res != self.none_handler():
@@ -228,15 +225,13 @@ class HPO_Vizier(BaseHPO):
             self.warmstart_trial_value = res
 
     def resume_trials(self):
-        """
-        Resume trials from a trial file.
-        """
+        '''Resume trials from a trial file.'''
         def helper(s):
             try:
-                return json.loads(s)  
-            except:
+                return json.loads(s)
+            except Exception:
                 return float(s)
-        # get previous and lastest seed folder
+        # Get previous and lastest seed folder
         try:
             folder_path = get_smallest_and_latest_seed_folder(self.output_dir)
             csv_file = os.path.join(folder_path, 'hpo', 'trials.csv')
@@ -250,126 +245,125 @@ class HPO_Vizier(BaseHPO):
                 self.study_client._add_trial(trial)
                 self.logger.info(f'Resume trial {i} with hyperparameters: {params}')
                 self.logger.info(f'Returns: {objective_values}')
-        except:
+        except Exception:
             self.logger.info('No trial file found to resume')
 
     def checkpoint(self):
-        """
-        Save checkpoints, results, and logs during hyperparameter optimization.
+        '''Save checkpoints, results, and logs during hyperparameter optimization.
         Supports logging and visualizing multiple optimization objectives.
-        """
+        '''
         output_dir = os.path.join(self.output_dir, 'hpo')
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        
+
         # Save warmstart trial value if exists
         if hasattr(self, 'warmstart_trial_value'):
             with open(f'{output_dir}/warmstart_trial_value.txt', 'w') as f:
                 f.write(str(self.warmstart_trial_value))
-        
+
         # Filter completed trials
         completed_trial_filter = vz.TrialFilter(status=[vz.TrialStatus.COMPLETED])
         all_trials = [tc.materialize() for tc in self.study_client.trials(trial_filter=completed_trial_filter)]
-        
+
         try:
             # Handle optimal trials for hyperparameter optimization
             optimal_trials = list(self.study_client.optimal_trials())
-            
+
             # Save hyperparameters for each optimal trial
             for optimal_trial in optimal_trials:
                 optimal_trial = optimal_trial.materialize()
-                
+
                 # Extract parameters
                 params = {key: val.value for key, val in optimal_trial.parameters._items.items()}
                 params = self.post_process_best_hyperparams(params)
                 params = self.add_unoptimized_hps(params)
                 params = self.apply_constraints_to_params(params)  # Apply constraints for accurate logging
-                
+
                 # Create filename with multiple objective values
                 objective_values = [
-                    f"{objective}_{optimal_trial.final_measurement.metrics[objective].value:.4f}"
+                    f'{objective}_{optimal_trial.final_measurement.metrics[objective].value:.4f}'
                     for objective in self.hpo_config.objective
                 ]
                 filename = f'{output_dir}/hyperparameters_trial{optimal_trial.id}_' + '_'.join(objective_values) + '.yaml'
-                
+
                 with open(filename, 'w') as f:
                     yaml.dump(params, f, default_flow_style=False)
-        
+
         except Exception as e:
             print(e)
             print('Saving hyperparameters failed')
-        
+
         try:
             # Visualization for hyperparameter optimization
             plt.figure(figsize=(12, 5))
-            
+
             # Create subplots for each objective
             num_objectives = len(self.hpo_config.objective)
             for obj_idx, objective in enumerate(self.hpo_config.objective, 1):
                 plt.subplot(1, num_objectives, obj_idx)
-                
+
                 # Scatter plot of trials for this objective
                 trial_i = [t.id - 1 for t in all_trials]
                 trial_ys = [t.final_measurement.metrics[objective].value for t in all_trials]
                 plt.scatter(trial_i, trial_ys, label='trials', marker='o', color='blue')
-                
+
                 if num_objectives == 1:
                     # Mark optimal trials
                     optimal_trial_i = [t.id - 1 for t in optimal_trials]
                     optimal_trial_ys = [t.final_measurement.metrics[objective].value for t in optimal_trials]
                     plt.scatter(optimal_trial_i, optimal_trial_ys, label='optimal', marker='x', color='green', s=100)
-                
+
                 plt.title(f'Optimization History: {objective}')
                 plt.xlabel('Trial')
                 plt.ylabel(f'{objective} Value')
                 plt.legend()
-            
+
             plt.tight_layout()
             plt.savefig(output_dir + '/optimization_history.png')
             plt.close()
-            
+
             # Collect trial data for CSV
             trial_data = []
             parameter_keys = set()
-            
+
             for t in all_trials:
                 trial_number = t.id - 1
                 # Collect all objective values
                 trial_objective_values = {
-                    objective: t.final_measurement.metrics[objective].value 
+                    objective: t.final_measurement.metrics[objective].value
                     for objective in self.hpo_config.objective
                 }
-                
+
                 # Extract parameters for each trial
                 trial_params = {key: val.value for key, val in t.parameters._items.items()}
                 trial_params = self.post_process_best_hyperparams(trial_params)
                 trial_params = self.add_unoptimized_hps(trial_params)
                 trial_params = self.apply_constraints_to_params(trial_params)  # Apply constraints for accurate logging
                 parameter_keys.update(trial_params.keys())
-                
+
                 trial_data.append((trial_number, trial_objective_values, trial_params))
-            
+
             # Convert set to sorted list for consistent CSV header
             parameter_keys = sorted(list(parameter_keys))
-            
+
             # Save to CSV file
             csv_file = 'trials.csv'
             with open(output_dir + '/' + csv_file, mode='w', newline='') as file:
                 writer = csv.writer(file)
-                
+
                 # Create header: number, objective values, then parameters
                 header = ['number'] + self.hpo_config.objective + parameter_keys
                 writer.writerow(header)
-                
+
                 # Write trial data
                 for trial_number, objective_values, trial_params in trial_data:
                     # Ensure objectives and parameters are in consistent order
                     row_values = [trial_number]
                     row_values.extend([objective_values.get(obj, '') for obj in self.hpo_config.objective])
                     row_values.extend([json.dumps(trial_params.get(key, '')) for key in parameter_keys])
-                    
+
                     writer.writerow(row_values)
-        
+
         except Exception as e:
             print(e)
             print('Saving hyperparameter optimization history failed')

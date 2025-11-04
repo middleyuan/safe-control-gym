@@ -14,4 +14,3 @@ algo_config:
   lamb_factor: 10
   lamb_max: 1000
   epsilon: 0.01
-

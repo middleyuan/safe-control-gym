@@ -129,16 +129,16 @@ class iLQR(BaseController):
 
         if env is None:
             env = self.env
-            
+
         # Set Q and R matrices
         env.Q, env.R = self.Q, self.R
         env.rew_state_weight, env.rew_act_weight = np.diag(self.Q), np.diag(self.R)
-        
+
         # Also set in the underlying environment if it exists
         if hasattr(env, 'env'):
             env.env.Q, env.env.R = self.Q, self.R
             env.env.rew_state_weight, env.env.rew_act_weight = np.diag(self.Q), np.diag(self.R)
-        
+
         # Initialize step size
         self.lamb = 1.0
 
@@ -185,7 +185,7 @@ class iLQR(BaseController):
             if self.ite_counter == 0 and \
                env.done_on_out_of_bound and \
                self.final_info['out_of_bounds'] and \
-               self.warm_start_traj is None:    
+               self.warm_start_traj is None:
                 print(colored('[ERROR] The initial policy might be unstable. Break from iLQR updates.', 'red'))
                 break
 
@@ -451,18 +451,18 @@ class iLQR(BaseController):
     def reset(self):
         '''Prepares for evaluation.'''
         self.env.reset()
-        
+
         # Ensure cost parameters are consistent
         self.env.rew_state_weight = np.diag(self.Q)
         self.env.rew_act_weight = np.diag(self.R)
         self.env.Q, self.env.R = self.Q, self.R
-        
+
         # Also set in the underlying environment if it exists
         if hasattr(self.env, 'env'):
             self.env.env.rew_state_weight = np.diag(self.Q)
             self.env.env.rew_act_weight = np.diag(self.R)
             self.env.env.Q, self.env.env.R = self.Q, self.R
-        
+
         self.ite_counter = 0
         self.traj_step = 0
 

@@ -1,46 +1,46 @@
 '''Base hyerparameter optimization class.'''
 
 
+import colorsys
 import os
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from functools import partial
 
-import numpy as np
 import matplotlib.pyplot as plt
-import colorsys
+import numpy as np
 
 from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.hyperparameters.hpo_search_space import HYPERPARAMS_DICT
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.logging import ExperimentLogger
 from safe_control_gym.utils.registration import make
-from safe_control_gym.utils.utils import mkdirs
+
 
 def interpolate_color(base_hex, light_hex, num_seeds, max_seeds):
     # Convert HEX to RGB
     def hex_to_rgb(hex_color):
         hex_color = hex_color.lstrip('#')
-        return tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
-    
+        return tuple(int(hex_color[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
     # Convert RGB to HEX
     def rgb_to_hex(rgb):
         return '#' + ''.join(f'{int(c * 255):02x}' for c in rgb)
-    
+
     # Convert RGB to HLS
     base_rgb = hex_to_rgb(base_hex)
     light_rgb = hex_to_rgb(light_hex)
     base_hls = colorsys.rgb_to_hls(*base_rgb)
     light_hls = colorsys.rgb_to_hls(*light_rgb)
-    
+
     # Interpolate lightness
     ratio = min(num_seeds / max_seeds, 1.0)  # Clamp to [0, 1]
     interpolated_lightness = base_hls[1] + (light_hls[1] - base_hls[1]) * ratio
-    
+
     # Keep hue and saturation constant, change lightness
     interpolated_hls = (base_hls[0], interpolated_lightness, base_hls[2])
     interpolated_rgb = colorsys.hls_to_rgb(*interpolated_hls)
-    
+
     return rgb_to_hex(interpolated_rgb)
 
 
@@ -57,7 +57,7 @@ class BaseHPO(ABC):
                  sf_config=None,
                  load_study=False,
                  resume=False):
-        """
+        '''
         Base class for Hyperparameter Optimization (HPO).
 
         Args:
@@ -71,7 +71,7 @@ class BaseHPO(ABC):
             sf_config: Safety filter configuration (optional).
             load_study (bool): Load existing study if True.
             resume (bool): Resume existing trials if True.
-        """
+        '''
         self.algo = algo
         self.task = task
         self.output_dir = output_dir
@@ -114,19 +114,21 @@ class BaseHPO(ABC):
         assert len(hpo_config.objective) == len(hpo_config.direction), 'objective and direction must have the same length'
 
     def append_hps_config(self):
-        """
+        '''
         Append hyperparameters (self.hps_config) if safety filter is not None.
 
-        """
+        '''
         if self.safety_filter is not None:
             for hp in HYPERPARAMS_DICT[self.search_space_key]:
                 if hp in self.sf_config:
                     self.hps_config[hp] = self.sf_config[hp]
 
     def remove_umoptimized_hps(self, params):
-        ''' Remove unoptimized hyperparameters from the sampled hyperparameters (one may wants to speficify hps in self.hps_config
-            but does not want them to be optimized).'''
-        
+        '''Remove unoptimized hyperparameters from the sampled hyperparameters
+           (one may wants to speficify hps in self.hps_config but does not
+           want them to be optimized).
+        '''
+
         for hp in list(params.keys()):
             # Handle multidimensional hyperparameters (e.g., q_mpc_0, q_mpc_1)
             base_param, index_str = hp.rsplit('_', 1) if '_' in hp else (hp, '')
@@ -138,9 +140,9 @@ class BaseHPO(ABC):
                     del params[hp]
 
         return params
-    
+
     def add_unoptimized_hps(self, params):
-        ''' Add unoptimized hyperparameters to the sampled hyperparameters for saving purposes.'''
+        '''Add unoptimized hyperparameters to the sampled hyperparameters for saving purposes.'''
 
         for hp in self.hps_config:
             if hp not in params:
@@ -149,7 +151,7 @@ class BaseHPO(ABC):
         return params
 
     def special_handle(self, param_name, param_value):
-        """
+        '''
         Special handling for specific hyperparameters, e.g., learning_rate and optimization_iterations, which
         have list types in configs but only one DoF in the search space. Special handling can be added here in
         the future if needed.
@@ -161,7 +163,7 @@ class BaseHPO(ABC):
         Returns:
             Valid (bool): True if the hyperparameter is valid, False otherwise.
             param_value (Any): If valid, sampled value of the hyperparameter cast to the appropriate type based on self.hps_config.
-        """
+        '''
 
         # special cases: learning_rate and optimization_iterations for gp_mpc
         valid = False
@@ -176,9 +178,9 @@ class BaseHPO(ABC):
         return valid, param_value
 
     def check_hyperparmeter_config(self):
-        """
+        '''
         Check if the hyperparameter configuration (self.hps_config) is valid, e.g., if types match what defined in hpo_search_space.py.
-        """
+        '''
         valid = True
         for param in self.hps_config:
             if param in HYPERPARAMS_DICT[self.search_space_key]:
@@ -189,32 +191,32 @@ class BaseHPO(ABC):
 
     @abstractmethod
     def setup_problem(self):
-        """
+        '''
         Setup hyperparameter optimization, e.g., search space, study, algorithm, etc.
         Needs to be implemented by subclasses.
-        """
+        '''
         raise NotImplementedError
 
     @abstractmethod
     def warm_start(self, params):
-        """
+        '''
         Warm start the study.
 
         Args:
             params (dict): Specified hyperparameters.
             objective (float): Objective value.
-        """
+        '''
         raise NotImplementedError
-    
+
     @abstractmethod
     def resume_trials(self):
-        """
+        '''
         Resume existing trials.
-        """
+        '''
         raise NotImplementedError
 
     def cast_to_original_type_from_config(self, param_name, param_value):
-        """
+        '''
         Cast the parameter to its original type based on the existing task, algo, or safty filter config.
 
         Args:
@@ -223,7 +225,7 @@ class BaseHPO(ABC):
 
         Returns:
             Any: The parameter value cast to the appropriate type.
-        """
+        '''
         # Check if the parameter exists in task_config, algo_config, or sf_config
         if param_name in self.task_config:
             current_value = self.task_config[param_name]
@@ -243,7 +245,7 @@ class BaseHPO(ABC):
             return type(current_value)(param_value)
 
     def cast_to_original_type_from_hyperparams_dict(self, param_name, param_value):
-        """
+        '''
         Cast the parameter to its original type based on HYPERPARAMS_DICT.
 
         Args:
@@ -252,23 +254,23 @@ class BaseHPO(ABC):
 
         Returns:
             Any: The parameter value cast to the appropriate type.
-        """
+        '''
         return HYPERPARAMS_DICT[self.search_space_key][param_name]['type'](param_value)
 
     def param_to_config(self, params):
-        """
+        '''
         Convert sampled hyperparameters to configurations (self.task_config, self.algo_config, and self.sf_config).
 
         Args:
             params (dict): Sampled hyperparameters.
 
-        """
+        '''
         # Special handling for iLQR: set reward weights to match LQR weights
         if self.algo == 'ilqr':
             # Look for q_lqr and r_lqr parameters (either single values or multi-dimensional)
             q_lqr_params = {}
             r_lqr_params = {}
-            
+
             for param_name, param_value in params.items():
                 if param_name.startswith('q_lqr_'):
                     # Multi-dimensional parameter (e.g., q_lqr_0, q_lqr_1)
@@ -282,7 +284,7 @@ class BaseHPO(ABC):
                     if index_str.isdigit():
                         index = int(index_str)
                         r_lqr_params[index] = param_value
-            
+
             # Set task reward weights to match LQR weights
             if q_lqr_params:
                 if hasattr(self.task_config, 'rew_state_weight'):
@@ -304,16 +306,17 @@ class BaseHPO(ABC):
                 if (base_param in self.algo_config or base_param in self.task_config or (self.safety_filter is not None and base_param in self.sf_config)):
                     # If base parameter exists in algo_config as a list/array
                     index = int(index_str)
-                    
+
                     # Special handling for PID 2D constraint before setting the parameter
-                    if (self.algo == 'pid' and self.task == 'quadrotor_2D_attitude' and 
-                        base_param in ['p_coeff_for', 'i_coeff_for', 'd_coeff_for', 'p_coeff_tor', 'i_coeff_tor', 'd_coeff_tor'] and 
-                        index == 1 and base_param in self.algo_config):
+                    if (self.algo == 'pid' and self.task == 'quadrotor_2D_attitude'
+                        and base_param in ['p_coeff_for', 'i_coeff_for', 'd_coeff_for',
+                                           'p_coeff_tor', 'i_coeff_tor', 'd_coeff_tor']
+                            and index == 1 and base_param in self.algo_config):
                         # For y-axis (index 1), use the x-axis value (index 0) if it exists in params
                         x_axis_param = f'{base_param}_0'
                         if x_axis_param in params:
                             param_value = params[x_axis_param]
-                    
+
                     if base_param in self.algo_config:
                         self.algo_config[base_param][index] = param_value
                     elif base_param in self.task_config:
@@ -335,7 +338,7 @@ class BaseHPO(ABC):
                 print(f'Warning: Unknown parameter {param_name} - not mapped to any configuration')
 
     def config_to_param(self, params):
-        """
+        '''
         Convert configuration to hyperparameters (mainly to handle multidimensional hyperparameters) as the input to add_trial.
 
         Args:
@@ -343,7 +346,7 @@ class BaseHPO(ABC):
 
         Returns:
             dict: Hyperparameter representation in the problem.
-        """
+        '''
         params = deepcopy(params)
         for param in list(params.keys()):
             is_list = isinstance(params[param], list)
@@ -362,7 +365,7 @@ class BaseHPO(ABC):
         return params
 
     def post_process_best_hyperparams(self, params):
-        """
+        '''
         Post-process the best hyperparameters after optimization (mainly to handle multidimensional hyperparameters).
 
         Args:
@@ -370,7 +373,7 @@ class BaseHPO(ABC):
 
         Returns:
             params (dict): Post-processed hyperparameters.
-        """
+        '''
         aggregated_params = {}
         for param_name, param_value in params.items():
             # Handle multidimensional hyperparameters (e.g., q_mpc_0, q_mpc_1)
@@ -396,34 +399,34 @@ class BaseHPO(ABC):
         return params
 
     def apply_constraints_to_params(self, params):
-        """
+        '''
         Apply constraint logic to parameters for logging/saving purposes.
         This ensures that saved trial parameters reflect the actual constraints used.
-        
+
         Args:
             params (dict): Original hyperparameters.
-            
+
         Returns:
             dict: Constrained hyperparameters.
-        """
+        '''
         # Make a copy to avoid modifying the original
         constrained_params = deepcopy(params)
-        
+
         # Apply PID 2D constraint for saving purposes
         if self.algo == 'pid' and self.task == 'quadrotor_2D_attitude':
             # PID parameters that need 2D constraint: p_coeff_for, i_coeff_for, d_coeff_for
             pid_params = ['p_coeff_for', 'i_coeff_for', 'd_coeff_for', 'p_coeff_tor', 'i_coeff_tor', 'd_coeff_tor']
-            
+
             for pid_param in pid_params:
                 if pid_param in constrained_params and isinstance(constrained_params[pid_param], list):
                     if len(constrained_params[pid_param]) >= 2:
                         # Set y-axis (index 1) equal to x-axis (index 0)
                         constrained_params[pid_param][1] = constrained_params[pid_param][0]
-        
+
         return constrained_params
 
     def evaluate(self, params, seed_list=None):
-        """
+        '''
         Evaluation of hyperparameters.
 
         Args:
@@ -431,13 +434,13 @@ class BaseHPO(ABC):
             seed_list (list): List of seeds for evaluation.
         Returns:
             Sampled objective value (list)
-        """
+        '''
         if seed_list is not None:
             assert len(seed_list) == self.hpo_config.repetitions, 'Number of seeds should be equal to the number of repetitions'
         sampled_hyperparams = params
 
         seeds, trajs_data_list, metrics_list = [], [], []
-        returns = { obj: [] for obj in self.hpo_config.objective }
+        returns = {obj: [] for obj in self.hpo_config.objective}
         for i in range(self.hpo_config.repetitions):
 
             seed = np.random.randint(0, 10000) if seed_list is None else seed_list[i]
@@ -534,17 +537,17 @@ class BaseHPO(ABC):
                     self.task_config.constraints[1].lower_bounds = [0.113, -0.436]
                     env_func = partial(make, self.task, output_dir=self.output_dir, **self.task_config)
                     agent = make(self.algo,
-                                  env_func,
-                                  training=False,
-                                  checkpoint_path=os.path.join(self.output_dir, 'model_latest.pt'),
-                                  output_dir=os.path.join(self.output_dir, 'hpo'),
-                                  use_gpu=self.hpo_config.use_gpu,
-                                  seed=seed,
-                                  **deepcopy(self.algo_config))
+                                 env_func,
+                                 training=False,
+                                 checkpoint_path=os.path.join(self.output_dir, 'model_latest.pt'),
+                                 output_dir=os.path.join(self.output_dir, 'hpo'),
+                                 use_gpu=self.hpo_config.use_gpu,
+                                 seed=seed,
+                                 **deepcopy(self.algo_config))
                     agent.load(os.path.join(self.output_dir, 'model_latest.pt'))
                     sf = make(self.safety_filter,
-                                        env_func,
-                                        **self.sf_config)
+                              env_func,
+                              **self.sf_config)
                     sf.reset()
                     if self.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
                         sf.cost_function.uncertified_controller = self.agent
@@ -580,17 +583,17 @@ class BaseHPO(ABC):
             # delete instances
             del self.agent
             del self.env_func
-        
+
         self.trajs_data_list = trajs_data_list
         self.metrics_list = metrics
 
         return returns
 
     def none_handler(self):
-        """
+        '''
         Assign worse objective values (based on objective bound) to None returns.
-        """
-        returns = { obj: [] for obj in self.hpo_config.objective }
+        '''
+        returns = {obj: [] for obj in self.hpo_config.objective}
         for obj in self.hpo_config.objective:
             if self.hpo_config.direction[0] == 'maximize':
                 returns[obj].append(self.objective_bounds[0][0])
@@ -600,18 +603,18 @@ class BaseHPO(ABC):
 
     @abstractmethod
     def hyperparameter_optimization(self):
-        """
+        '''
         Hyperparameter optimization loop. Should be implemented by subclasses.
-        """
+        '''
         raise NotImplementedError
 
     @abstractmethod
     def checkpoint(self):
-        """
+        '''
         Save checkpoints, results, and logs during optimization.
-        """
+        '''
         raise NotImplementedError
-    
+
     def plot_results(self, trajs_data_list, metrics, output_dir, tag):
         '''Plot the evaluation results, overlaying all trajectories.
 
@@ -635,7 +638,7 @@ class BaseHPO(ABC):
 
         # Flatten data: extract episodes from each seed
         state_traj = np.vstack([seed_data['obs'] for seed_data in trajs_data_list])
-        action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list]) 
+        action_traj = np.vstack([seed_data['current_clipped_action'] for seed_data in trajs_data_list])
 
         # determin the state index
         if self.env.state_dim == 6:
@@ -712,24 +715,24 @@ class BaseHPO(ABC):
             plt.close()
 
     def plot_results_grid(self, trajs_dict, metrics_dict, output_dir):
-        """
+        '''
         Plot evaluation results in a grid layout.
         Each row corresponds to a trajectory type (state or action),
         and each column corresponds to a hyperparameter set.
 
         Args:
-            trajs_dict (dict): Dictionary where keys are tags (e.g., 'handtuned hps', 'vizier hps') 
+            trajs_dict (dict): Dictionary where keys are tags (e.g., 'handtuned hps', 'vizier hps')
                             and values are corresponding trajs_data_list.
             metrics_dict (dict): Dictionary where keys are tags (e.g., 'handtuned hps', 'vizier hps')
             output_dir (str): Output directory for plots.
-        """
+        '''
         # Ensure the output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
         # Create a figure with a grid layout: 2 rows (state and action) and N columns (tags)
         num_tags = len(trajs_dict)
         fig, axes = plt.subplots(2, num_tags, figsize=(5 * num_tags, 8))
-        
+
         if num_tags == 1:  # Handle case where there is only one tag (axes won't be a 2D array)
             axes = np.expand_dims(axes, axis=-1)
 

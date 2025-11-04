@@ -3,5 +3,5 @@ algo_config:
   horizon: 40
   q_mpc: [18, 0.1, 18, 0.1, 0.5, 0.01]
   r_mpc: [5., 5.]
-  
+
   warmstart: True

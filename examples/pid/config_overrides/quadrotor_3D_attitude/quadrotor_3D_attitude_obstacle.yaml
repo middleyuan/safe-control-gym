@@ -52,7 +52,7 @@ task_config:
       - start: [-0.25, -1.25, 0.0]
         end:   [-0.25, -1.25, 2.0]
     waypoints:
-      # === Fast Tracking Waypoints ===   
+      # === Fast Tracking Waypoints ===
       # === Randomized String Waypoints ===
       # - time: 1
       #   position: [2.5, 1.5, 1.00]
@@ -132,7 +132,7 @@ task_config:
   # episode_len_sec: 20
   # episode_len_sec: 30
   episode_len_sec: 62
-  
+
   # cost: rl_reward
   cost: quadratic
   constraints:

@@ -1,4 +1,4 @@
-"""Distributional Proximal Policy Optimization algorithm.
+'''Distributional Proximal Policy Optimization algorithm.
 
 Resource: https://github.com/leggedrobotics/rsl_rl/tree/algorithms
 
@@ -9,7 +9,7 @@ IQN Paper: https://arxiv.org/pdf/1806.06923.pdf
 
 The implementation works with recurrent neural networks. We further implement Sample-Replacement SR(lambda) for the
 value target computation, as described by Nam et. al. in https://arxiv.org/pdf/2105.11366.pdf.
-"""
+'''
 
 import os
 import time
@@ -31,7 +31,7 @@ from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_rando
 
 
 class DPPO(BaseController):
-    """Distributional Proximal policy optimization."""
+    '''Distributional Proximal policy optimization.'''
 
     def __init__(self,
                  env_func,
@@ -93,7 +93,7 @@ class DPPO(BaseController):
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
     def reset(self):
-        """Do initializations for training or evaluation."""
+        '''Do initializations for training or evaluation.'''
         if self.training:
             # set up stats tracking
             self.env.add_tracker('constraint_violation', 0)
@@ -111,14 +111,14 @@ class DPPO(BaseController):
             self.env.add_tracker('mse', 0, mode='queue')
 
     def close(self):
-        """Shuts down and cleans up lingering resources."""
+        '''Shuts down and cleans up lingering resources.'''
         self.env.close()
         if self.training:
             self.eval_env.close()
         self.logger.close()
 
     def save(self, path):
-        """Saves model params and experiment state to checkpoint path."""
+        '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -137,7 +137,7 @@ class DPPO(BaseController):
         torch.save(state_dict, path)
 
     def load(self, path):
-        """Restores model and experiment given checkpoint path."""
+        '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path, weights_only=False)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
@@ -156,7 +156,7 @@ class DPPO(BaseController):
         self.results_dict = {'inference_time': []}
 
     def learn(self, env=None, **kwargs):
-        """Performs learning (pre-training, training, fine-tuning, etc.)."""
+        '''Performs learning (pre-training, training, fine-tuning, etc.).'''
         # Initial Evaluation.
         eval_results = self.run(env=self.eval_env, n_episodes=self.eval_batch_size)
         self.logger.info('Eval | ep_lengths {:.2f} +/- {:.2f} | ep_return {:.3f} +/- {:.3f}'.format(
@@ -207,7 +207,7 @@ class DPPO(BaseController):
                 self.log_step(results)
 
     def select_action(self, obs, info=None):
-        """Determine the action to take at the current timestep.
+        '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
@@ -215,17 +215,17 @@ class DPPO(BaseController):
 
         Returns:
             action (ndarray): The action chosen by the controller.
-        """
+        '''
 
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
             start = time.time()
             action = self.agent.ac.act(obs)
-            self.results_dict['inference_time'].append(time.time()-start)
+            self.results_dict['inference_time'].append(time.time() - start)
         return action
 
     def train_step(self):
-        """Performs a training/fine-tuning step."""
+        '''Performs a training/fine-tuning step.'''
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = DPPOBuffer(self.env.observation_space, self.env.action_space,
@@ -288,7 +288,7 @@ class DPPO(BaseController):
             n_episodes=1,
             verbose=False,
             ):
-        """Runs evaluation with current policy."""
+        '''Runs evaluation with current policy.'''
         self.agent.eval()
         self.obs_normalizer.set_read_only()
         if env is None:
@@ -339,7 +339,7 @@ class DPPO(BaseController):
         return eval_results
 
     def log_step(self, results):
-        """Does logging after a training step."""
+        '''Does logging after a training step.'''
         step = results['step']
         # runner stats
         self.logger.add_scalars(

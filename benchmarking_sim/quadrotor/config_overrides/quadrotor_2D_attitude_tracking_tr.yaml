@@ -3,7 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
-  # physics: pyb
   quad_type: 4
 
   init_state:
@@ -56,8 +55,6 @@ task_config:
       constrained_variable: state
     - constraint_form: default_constraint
       constrained_variable: input
-      # upper_bounds: [0.58212, 0.7]
-      # lower_bounds: [0.09702, -0.7]
 
   done_on_out_of_bound: True
   done_on_violation: False
@@ -73,7 +70,4 @@ task_config:
         low:  1. # dummy
         high: 1. # dummy
         mode: fix
-        # mode: track
         pos: [0, 0, -1] # z = 0, will cause no downwash
-        # pos in track mode is the relative position to the quadrotor
-        # pos in fix mode is the absolute position in the world frame

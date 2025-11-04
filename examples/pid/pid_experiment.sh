@@ -21,6 +21,6 @@ python3 ./pid_experiment.py \
     --algo pid \
     --overrides \
         ./config_overrides/pid.yaml \
-        ./config_overrides/${SYS}/${SYS}_${TASK}.yaml 
+        ./config_overrides/${SYS}/${SYS}_${TASK}.yaml
     # --kv_overrides \
     #     task_config.task_info.trajectory_type=${TRAJ_TYPE}

@@ -1,5 +1,5 @@
-"""Proximal Policy Optimization (PPO) with MPC
-"""
+'''Proximal Policy Optimization (PPO) with MPC
+'''
 
 import os
 import time
@@ -17,11 +17,11 @@ from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
 from safe_control_gym.math_and_models.normalization import (BaseNormalizer, MeanStdNormalizer,
                                                             RewardStdNormalizer)
 from safe_control_gym.utils.logging import ExperimentLogger
-from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
+from safe_control_gym.utils.utils import get_random_state, set_random_state
 
 
 class APPO_MPC(BaseController):
-    """Approximate proximal policy optimization with MPC"""
+    '''Approximate proximal policy optimization with MPC'''
 
     def __init__(self,
                  env_func,
@@ -90,7 +90,7 @@ class APPO_MPC(BaseController):
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
     def reset(self):
-        """Do initializations for training or evaluation."""
+        '''Do initializations for training or evaluation.'''
         self.agent.reset()
         if self.training:
             # set up stats tracking
@@ -109,17 +109,17 @@ class APPO_MPC(BaseController):
             self.env.add_tracker('mse', 0, mode='queue')
 
     def reset_before_run(self, obs, info=None, env=None):
-        """Reinitialize just the controller before a new run.
+        '''Reinitialize just the controller before a new run.
 
         Args:
             obs (ndarray): The initial observation for the new run.
             info (dict): The first info of the new run.
             env (BenchmarkEnv): The environment to be used for the new run.
-        """
+        '''
         self.reset()
 
     def close(self):
-        """Shuts down and cleans up lingering resources."""
+        '''Shuts down and cleans up lingering resources.'''
         self.env.close()
         self.venv.close()
         if self.training:
@@ -127,7 +127,7 @@ class APPO_MPC(BaseController):
         self.logger.close()
 
     def save(self, path):
-        """Saves model params and experiment state to checkpoint path."""
+        '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -146,7 +146,7 @@ class APPO_MPC(BaseController):
         torch.save(state_dict, path)
 
     def load(self, path):
-        """Restores model and experiment given checkpoint path."""
+        '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
@@ -161,7 +161,7 @@ class APPO_MPC(BaseController):
             self.logger.load(self.total_steps)
 
     def learn(self, env=None, **kwargs):
-        """Performs learning (pre-training, training, fine-tuning, etc.)."""
+        '''Performs learning (pre-training, training, fine-tuning, etc.).'''
         start = time.time()
         # Initial Evaluation.
         if self.eval_interval:
@@ -178,11 +178,11 @@ class APPO_MPC(BaseController):
         if self.num_checkpoints > 0:
             step_interval = np.linspace(0, self.max_env_steps, self.num_checkpoints)
             interval_save = np.zeros_like(step_interval, dtype=bool)
-        print("eval time")
-        print(time.time()-start)
+        print('eval time')
+        print(time.time() - start)
 
         while self.total_steps < self.max_env_steps:
-            print("next iter")
+            print('next iter')
             start = time.time()
             results = self.train_step()
             print(time.time() - start)
@@ -225,7 +225,7 @@ class APPO_MPC(BaseController):
             print(time.time() - start)
 
     def select_action(self, obs, info=None):
-        """Determine the action to take at the current timestep.
+        '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
@@ -233,7 +233,7 @@ class APPO_MPC(BaseController):
 
         Returns:
             action (ndarray): The action chosen by the controller.
-        """
+        '''
 
         with torch.no_grad():
             # obs = torch.FloatTensor(obs).to(self.device)
@@ -241,7 +241,7 @@ class APPO_MPC(BaseController):
         return action
 
     def train_step(self):
-        """Performs a training/fine-tuning step."""
+        '''Performs a training/fine-tuning step.'''
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
@@ -290,12 +290,12 @@ class APPO_MPC(BaseController):
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = defaultdict(list)
-        print("training rollouts done")
+        print('training rollouts done')
         print(time.time() - start)
         results['train'] = self.agent.update(rollouts, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         print(time.time() - start)
-        print("training done")
+        print('training done')
         return results
 
     def run(self,
@@ -304,7 +304,7 @@ class APPO_MPC(BaseController):
             n_episodes=1,
             verbose=False,
             ):
-        """Runs evaluation with current policy."""
+        '''Runs evaluation with current policy.'''
         self.agent.reset()
         self.agent.eval()
         self.obs_normalizer.set_read_only()
@@ -359,7 +359,7 @@ class APPO_MPC(BaseController):
     def log_step(self,
                  results
                  ):
-        """Does logging after a training step."""
+        '''Does logging after a training step.'''
         step = results['step']
         # runner stats
         self.logger.add_scalars(

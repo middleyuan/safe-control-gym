@@ -51,7 +51,6 @@ done
 
 # if resume is 1 and sampler is optuna, load the study for all jobs
 if [ "$resume" == '1' ] && [ "$sampler" == 'optuna' ]; then
-
     if [ "$safety_filter" == 'False' ]; then
         algo_name=${algo}
         echo "task config path: ./examples/hpo/${sys_name}/config_overrides/${sys}_${task}${hpo_postfix}.yaml"
@@ -98,8 +97,7 @@ if [ "$resume" == '1' ] && [ "$sampler" == 'optuna' ]; then
             sleep 3
         done
     fi
-
-# else create a study for the first job and load it for the remaining jobs
+# If resume is False, create a study for the first job and load it for the remaining jobs
 else
     # First job creates the study
     if [ "$safety_filter" == 'False' ]; then
@@ -196,7 +194,7 @@ for pid in ${pids[*]}; do
     echo "Job $pid finished"
 done
 
-# back up the database after all jobs finish
+# Back up the database after all jobs finish
 echo "backing up the database"
 mv ${algo_name}_hpo${hpo_postfix}_${sampler}.db ./examples/hpo/hpo/${algo_name}/${experiment_name}/${algo_name}_hpo${hpo_postfix}_${sampler}.db
 mv ${algo_name}_hpo${hpo_postfix}_${sampler}.db-journal ./examples/hpo/hpo/${algo_name}/${experiment_name}/${algo_name}_hpo${hpo_postfix}_${sampler}.db-journal

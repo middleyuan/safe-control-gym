@@ -3,7 +3,6 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
-  # physics: pyb
   quad_type: 4
 
   init_state:
@@ -43,8 +42,7 @@ task_config:
     trajectory_position_offset: [0, 1.]
     trajectory_scale: 1.0
     ilqr_ref: True
-    # ilqr_traj_data: '../lqr/ilqr_ref_traj.npy'
-    
+
   episode_len_sec: 11
   cost: quadratic
   rew_state_weight: [20, 0.1, 20, 0.1, 0.5, 0.01]
@@ -55,8 +53,6 @@ task_config:
       constrained_variable: state
     - constraint_form: default_constraint
       constrained_variable: input
-      # upper_bounds: [0.58212, 0.7]
-      # lower_bounds: [0.09702, -0.7]
 
   done_on_out_of_bound: True
   done_on_violation: False

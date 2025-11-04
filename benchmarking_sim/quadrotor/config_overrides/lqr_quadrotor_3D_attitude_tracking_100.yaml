@@ -26,8 +26,3 @@ algo_config:
   #       based on the continuous-time model
   discrete_dynamics: True
   output_dir: ./lqr/results
-
-  # prior_info:
-  #   prior_prop:
-  #     M: 0.054 # Must be capitcal M
-  #     Iyy: 1.4e-05

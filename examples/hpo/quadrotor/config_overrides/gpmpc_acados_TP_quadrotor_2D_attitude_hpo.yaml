@@ -9,7 +9,8 @@ hpo_config:
   use_gpu: False
   seed: 24
   save_n_best_hps: 1
-  # budget
+
+  # Budget
   trials: 50
   hp_eval_list: ['hps_config', 'basic', 'dr', 'ob_ns=5', 'ob_ns=5_proc_ns=3', 'proc_ns=3', 'tr'] # list of optimized hyperparameter configurations to evaluate
 

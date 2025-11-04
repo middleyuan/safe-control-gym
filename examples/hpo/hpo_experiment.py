@@ -1,8 +1,8 @@
 '''Template hyperparameter optimization/hyperparameter evaluation script.'''
 
+from safe_control_gym.hyperparameters.hpo_eval import HPOEval
 from safe_control_gym.hyperparameters.optuna.hpo_optuna import HPO_Optuna
 from safe_control_gym.hyperparameters.vizier.hpo_vizier import HPO_Vizier
-from safe_control_gym.hyperparameters.hpo_eval import HPOEval
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.utils import set_device_from_config, set_dir_from_config, set_seed_from_config
 
@@ -30,7 +30,7 @@ def hpo(config):
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
         if config.algo == 'ppo' and config.safety_filter == 'nl_mpsc':
-            config.sf_config.cost_function='one_step_cost'
+            config.sf_config.cost_function = 'one_step_cost'
             config.sf_config.soften_constraints = True
             config.algo_config.rollout_batch_size = 1
             config.algo_config.filter_train_actions = False
@@ -80,6 +80,7 @@ def hpo(config):
     hpo.hyperparameter_optimization()
     print('Hyperparameter optimization done.')
 
+
 def eval(config):
     '''Hyperparameter evaluation.
 
@@ -91,7 +92,7 @@ def eval(config):
     if 'safety_filter' not in config:
         config.safety_filter = None
         config.sf_config = None
-    
+
     # change the cost function for rl methods
     if config.algo == 'ppo' or config.algo == 'sac' or config.algo == 'dppo':
         config.task_config.cost = 'rl_reward'
@@ -103,7 +104,7 @@ def eval(config):
         config.algo_config.log_interval = 10000000
         config.algo_config.eval_interval = 10000000
         if config.algo == 'ppo' and config.safety_filter == 'nl_mpsc':
-            config.sf_config.cost_function='one_step_cost'
+            config.sf_config.cost_function = 'one_step_cost'
             config.sf_config.soften_constraints = True
             config.algo_config.rollout_batch_size = 1
             config.algo_config.filter_train_actions = False
@@ -119,7 +120,7 @@ def eval(config):
 
     appended_folder = config.overrides[0].split('quadrotor_2D_attitude_tracking')[-1].split('.')[0]
     config.output_dir += f'/{appended_folder}'
-    
+
     hpo_eval = HPOEval(config.hpo_config,
                        config.task_config,
                        config.algo_config,
@@ -131,6 +132,7 @@ def eval(config):
                        )
     hpo_eval.hp_evaluation()
 
+
 MAIN_FUNCS = {'hpo': hpo, 'eval': eval}
 
 if __name__ == '__main__':
@@ -139,8 +141,9 @@ if __name__ == '__main__':
     fac.add_argument('--func', type=str, default='hpo', help='main function to run.')
     fac.add_argument('--load_study', type=bool, default=False, help='whether to load study from a previous HPO.')
     fac.add_argument('--sampler', type=str, default='optuna', help='which package to use in HPO.')
-    fac.add_argument('--resume', type=int, default=False, help='if to resume HPO.') # this is defined as int to be able to pass from bash command
-    # merge config
+    fac.add_argument('--resume', type=int, default=False, help='if to resume HPO.')  # this is defined as int to be able to pass from bash command
+
+    # Merge config
     config = fac.merge()
 
     # Execute.

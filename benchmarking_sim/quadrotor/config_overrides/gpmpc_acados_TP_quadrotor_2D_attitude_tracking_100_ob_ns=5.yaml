@@ -21,10 +21,9 @@
     - 0.0005547757359901814
     - 0.0005547757359901814
     normalize_training_data: False
-    # normalize_training_data: True
     prior_info:
       prior_prop:
-        M: 0.033 # Must be capitcal M 
+        M: 0.033 # Must be capitcal M
         beta_1: 12.1432
         beta_2: 1.8118
         beta_3: 0
@@ -33,18 +32,14 @@
         alpha_3: 39.8653
         pitch_bias: 0.0 # in radian
     use_linear_prior: False
-    # use_linear_prior: True
     obs_noise_std: [5.250e-05, 2.190e-03, 6.450e-05, 2.685e-03, 5.650e-03, 2.170e-01]
     act_noise_std: [0.03116, 0.03450]
-    # prior_param_coeff: 0.2
     prior_param_coeff: 1.0
     prob: 0.95
     warmstart: True
     use_gpu: True
-    # use_gpu: False
     kernel: RBF_single
-    gp_approx: 'mean_eq' # 'taylor'
-    # sparse_gp: false # true
+    gp_approx: 'mean_eq'
     sparse_gp: true
     inducing_point_selection_method: 'kmeans'
     overwrite_saved_data: false
@@ -60,15 +55,7 @@
     rand_data_selection: false
     terminate_train_on_done: True
     terminate_test_on_done: True
-    # parallel: True
     parallel: False
     use_RTI: False
     output_dir: ./gpmpc_acados_TP/results
-    # plot_trained_gp: False
     plot_trained_gp: True
-    # use_ancillary_gain: True
-    # soft_constraints_params:
-    #   gp_soft_constraints: true
-    #   gp_soft_constraints_coeff: 10000
-    #   prior_soft_constraints: false
-    #   prior_soft_constraints_coeff: 10000

@@ -13,7 +13,9 @@ from scipy.spatial.transform import Rotation
 
 from safe_control_gym.controllers.base_controller import BaseController
 from safe_control_gym.envs.benchmark_env import Environment, Task
+
 # from line_profiler import profile
+
 
 def cross_3d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     '''Computes the cross product of two 3D vectors.
@@ -23,44 +25,46 @@ def cross_3d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     Returns:
         ndarray: The cross product of the two vectors.
     '''
-    assert a.shape == b.shape, "Input arrays must have the same shape"
-    assert a.shape == (3,), "Input arrays must be 1D arrays of length 3"
+    assert a.shape == b.shape, 'Input arrays must have the same shape'
+    assert a.shape == (3,), 'Input arrays must be 1D arrays of length 3'
     skew_symmetric = np.array([[0, -a[2], a[1]],
-                                [a[2], 0, -a[0]],
-                                [-a[1], a[0], 0]])
+                               [a[2], 0, -a[0]],
+                               [-a[1], a[0], 0]])
     return np.dot(skew_symmetric, b)
+
 
 def normalize_angle(x):
     '''Wraps input angle to [-pi, pi).'''
     return ((x + np.pi) % (2 * np.pi)) - np.pi
 
 # @profile
+
+
 def rot2eul(R: np.ndarray) -> np.ndarray:
     '''Convert rotation matrix to euler angles.
     Args:
         R (ndarray): The rotation matrix.
     Returns:
         ndarray: The euler angles.
-    
+
     The rotation matrix is assumed to be follow the intrinsic rotation in the order of X -> Y -> Z
     Gimbal lock is handled by the setting the third angle to zero.
     '''
     EPSILON = 1e-7
-    # assert np.linalg.norm(np.dot(R, R.transpose()) - np.eye(3)) < 1e-5, "Input must be a valid rotation matrix"
+    # assert np.linalg.norm(np.dot(R, R.transpose()) - np.eye(3)) < 1e-5, 'Input must be a valid rotation matrix'
     beta = np.arctan2(R[0, 2], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
     safe1 = np.abs(beta) >= EPSILON
     safe2 = np.abs(beta - np.pi) >= EPSILON
     safe = safe1 and safe2
     if safe:
-        gamma = np.arctan2(-R[0, 1]/np.cos(beta), R[0, 0]/np.cos(beta))
-        alpha = np.arctan2(-R[1, 2]/np.cos(beta), R[2, 2]/np.cos(beta))
+        gamma = np.arctan2(-R[0, 1] / np.cos(beta), R[0, 0] / np.cos(beta))
+        alpha = np.arctan2(-R[1, 2] / np.cos(beta), R[2, 2] / np.cos(beta))
     else:
         gamma = 0
         alpha = np.arctan2(R[2, 1], R[1, 1])
         print('Warning: Gimbal lock detected. Setting gamma to 0.')
 
     return np.array((alpha, beta, gamma))
-
 
 
 class PID(BaseController):
@@ -184,12 +188,12 @@ class PID(BaseController):
         time_before = time.perf_counter()
         try:
             thrust, computed_target_rpy, _ = self._dslPIDPositionControl(cur_pos,
-                                                                        cur_quat,
-                                                                        cur_vel,
-                                                                        target_pos,
-                                                                        target_rpy,
-                                                                        target_vel
-                                                                        )
+                                                                         cur_quat,
+                                                                         cur_vel,
+                                                                         target_pos,
+                                                                         target_rpy,
+                                                                         target_vel
+                                                                         )
             if self.env.QUAD_TYPE in [4, 6, 8, 9]:
                 if self.env.QUAD_TYPE == 4:  # 2D quadrotor with attitude control
                     # action = np.array([self.env.attitude_control.pwm2thrust(thrust), computed_target_rpy[1]])
@@ -197,31 +201,31 @@ class PID(BaseController):
                 elif self.env.QUAD_TYPE == 6:  # 3D quadrotor with attitude control
                     # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
                     action = np.array([thrust,
-                                    computed_target_rpy[0],
-                                    computed_target_rpy[1],
-                                    computed_target_rpy[2]])
+                                       computed_target_rpy[0],
+                                       computed_target_rpy[1],
+                                       computed_target_rpy[2]])
                 elif self.env.QUAD_TYPE == 8:  # 3D quadrotor with attitude control
                     # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
-                    action = np.array([thrust,               
-                                    computed_target_rpy[0],
-                                    computed_target_rpy[1],])
+                    action = np.array([thrust,
+                                       computed_target_rpy[0],
+                                       computed_target_rpy[1],])
                 elif self.env.QUAD_TYPE == 9:
                     # action = np.array([self.env.attitude_control.pwm2thrust(thrust/3)*4,
-                    action = np.array([thrust,                
-                                    computed_target_rpy[0],
-                                    computed_target_rpy[1],
-                                    computed_target_rpy[2]])
+                    action = np.array([thrust,
+                                       computed_target_rpy[0],
+                                       computed_target_rpy[1],
+                                       computed_target_rpy[2]])
                 self.last_action = action
                 time_after = time.perf_counter()
                 self.results_dict['inference_time'].append(time_after - time_before)
                 # print(f'Action: {action}, ')
                 return action
-            
+
             rpm = self._dslPIDAttitudeControl(thrust,
-                                            cur_quat,
-                                            computed_target_rpy,
-                                            target_rpy_rates
-                                            )
+                                              cur_quat,
+                                              computed_target_rpy,
+                                              target_rpy_rates
+                                              )
         except ValueError as e:
             print(e)
             print('Error in Control._dslPIDPositionControl() or Control._dslPIDAttitudeControl()')
@@ -273,8 +277,8 @@ class PID(BaseController):
             + np.multiply(self.I_COEFF_FOR, self.integral_pos_e) \
             + np.multiply(self.D_COEFF_FOR, vel_e) + np.array([0, 0, self.GRAVITY])
         scalar_thrust = max(0., np.dot(target_thrust, cur_rotation[:, 2]))
-                
-        if self.env.QUAD_TYPE in [4, 6, 8, 9]: # attitude interface
+
+        if self.env.QUAD_TYPE in [4, 6, 8, 9]:  # attitude interface
             # similar to hardware implementation
             n_mot = 4
             a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
@@ -283,7 +287,7 @@ class PID(BaseController):
         else:
             # scg implementation
             thrust = (math.sqrt(scalar_thrust / (4 * self.KF)) - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
-            
+
         target_z_ax = target_thrust / np.linalg.norm(target_thrust)
         target_x_c = np.array([math.cos(target_rpy[2]), math.sin(target_rpy[2]), 0])
         target_y_ax = cross_3d(target_z_ax, target_x_c) / np.linalg.norm(cross_3d(target_z_ax, target_x_c))
@@ -399,4 +403,4 @@ class PID(BaseController):
         '''Setup the results dictionary to store run information.'''
         self.results_dict = {
             'inference_time': []
-            }
+        }

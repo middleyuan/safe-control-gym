@@ -6,7 +6,7 @@
 # 2. Remove or backup the database if needed.
 # 3. Create a screen session `screen`, and detach it `Ctrl+a d`.
 # 4. Run this script by giving experiment name as the first arg. and the seed as the second.
-# 5. If you want to kill them, run `pkill -f "python ./experiments/comparisons/gpmpc/gpmpc_experiment.py"`. 
+# 5. If you want to kill them, run `pkill -f "python ./experiments/comparisons/gpmpc/gpmpc_experiment.py"`.
 #####################
 
 cd ~/safe-control-gym
@@ -47,13 +47,16 @@ python ./safe_control_gym/hyperparameters/database.py --func create --tag ${algo
 if [ "$resume" == 'False' ]; then
 
 python ./examples/hpo/hpo_experiment.py \
-         --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
-                     ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
-                     ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
-                     --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
-                     --sampler $sampler \
-                     --use_gpu True \
-                     --task ${sys} --func hpo --tag run${experiment_name} --seed $seed1 &
+    --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
+                ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
+                ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
+    --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
+    --sampler $sampler \
+    --use_gpu True \
+    --task ${sys} \
+    --func hpo \
+    --tag run${experiment_name} \
+    --seed $seed1 &
 pid1=$!
 
 # wait until the first study is created
@@ -61,13 +64,17 @@ sleep 3
 
 # set load_study to True
 python ./examples/hpo/hpo_experiment.py \
-         --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
-                     ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
-                     ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
-                     --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
-                     --sampler $sampler \
-                     --use_gpu True \
-                     --task ${sys} --func hpo --load_study True --tag run${experiment_name} --seed $seed2 &
+    --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
+                ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
+                ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
+    --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
+    --sampler $sampler \
+    --use_gpu True \
+    --task ${sys} \
+    --func hpo \
+    --load_study True \
+    --tag run${experiment_name} \
+    --seed $seed2 &
 pid2=$!
 
 fi
@@ -81,24 +88,32 @@ cd ~/safe-control-gym
 
 # set load_study to True
 python ./examples/hpo/hpo_experiment.py \
-         --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
-                     ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
-                     ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
-                     --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
-                     --sampler $sampler \
-                     --use_gpu True \
-                     --task ${sys} --func hpo --load_study True --tag run${experiment_name} --seed $seed3 &
+    --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
+                ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
+                ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
+    --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
+    --sampler $sampler \
+    --use_gpu True \
+    --task ${sys} \
+    --func hpo \
+    --load_study True \
+    --tag run${experiment_name} \
+    --seed $seed3 &
 pid1=$!
 
 # set load_study to True
 python ./examples/hpo/hpo_experiment.py \
-         --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
-                     ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
-                     ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
-                     --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
-                     --sampler $sampler \
-                     --use_gpu True \
-                     --task ${sys} --func hpo --load_study True --tag run${experiment_name} --seed $seed3 &
+    --overrides ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_.yaml \
+                ./examples/hpo/rl/config_overrides/${sys}/${sys}_${task}.yaml \
+                ./examples/hpo/rl/${algo}/config_overrides/${sys}/${algo}_${sys}_hpo_.yaml \
+    --output_dir ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys} \
+    --sampler $sampler \
+    --use_gpu True \
+    --task ${sys} \
+    --func hpo \
+    --load_study True \
+    --tag run${experiment_name} \
+    --seed $seed3 &
 pid2=$!
 
 fi
@@ -109,13 +124,10 @@ echo "job1 finished"
 wait $pid2
 echo "job2 finished"
 
-# old code for sqlite database which having performance issue
-# mv ${algo}_hpo.db ./experiments/comparisons/gpmpc/hpo/${experiment_name}/${algo}_hpo.db
-
-# new code for mysql database
 # back up first
 echo "backing up the database"
 mysqldump --no-tablespaces -u optuna ${algo}_hpo > ${algo}_hpo.sql
 mv ${algo}_hpo.sql ./examples/hpo/rl/${algo}/hpo_study_${sampler}_${sys}/run${experiment_name}/${algo}_hpo.sql
+
 # remove the database
 python ./safe_control_gym/hyperparameters/database.py --func drop --tag ${algo}_hpo

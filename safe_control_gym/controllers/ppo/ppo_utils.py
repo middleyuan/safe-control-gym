@@ -175,10 +175,10 @@ class MLPActor(nn.Module):
         # self.action_scale = torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32)
         # self.action_bias = torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32)
         self.register_buffer(
-            "action_scale", torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
+            'action_scale', torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
         )
         self.register_buffer(
-            "action_bias", torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
+            'action_bias', torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
         )
 
     def forward(self,
@@ -230,10 +230,8 @@ class MLPActorCritic(nn.Module):
         super().__init__()
         obs_dim = obs_space.shape[0]
         if isinstance(act_space, Box):
-            act_dim = act_space.shape[0]
             discrete = False
         else:
-            act_dim = act_space.n
             discrete = True
         # Policy.
         self.actor = MLPActor(obs_dim, act_space, hidden_dims, activation, discrete, exploration_init)

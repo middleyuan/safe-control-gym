@@ -1,5 +1,5 @@
-"""Proximal Policy Optimization (PPO) with MPC
-"""
+'''Proximal Policy Optimization (PPO) with MPC
+'''
 
 import os
 import time
@@ -17,11 +17,11 @@ from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
 from safe_control_gym.math_and_models.normalization import (BaseNormalizer, MeanStdNormalizer,
                                                             RewardStdNormalizer)
 from safe_control_gym.utils.logging import ExperimentLogger
-from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
+from safe_control_gym.utils.utils import get_random_state, set_random_state
 
 
 class PPO_VMPC(BaseController):
-    """Proximal policy optimization with VMPC"""
+    '''Proximal policy optimization with VMPC'''
 
     def __init__(self,
                  env_func,
@@ -91,7 +91,7 @@ class PPO_VMPC(BaseController):
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
     def reset(self):
-        """Do initializations for training or evaluation."""
+        '''Do initializations for training or evaluation.'''
         self.agent.reset()
         if self.training:
             # set up stats tracking
@@ -110,17 +110,17 @@ class PPO_VMPC(BaseController):
             self.env.add_tracker('mse', 0, mode='queue')
 
     def reset_before_run(self, obs, info=None, env=None):
-        """Reinitialize just the controller before a new run.
+        '''Reinitialize just the controller before a new run.
 
         Args:
             obs (ndarray): The initial observation for the new run.
             info (dict): The first info of the new run.
             env (BenchmarkEnv): The environment to be used for the new run.
-        """
+        '''
         self.reset()
 
     def close(self):
-        """Shuts down and cleans up lingering resources."""
+        '''Shuts down and cleans up lingering resources.'''
         self.env.close()
         if self.training:
             self.venv.close()
@@ -128,7 +128,7 @@ class PPO_VMPC(BaseController):
         self.logger.close()
 
     def save(self, path):
-        """Saves model params and experiment state to checkpoint path."""
+        '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -147,7 +147,7 @@ class PPO_VMPC(BaseController):
         torch.save(state_dict, path)
 
     def load(self, path):
-        """Restores model and experiment given checkpoint path."""
+        '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path, weights_only=False)
         # Restore policy.
         self.agent.load_state_dict(state['agent'], strict=False)
@@ -162,7 +162,7 @@ class PPO_VMPC(BaseController):
             self.logger.load(self.total_steps)
 
     def learn(self, env=None, **kwargs):
-        """Performs learning (pre-training, training, fine-tuning, etc.)."""
+        '''Performs learning (pre-training, training, fine-tuning, etc.).'''
         # Initial Evaluation.
         if self.eval_interval:
             results = defaultdict(list)
@@ -219,7 +219,7 @@ class PPO_VMPC(BaseController):
                 self.log_step(results)
 
     def select_action(self, obs, info=None):
-        """Determine the action to take at the current timestep.
+        '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
@@ -227,7 +227,7 @@ class PPO_VMPC(BaseController):
 
         Returns:
             action (ndarray): The action chosen by the controller.
-        """
+        '''
 
         with torch.no_grad():
             # obs = torch.FloatTensor(obs).to(self.device)
@@ -235,7 +235,7 @@ class PPO_VMPC(BaseController):
         return action
 
     def train_step(self):
-        """Performs a training/fine-tuning step."""
+        '''Performs a training/fine-tuning step.'''
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
@@ -265,7 +265,7 @@ class PPO_VMPC(BaseController):
                     # terminal_obs = inf['terminal_observation']
                     # terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     # terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_val = self.agent.ac.value(soln_info[idx])[:, None]  #.detach().cpu().numpy()[:, None]
+                    terminal_val = self.agent.ac.value(soln_info[idx])[:, None]  # .detach().cpu().numpy()[:, None]
                     terminal_v[idx] = terminal_val
                     # self.agent.reset()
             rollouts.push(
@@ -277,7 +277,7 @@ class PPO_VMPC(BaseController):
 
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
-        last_val = self.agent.ac.value(soln_info)[:, None]  #.detach().cpu().numpy()[:, None]
+        last_val = self.agent.ac.value(soln_info)[:, None]  # .detach().cpu().numpy()[:, None]
         ret, adv = compute_returns_and_advantages(rollouts.rew,
                                                   rollouts.v,
                                                   rollouts.mask,
@@ -297,7 +297,7 @@ class PPO_VMPC(BaseController):
         return results
 
     def run(self, env=None, render=False, n_episodes=1, verbose=False):
-        """Runs evaluation with current policy."""
+        '''Runs evaluation with current policy.'''
         self.agent.reset()
         self.agent.eval()
         self.obs_normalizer.set_read_only()
@@ -353,7 +353,7 @@ class PPO_VMPC(BaseController):
         return eval_results
 
     def log_step(self, results):
-        """Does logging after a training step."""
+        '''Does logging after a training step.'''
         step = results['step']
         # runner stats
         self.logger.add_scalars(

@@ -30,19 +30,16 @@ fi
 
 conda activate safe
 
-# find optimal hyperparameters file
+# Find optimal hyperparameters file
 for strat_dir in ${FOLDER}/${HPO_NAME}; do
-
-# Find hyperparameters_ file with the largest return among all seed directories within the run directory
-best_hp_file=$(find ${strat_dir}/seed*/ -name "hyperparameters_*.yaml" | awk -F_ '{print $NF,$0}' | sort -n -k1,1 | cut -d' ' -f2- | tail -n 1)
-# Find hyperparameters_ file with the smallest return among all seed directories within the run directory
-# best_hp_file=$(find ${strat_dir}/seed*/ -name "hyperparameters_*.yaml" | awk -F_ '{print $NF,$0}' | sort -n -k1,1 | cut -d' ' -f2- | head -n 1)
-echo "Best hyperparameters file: ${best_hp_file}"
-
+    # Find hyperparameters_ file with the largest return among all seed directories within the run directory
+    best_hp_file=$(find ${strat_dir}/seed*/ -name "hyperparameters_*.yaml" | awk -F_ '{print $NF,$0}' | sort -n -k1,1 | cut -d' ' -f2- | tail -n 1)
+    # Find hyperparameters_ file with the smallest return among all seed directories within the run directory
+    echo "Best hyperparameters file: ${best_hp_file}"
 done
 
 # 20 training unseen seeds that are unseen during hpo (hpo only saw seeds in [0, 10000])
-seeds=(22403 84244 98825 40417 58454 47838 56715 77833 19880 59009 
+seeds=(22403 84244 98825 40417 58454 47838 56715 77833 19880 59009
        47722 81354 63825 13296 10779 98122 86221 89144 35192 24759)
 
 # Number of concurrent processes to run
@@ -50,9 +47,7 @@ parallel_jobs=2
 count=0
 
 for seed in "${seeds[@]}"; do
-
   for hps in "${hp_kind[@]}"; do
-
     if [ "$hps" == "default" ]; then
         hp_path=''
     elif [ "$hps" == "optimized" ]; then
@@ -60,7 +55,7 @@ for seed in "${seeds[@]}"; do
     fi
 
     echo "Training in ${hps} config with seed ${seed}"
-    
+
     # Run the process in the background
     python ./examples/hpo/hpo_experiment.py \
         --algo "${algo}" \
@@ -82,7 +77,5 @@ for seed in "${seeds[@]}"; do
         # Wait for all background jobs to finish before continuing
         wait
     fi
-
   done
-
 done

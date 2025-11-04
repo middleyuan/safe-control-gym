@@ -8,4 +8,3 @@ algo_config:
   # Note: Higher simulation frequency is required if using controller designed
   #       based on the continuous-time model
   discrete_dynamics: True
-

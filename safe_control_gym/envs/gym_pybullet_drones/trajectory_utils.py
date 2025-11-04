@@ -1,8 +1,8 @@
-"""
+'''
 Copyright © 2023 Hs293Go
 
 Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the "Software"),
+a copy of this software and associated documentation files (the 'Software'),
 to deal in the Software without restriction, including without limitation
 the rights to use, copy, modify, merge, publish, distribute, sublicense,
 and/or sell copies of the Software, and to permit persons to whom the
@@ -11,24 +11,25 @@ Software is furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included
 in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
 OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-"""
+'''
 
+import time
 import warnings
 from typing import NamedTuple
-import time
 
-import numpy as np
 import casadi as cs
+import matplotlib.pyplot as plt
+import numpy as np
 import scipy.linalg as la
 from scipy import optimize
-import matplotlib.pyplot as plt
+
 
 class Waypoint(dict):
     def __init__(
@@ -123,13 +124,13 @@ def generate_trajectory(
         acc_limits=(-np.inf, np.inf),
 ):
     '''
-    
+
     Args:
         references: List of Waypoint objectsm {-1: time, 0: position}
         degree: Degree of the polynomial
     '''
-    if algorithm == "closed-form":
-        print("Using closed-form solution for minimum snap, acceleration limits will be ignored")
+    if algorithm == 'closed-form':
+        print('Using closed-form solution for minimum snap, acceleration limits will be ignored')
 
     if degree < 2:
         raise ValueError('Polynomial degree too low')
@@ -176,7 +177,7 @@ def generate_trajectory(
     dim: dimension of the trajectory = num of continuous orders
     '''
 
-    if algorithm == "constrained":
+    if algorithm == 'constrained':
         solver = _solve_constrained
         polys = solver(
             refs,
@@ -187,7 +188,7 @@ def generate_trajectory(
             optimize_options,
             acc_limits,
         )
-    elif algorithm == "closed-form":
+    elif algorithm == 'closed-form':
         solver = _solve_closed_form
         polys = solver(
             refs,
@@ -268,10 +269,10 @@ def _solve_closed_form(
         s = np.s_[poly_dim.n_cfs * i: poly_dim.n_cfs * (i + 1)]
         for r in range(r_cts):
             A[r_cts * 2 * i + r, s] = (
-                    _compute_tvec(poly_dim.n_cfs, r, 0) / durations[i] ** r
+                _compute_tvec(poly_dim.n_cfs, r, 0) / durations[i] ** r
             )
             A[r_cts * (2 * i + 1) + r, s] = (
-                    _compute_tvec(poly_dim.n_cfs, r, 1) / durations[i] ** r
+                _compute_tvec(poly_dim.n_cfs, r, 1) / durations[i] ** r
             )
 
     M = np.zeros((poly_dim.n_poly * 2 * r_cts, r_cts * (poly_dim.n_poly + 1)))
@@ -321,7 +322,7 @@ def _solve_constrained(
         acc_limits=(-np.inf, np.inf),
 ):
     '''
-    # reminder: 
+    # reminder:
     n_poly: num of segments = num of references - 1
     n_cfs: num of coefficients = degree + 1
     dim: dimension of the trajectory (x y z)
@@ -335,7 +336,7 @@ def _solve_constrained(
     optimize_options: dict
     acc_limits: tuple, (min, max) acceleration limits
     '''
-    opts = {"method": "SLSQP", "tol": 1e-10}
+    opts = {'method': 'SLSQP', 'tol': 1e-10}
     if optimize_options is not None:
         opts.update(optimize_options)
     n_vars = poly_dim.n_poly * poly_dim.n_cfs
@@ -410,7 +411,7 @@ def _compute_dynamical_constraints(poly_dim, refs, durations):
         s = np.s_[poly_dim.n_cfs * idx: poly_dim.n_cfs * (1 + idx)]
         for r in range(n_constrain_orders[i]):
             Aeq[row_its[i] + r, s] = (
-                    _compute_tvec(poly_dim.n_cfs, r, tau) / durations[idx] ** r
+                _compute_tvec(poly_dim.n_cfs, r, tau) / durations[idx] ** r
             )
             beq[row_its[i] + r] = refs[i, r]
     return Aeq, beq
@@ -422,7 +423,7 @@ def _compute_acceleration_constraints(poly_dim, refs, durations, acc_limits):
     '''
     acc_min, acc_max = acc_limits
     n_vars = poly_dim.n_poly * poly_dim.n_cfs
-    # n_constrain_orders = 3 
+    # n_constrain_orders = 3
     Aineq = np.zeros((poly_dim.n_poly, n_vars))
     bineq_ub = np.zeros(poly_dim.n_poly)
     bineq_lb = np.zeros(poly_dim.n_poly)
@@ -442,7 +443,7 @@ def _compute_Q(n_cfs, r, tau):  # pylint: disable=C0103
     m_seq = np.arange(0, r)[:, None, None]
     k = -2 * r + 1
     Q[:, i, l] = (
-            np.prod((i - m_seq) * (l - m_seq), axis=0) / (k + i + l) * tau[:, None, None] ** k
+        np.prod((i - m_seq) * (l - m_seq), axis=0) / (k + i + l) * tau[:, None, None] ** k
     )
     return Q
 
@@ -450,7 +451,7 @@ def _compute_Q(n_cfs, r, tau):  # pylint: disable=C0103
 def _compute_tvec(n_cfs, r, tau):
     '''
     Compute the vector of monomials for a given order and time
-    
+
     Args:
         n_cfs: int, number of coefficients = degree + 1
         r: int, order of the derivative (0 for position, 1 for velocity, etc.)
@@ -497,7 +498,7 @@ def _nd_polyvals(coeffs, time, r):
     n_seq = np.arange(r, n_cfs, dtype=np.int64)
     r_seq = np.arange(0, r, dtype=np.int64)
     return time ** (n_seq - r) @ (
-            np.prod(n_seq[None, :] - r_seq[:, None], axis=0)[..., None] * coeffs[n_seq, :]
+        np.prod(n_seq[None, :] - r_seq[:, None], axis=0)[..., None] * coeffs[n_seq, :]
     )
 
 
@@ -510,10 +511,11 @@ def _distance_to_line(start, end, point):
     string = start - end
     return cs.sqrt((cross.T @ cross) / (string.T @ string))
 
+
 def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
 
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(5, 4))
-    ax.plot(pos_ref[:, 0], pos_ref[:, 1], pos_ref[:, 2], 'b', label="Position Trajectory")
+    fig, ax = plt.subplots(subplot_kw={'projection': '3d'}, figsize=(5, 4))
+    ax.plot(pos_ref[:, 0], pos_ref[:, 1], pos_ref[:, 2], 'b', label='Position Trajectory')
     if waypoints is not None:
         for i, waypoint in enumerate(waypoints):
             position = waypoint.position
@@ -521,31 +523,32 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
                 position[0],
                 position[1],
                 position[2],
-                "go",
-                label="Position Waypoints" if i == 0 else ""
+                'go',
+                label='Position Waypoints' if i == 0 else ''
             )
     if strings is not None:
         for i, string in enumerate(strings):
             start = string['start']
             end = string['end']
-            ax.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], 'r', label="Strings"  if i == 0 else "")
+            ax.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], 'r', label='Strings' if i == 0 else '')
 
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-    ax.set_zlabel("Z (m)")
-    ax.legend(loc="upper right")
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.legend(loc='upper right')
     fig.tight_layout()
     try:
         fig.savefig(save_path)
-        print(f"Trajectory plot saved to {save_path}")
-    except:
+        print(f'Trajectory plot saved to {save_path}')
+    except Exception:
         pass
     # # plt.show()
     plt.close(fig)
 
+
 def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, waypoints=None, strings=None, save_path=None):
     if pos_ref is None:
-        print("Missing position reference data for kinematic plotting.")
+        print('Missing position reference data for kinematic plotting.')
         return
 
     time_ref = np.linspace(0, len(pos_ref) - 1, len(pos_ref))  # Assumes uniform time steps
@@ -562,20 +565,20 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
         if acc_ref is not None:
             ax.plot(time_ref, acc_ref[:, i], 'm-', linewidth=1.5, label=f'Acceleration {axis_labels[i]}')
 
-        ax.set_xlabel("Time (arbitrary units)")
-        ax.set_ylabel(f"{axis_labels[i]}-axis")
-        ax.set_title(f"{axis_labels[i]}-Axis Kinematics")
-        ax.legend(loc="upper right")
+        ax.set_xlabel('Time (arbitrary units)')
+        ax.set_ylabel(f'{axis_labels[i]}-axis')
+        ax.set_title(f'{axis_labels[i]}-Axis Kinematics')
+        ax.legend(loc='upper right')
         ax.grid(True)
         fig.tight_layout()
 
         if save_path is not None:
-            save_axis_path = f"{save_path}_{axis_labels[i].lower()}.png"
+            save_axis_path = f'{save_path}_{axis_labels[i].lower()}.png'
             try:
                 fig.savefig(save_axis_path)
-                print(f"Kinematics plot saved to {save_axis_path}")
+                print(f'Kinematics plot saved to {save_axis_path}')
             except Exception as e:
-                print(f"Failed to save plot {save_axis_path}: {e}")
+                print(f'Failed to save plot {save_axis_path}: {e}')
 
         # plt.show()
         plt.close(fig)
@@ -591,12 +594,12 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
     fig.tight_layout()
 
     if save_path is not None:
-        save_xy_path = f"{save_path}_xy.png"
+        save_xy_path = f'{save_path}_xy.png'
         try:
             fig.savefig(save_xy_path)
-            print(f"XY plot saved to {save_xy_path}")
+            print(f'XY plot saved to {save_xy_path}')
         except Exception as e:
-            print(f"Failed to save plot {save_xy_path}: {e}")
+            print(f'Failed to save plot {save_xy_path}: {e}')
 
     # plt.show()
     plt.close(fig)
@@ -612,12 +615,12 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
     fig.tight_layout()
 
     if save_path is not None:
-        save_xz_path = f"{save_path}_xz.png"
+        save_xz_path = f'{save_path}_xz.png'
         try:
             fig.savefig(save_xz_path)
-            print(f"XZ plot saved to {save_xz_path}")
+            print(f'XZ plot saved to {save_xz_path}')
         except Exception as e:
-            print(f"Failed to save plot {save_xz_path}: {e}")
+            print(f'Failed to save plot {save_xz_path}: {e}')
 
     # plt.show()
     plt.close(fig)
@@ -626,24 +629,24 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
     if speed_ref is not None:
         fig, ax = plt.subplots(figsize=(5, 4))
         ax.plot(time_ref, speed_ref, 'r-', linewidth=1.5, label='Speed (Magnitude)')
-        ax.set_xlabel("Time (arbitrary units)")
-        ax.set_ylabel("Speed")
-        ax.set_title("Speed Magnitude vs Time")
-        ax.legend(loc="upper right")
+        ax.set_xlabel('Time (arbitrary units)')
+        ax.set_ylabel('Speed')
+        ax.set_title('Speed Magnitude vs Time')
+        ax.legend(loc='upper right')
         ax.grid(True)
         fig.tight_layout()
 
         if save_path is not None:
-            save_speed_path = f"{save_path}_speed.png"
+            save_speed_path = f'{save_path}_speed.png'
             try:
                 fig.savefig(save_speed_path)
-                print(f"Speed plot saved to {save_speed_path}")
+                print(f'Speed plot saved to {save_speed_path}')
             except Exception as e:
-                print(f"Failed to save plot {save_speed_path}: {e}")
+                print(f'Failed to save plot {save_speed_path}: {e}')
 
         # plt.show()
         plt.close(fig)
-    
+
 
 class TrajectoryPlanner:
     def __init__(self, waypoint_list, string_list, N=30):
@@ -725,32 +728,32 @@ class TrajectoryPlanner:
         final = np.array(waypoint_list[-1]['position'] + [0., 0., 0.])[None, :]
         pos_init = np.concatenate((pos_init, final), axis=0)
 
-        print("Final pos_init shape:", pos_init.shape)  # Should be (N+1, 6)
+        print('Final pos_init shape:', pos_init.shape)  # Should be (N+1, 6)
         print(pos_init.shape)
-        print("Expected:", self.N + 1, "Actual:", pos_init.shape[0])
+        print('Expected:', self.N + 1, 'Actual:', pos_init.shape[0])
         self.dynamics_fn()
         self.traj_solver = self.traj_optimizer()
         u_init = np.zeros((self.N * 3, 1))
-        print("U shape:", u_init.shape)
+        print('U shape:', u_init.shape)
 
         x_init = pos_init.reshape(-1, 1)
-        print("X shape:", x_init.shape)
+        print('X shape:', x_init.shape)
 
         sigma_init = np.zeros(((self.N + 1) * len(self.string_list) * self.string_discrete_point, 1))
-        print("Sigma shape:", sigma_init.shape)
+        print('Sigma shape:', sigma_init.shape)
 
         x0 = np.concatenate((u_init, x_init, sigma_init), axis=0)
-        print("x0 shape:", x0.shape)
+        print('x0 shape:', x0.shape)
         x0 = np.concatenate((np.zeros((self.N * 3, 1)),
                              pos_init.reshape(-1, 1),
                              np.zeros(((self.N + 1) * len(self.string_list) * self.string_discrete_point, 1))), axis=0)
         print(x0.shape, self.lbg.shape, self.ubg.shape)
-        #Timer Start
+        # Timer Start
         start_time = time.time()
         soln = self.traj_solver(x0=x0, p=[], lbg=self.lbg, ubg=self.ubg)
         elapsed_time = time.time() - start_time
-        print(f"Trajectory optimization completed in {elapsed_time:.2f} seconds")
-        
+        print(f'Trajectory optimization completed in {elapsed_time:.2f} seconds')
+
         ref = soln['x'].full()
         if not self.traj_solver.stats()['success']:
             print('Trajectory planner failed')
@@ -767,7 +770,7 @@ class TrajectoryPlanner:
                     # velocity=vel_ref[i, :]
                 )
             )
-        
+
     def dynamics_fn(self):
         x = cs.MX.sym('x', 6)
         u = cs.MX.sym('u', 3)
@@ -799,7 +802,7 @@ class TrajectoryPlanner:
         g.append(X[:3, -1] - np.array(self.end_loc))
         g.append(X[3:, -1])
         for i in range(self.N):
-            cost += weights[0]*U[:, i].T @ U[:, i]
+            cost += weights[0] * U[:, i].T @ U[:, i]
             h.append(U[:, i] - ub)
             h.append(lb - U[:, i])
             x_next = self.dyn(X[:, i], U[:, i])
@@ -807,13 +810,13 @@ class TrajectoryPlanner:
             for j, string in enumerate(self.string_list):
                 for k, point in enumerate(np.linspace(string['start'], string['end'], self.string_discrete_point)):
                     d = _distance_to_point(point, X[:3, i])
-                    h.append(0.25 - d - Sigma[j * k, i]) 
+                    h.append(0.25 - d - Sigma[j * k, i])
                     h.append(-Sigma[j * k, i])
-            # cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds 
-            # cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds 
+            # cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds
+            # cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds
             # cost += 3 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 30 seconds
             # cost += 1 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 40 seconds
-            cost += weights[1] * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 40 seconds
+            cost += weights[1] * Sigma[:, i].T @ Sigma[:, i]  # obstacle course for 40 seconds
         for wp in self.waypoint_list[1:-1]:  # skip start and end
             t_idx = int(wp['time'] / self.dt)  # convert time to index
             pos = X[:3, t_idx]  # predicted position at that time

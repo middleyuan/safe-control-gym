@@ -10,13 +10,11 @@ task=$5 # stab, or track
 resume=$6 # True or False
 
 hpo_runs=(1)
-# run HPO on with different strategy
+# Run HPO on with different strategy
 for run in "${hpo_runs[@]}"
-do
-
-bash examples/hpo/rl/rl_hpo.sh ${run} $((run+6)) ${sampler} ${localOrHost} ${sys} ${task} ${algo} ${resume}
-
+    do
+    bash examples/hpo/rl/rl_hpo.sh ${run} $((run+6)) ${sampler} ${localOrHost} ${sys} ${task} ${algo} ${resume}
 done
 
-# eval
+# Eval
 bash examples/hpo/rl/rl_hp_evaluation.sh ${localOrHost} ${algo} ${sys} ${task} ${sampler}

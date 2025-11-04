@@ -21,10 +21,9 @@
       - 0.01
       - 0.01
     normalize_training_data: False
-    # normalize_training_data: True
     prior_info:
       prior_prop:
-        M: 0.033 # Must be capitcal M 
+        M: 0.033 # Must be capitcal M
         beta_1: 12.1432
         beta_2: 1.8118
         beta_3: 0
@@ -33,25 +32,19 @@
         alpha_3: 39.8653
         pitch_bias: 0.0 # in radian
     use_linear_prior: False
-    # use_linear_prior: True
     obs_noise_std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
     act_noise_std: [0.03116, 0.03450]
-    # prior_param_coeff: 0.2
     prior_param_coeff: 1.0
     prob: 0.95
     warmstart: True
     kernel: RBF_single
     gp_approx: 'mean_eq' # 'taylor'
-    # sparse_gp: false # true
     sparse_gp: true
     n_ind_points: 40
     inducing_point_selection_method: 'kmeans'
     overwrite_saved_data: false
     online_learning: False
     additional_constraints: null
-    # input_mask: null
-    # target_mask: null
-    # target_mask: [1, 3, 5]
     num_epochs: 6
     num_samples: 50
     num_test_episodes_per_epoch: 1
@@ -61,14 +54,6 @@
     rand_data_selection: false
     terminate_train_on_done: True
     terminate_test_on_done: True
-    # parallel: True
     parallel: False
     use_RTI: False
-    # plot_trained_gp: False
     plot_trained_gp: True
-    # use_ancillary_gain: True
-    # soft_constraints_params:
-    #   gp_soft_constraints: true
-    #   gp_soft_constraints_coeff: 10000
-    #   prior_soft_constraints: false
-    #   prior_soft_constraints_coeff: 10000

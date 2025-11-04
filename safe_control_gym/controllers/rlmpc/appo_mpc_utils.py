@@ -2,7 +2,6 @@
 
 from collections import defaultdict, deque
 from copy import deepcopy
-from multiprocessing import Pool
 
 import casadi as cs
 import numpy as np
@@ -10,13 +9,11 @@ import torch
 import torch.nn as nn
 from gymnasium.spaces import Box
 
-from safe_control_gym.controllers.mpc.mpc_utils import (compute_discrete_lqr_gain_from_cont_linear_system,
-                                                        compute_state_rmse, get_cost_weight_matrix,
-                                                        reset_constraints, rk_discrete)
+from safe_control_gym.controllers.mpc.mpc_utils import reset_constraints
 from safe_control_gym.controllers.rlmpc.rlmpc_utils import AdamOptimizer, euler_discrete
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, create_constraint_list
-from safe_control_gym.math_and_models.distributions import Categorical, Normal
+from safe_control_gym.math_and_models.distributions import Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
 
 
@@ -123,7 +120,7 @@ class PPO_MPC_Agent:
 
     def compute_value_loss(self, batch_th):
         '''Returns value loss(es) given batch of data.'''
-        obs, ret, v_old = batch_th['obs'], batch_th['ret'], batch_th['v']
+        obs, ret = batch_th['obs'], batch_th['ret']
         v_cur = self.ac.critic(obs)
         value_loss = 0.5 * (v_cur - ret).pow(2).mean()
         return value_loss
@@ -136,7 +133,7 @@ class PPO_MPC_Agent:
         assert num_mini_batch != 0, 'num_mini_batch is 0'
         for _ in range(self.opt_epochs):
             p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
-            theta_loss_epoch, ref_loss_epoch = 0, 0
+            theta_loss_epoch = 0
             for batch, batch_th in rollouts.sampler(self.mini_batch_size, device):
                 # Actor update.
                 (policy_loss, entropy_loss, approx_kl, action_th,
@@ -413,20 +410,20 @@ class MPCPolicyFunction:
             self.traj_step = 0
 
     def add_constraints(self, constraints):
-        """Add the constraints (from a list) to the system.
+        '''Add the constraints (from a list) to the system.
 
         Args:
             constraints (list): List of constraints controller is subject too.
-        """
+        '''
         (self.constraints, self.state_constraints_sym,
          self.input_constraints_sym) = reset_constraints(constraints + self.constraints.constraints)
 
     def remove_constraints(self, constraints):
-        """Remove constraints from the current constraint list.
+        '''Remove constraints from the current constraint list.
 
         Args:
             constraints (list): list of constraints to be removed.
-        """
+        '''
         old_constraints_list = self.constraints.constraints
         for constraint in constraints:
             assert constraint in self.constraints.constraints, \
@@ -436,7 +433,7 @@ class MPCPolicyFunction:
             old_constraints_list)
 
     def set_dynamics_func(self):
-        """Updates symbolic dynamics with actual control frequency."""
+        '''Updates symbolic dynamics with actual control frequency.'''
         # self.dynamics_func = rk_discrete(self.model.fc_func,
         #                                  self.model.nx,
         #                                  self.model.nu,
@@ -448,7 +445,7 @@ class MPCPolicyFunction:
                                             self.dt)
 
     def setup_optimizer(self):
-        """Sets up nonlinear optimization problem."""
+        '''Sets up nonlinear optimization problem.'''
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
         etau = 1e-4  # barrier parameter for interior point method
@@ -496,7 +493,7 @@ class MPCPolicyFunction:
         Q, th_q, nq = _create_semi_definite_matrix(nx)
         R, th_r, nr = _create_semi_definite_matrix(nu)
         Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
-        # theta_param = cs.MX.sym("theta_var", nq + nr)
+        # theta_param = cs.MX.sym('theta_var', nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
         # Model
         model_param = cs.MX.sym('f_param', npl)
@@ -596,8 +593,8 @@ class MPCPolicyFunction:
         mult, lamb, mu = cs.vcat(mult), cs.vcat(lamb), cs.vcat(mu)
         con_lbg, con_ubg = cs.vcat(con_lbg), cs.vcat(con_ubg)
         lang_mult_fn = cs.Function('lang_mult_fn', [mult], [lamb, mu])
-        lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, "thread")
-        lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, "thread")
+        lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, 'thread')
+        lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, 'thread')
 
         # Create solver (IPOPT solver in this version)
         opts_setting = {
@@ -623,14 +620,14 @@ class MPCPolicyFunction:
             'g': con_list,
         }
         vsolver = cs.nlpsol('vsolver', 'fatrop', vnlp_prob, opts_setting)
-        vsolver_parallel = vsolver.map(self.n_parallel_solver, "thread")
-        vsolver_parallel_train = vsolver.map(self.n_train_solver, "thread")
+        vsolver_parallel = vsolver.map(self.n_parallel_solver, 'thread')
+        vsolver_parallel_train = vsolver.map(self.n_train_solver, 'thread')
 
         # Build Lagrangian
         lagrangian = (
-                cost
-                + cs.transpose(lamb) @ H_eq
-                + cs.transpose(mu) @ H_ieq
+            cost
+            + cs.transpose(lamb) @ H_eq
+            + cs.transpose(mu) @ H_ieq
         )
         dlag_dw = cs.jacobian(lagrangian, opt_vars)
         # Build KKT matrix
@@ -645,8 +642,8 @@ class MPCPolicyFunction:
 
         # Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function('rkkt_fn', [z, fixed_param, ref_param, theta], [R_kkt])
-        rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, "thread")
-        rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, "thread")
+        rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, 'thread')
+        rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, 'thread')
         dR_sensfunc = rkkt_fn.factory('dR', ['i0', 'i1', 'i2', 'i3'], ['jac:o0:i0', 'jac:o0:i2', 'jac:o0:i3'])
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
         dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
@@ -679,7 +676,7 @@ class MPCPolicyFunction:
         }
 
     def get_references(self, traj_step=None, traj_ref=None):
-        """Constructs reference states along mpc horizon.(nx, T+1)."""
+        '''Constructs reference states along mpc horizon.(nx, T+1).'''
         if self.env.TASK == Task.STABILIZATION:
             # Repeat goal state for horizon steps.
             goal_states = np.tile(self.env.X_GOAL.reshape(-1, 1), (1, self.T + 1))
@@ -705,7 +702,7 @@ class MPCPolicyFunction:
         return goal_states  # (nx, T+1).
 
     def select_action(self, obs, theta, traj_ref, info=None, mode='eval'):
-        """Solves nonlinear mpc problem to get next action.
+        '''Solves nonlinear mpc problem to get next action.
 
         Args:
             obs (ndarray): Current state/observation.
@@ -716,7 +713,7 @@ class MPCPolicyFunction:
 
         Returns:
             action (ndarray): Input/action to the task/env.
-        """
+        '''
         solver_dict = self.solver_dict
         solver = solver_dict['solver']
         opt_vars_fn = solver_dict['opt_vars_fn']
@@ -814,13 +811,13 @@ class MPCPolicyFunction:
         rkkt_batch = rkkt_fn(z, fixed_p, ref_param, theta.T)
         optimal_batch = [True if np.linalg.norm(rkkt_batch[:, i]) ** 2 <= 1e-3 else False for i in
                          range(obs_batch.shape[0])]
-        dpi_fn_train = dpi_fn.map(sum(optimal_batch), "thread")
+        dpi_fn_train = dpi_fn.map(sum(optimal_batch), 'thread')
         dpi_cs = dpi_fn_train(z, fixed_p, ref_param, theta.T).full()
 
         # Post-processing the solution
         action_batch, results_dict_batch, info_batch = [], [], []
         # action_batch = opt_act_fn(soln_batch['x']).full().T
-        # dpi_fn_train = dpi_fn.map(sum(optimal_batch), "thread")
+        # dpi_fn_train = dpi_fn.map(sum(optimal_batch), 'thread')
         # dpi_cs = dpi_fn_train(z, fixed_p, ref_p, theta.T).full()
         # nabla_pi_ref_batch = []
         # nabla_pi_theta_batch = []
@@ -907,7 +904,7 @@ class MPCPolicyFunction:
                          range(obs_batch.shape[0])]
 
         action_batch = opt_act_fn(soln_batch['x']).full().T
-        dpi_fn_train = dpi_fn.map(sum(optimal_batch), "thread")
+        dpi_fn_train = dpi_fn.map(sum(optimal_batch), 'thread')
         dpi_cs = dpi_fn_train(z, fixed_p, ref_p, theta.T).full()
         nabla_pi_ref_batch = []
         nabla_pi_theta_batch = []
@@ -1072,11 +1069,11 @@ def update_initial_guess(x_prev, u_prev, sigma_prev, opt_vars_fn):
 
 
 def _create_semi_definite_matrix(n):
-    # U = cs.SX.sym("U", cs.Sparsity.lower(n))
+    # U = cs.SX.sym('U', cs.Sparsity.lower(n))
     # u = cs.vertcat(*U.nonzeros())
-    # W_upper = cs.Function("Lower_tri_W", [u], [U])
+    # W_upper = cs.Function('Lower_tri_W', [u], [U])
     # np = int(n * (n + 1) / 2)
-    # p = cs.MX.sym("p", np)
+    # p = cs.MX.sym('p', np)
     # W = W_upper(p)
     # WW = W.T @ W
 
@@ -1088,13 +1085,13 @@ def _create_semi_definite_matrix(n):
 
 
 def soft_update(source, target, tau):
-    """Synchronizes target networks with exponential moving average."""
+    '''Synchronizes target networks with exponential moving average.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
 
 def hard_update(source, target):
-    """Synchronizes target networks by copying over parameters directly."""
+    '''Synchronizes target networks by copying over parameters directly.'''
     for target_param, param in zip(target.parameters(), source.parameters()):
         target_param.data.copy_(param.data)
 

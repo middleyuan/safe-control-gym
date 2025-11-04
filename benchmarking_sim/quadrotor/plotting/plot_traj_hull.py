@@ -1,14 +1,17 @@
-import sys
 import pathlib
-import numpy as np
-import matplotlib.pyplot as plt
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plot_xz_trajectory_with_hull, STEPS_PER_SECOND
-from safe_control_gym.utils.configuration import ConfigFactory
+import sys
 from functools import partial
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
+from benchmarking_sim.quadrotor.benchmark_util.utils import (STEPS_PER_SECOND, plot_colors,
+                                                             plot_xz_trajectory_with_hull)
+from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
-import seaborn as sns
-sns.set_theme(style="whitegrid")
+sns.set_theme(style='whitegrid')
 script_path = pathlib.Path(__file__).parent.resolve()
 #############################################
 if len(sys.argv) > 1:
@@ -33,9 +36,9 @@ SAFETY_FILTER = None
 
 # Check if the config file exists
 assert (script_path / f'../config_overrides/{SYS}_{TASK}_{additional}.yaml').exists(), \
-    f'{script_path / f"../config_overrides/{SYS}_{TASK}_{additional}.yaml"} does not exist'
+    f'{script_path / f".. / config_overrides / {SYS}_{TASK}_{additional}.yaml"} does not exist'
 assert (script_path / f'../config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml').exists(), \
-    f'{script_path / f"../config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml"} does not exist'
+    f'{script_path / f".. / config_overrides / {ALGO}_{SYS}_{TASK}_{PRIOR}.yaml"} does not exist'
 
 if SAFETY_FILTER is None:
     sys.argv[1:] = ['--algo', ALGO,
@@ -111,8 +114,9 @@ ppo_mpc_data = np.load(ppo_mpc_data_path, allow_pickle=True).item()
 ppo_mpc_traj_data = np.array(ppo_mpc_data['obs'])
 print(ppo_mpc_traj_data.shape)
 
-def compute_rmse_and_mean(traj_data, ref,  ctrl=None):
-    """
+
+def compute_rmse_and_mean(traj_data, ref, ctrl=None):
+    '''
     Compute RMSE and mean RMSE for trajectory data.
 
     Args:
@@ -122,7 +126,7 @@ def compute_rmse_and_mean(traj_data, ref,  ctrl=None):
 
     Returns:
         tuple: mean_rmse, std_rmse, mean_error, std_error
-    """
+    '''
     state_idx = [0, 2]
 
     min_length = min(traj_data.shape[1], ref.shape[0])
@@ -140,6 +144,7 @@ def compute_rmse_and_mean(traj_data, ref,  ctrl=None):
         print(f'RMSE {ctrl}: {mean_rmse:.3f} +/- {std_rmse:.3f}')
     return mean_rmse, std_rmse, mean_error, std_error
 
+
 # Update calls to the merged function
 mean_rmse_pid, std_rmse_pid, mean_error_pid, std_error_pid = compute_rmse_and_mean(pid_traj_data, X_GOAL, 'Geometric Control')
 mean_rmse_lqr, std_rmse_lqr, mean_error_lqr, std_error_lqr = compute_rmse_and_mean(lqr_traj_data, X_GOAL, 'LQR')
@@ -156,14 +161,14 @@ mean_rmse_ppo_mpc, std_rmse_ppo_mpc, mean_error_ppo_mpc, std_error_ppo_mpc = com
 # Adjust hull colors using transparency
 hull_alpha = 0.3
 
-# plot tracking error plot
+# Plot tracking error plot
 plot_std_tracking_error = True
 # plot_std_tracking_error = False
 s = 2
 fig, ax = plt.subplots(figsize=(6, 4))
 # adjust the distance between title and the plot
 time_axis = np.arange(0, mean_error_pid.shape[0])
-dt = 1/60
+dt = 1 / 60
 time_axis = time_axis * dt
 if plot_name == 'RL':
     ax.plot(time_axis, mean_error_ppo, color=plot_colors['PPO'], label='PPO')
@@ -227,7 +232,7 @@ else:
     print(f'Saved at {error_dir / f"{file_name}.png"}')
 
 ##################################################
-# plot the state path x, z [0, 2]
+# Plot the state path x, z [0, 2]
 title_fontsize = 20
 legend_fontsize = 12
 axis_label_fontsize = 12
@@ -237,7 +242,7 @@ fig, ax = plt.subplots(figsize=(8, 4))
 # adjust the distance between title and the plot
 fig.subplots_adjust(top=0.2)
 
-# plot the convex hull of each steps
+# Plot the convex hull of each steps
 hull_alpha = 0.3
 plot_second_half = True  # Option to plot only the second half of the trajectory
 max_steps = eval(additional) * STEPS_PER_SECOND
@@ -279,7 +284,7 @@ elif plot_name == 'Control-oriented':
                                  alpha=hull_alpha, plot_second_half=plot_second_half)
     plot_xz_trajectory_with_hull(ax, fmpc_traj_data, label='F-MPC',
                                  traj_color=plot_colors['F-MPC'], hull_color=plot_colors['F-MPC'],
-                                 alpha=hull_alpha, plot_second_half=plot_second_half)   
+                                 alpha=hull_alpha, plot_second_half=plot_second_half)
 
 ax.plot(X_GOAL[reference_idx, 0], X_GOAL[reference_idx, 2], color=plot_colors['Reference'], linestyle='-.', linewidth=1., label='Reference')
 # ax.plot()
@@ -298,22 +303,22 @@ ax.set_ylim(0.35, 1.85)
 ax.set_xlim(-1.6, 1.6)
 fig.tight_layout()
 
-#get handles and labels
+# get handles and labels
 handles, labels = plt.gca().get_legend_handles_labels()
 
-#specify order of items in legend
+# specify order of items in legend
 # order = [3, 1, 2, 0]
 # order = [0, 4, 6, 1, 5, 2, 3]
 order = np.arange(len(labels))
 
-#add legend to plot
-plt.legend([handles[idx] for idx in order],[labels[idx] for idx in order], ncol=3, loc='upper center', fontsize=legend_fontsize)
+# add legend to plot
+plt.legend([handles[idx] for idx in order], [labels[idx] for idx in order], ncol=3, loc='upper center', fontsize=legend_fontsize)
 
 # Save path plot
 if additional == '11':
     fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.pdf', bbox_inches='tight')
     print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.pdf"}')
-    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.png', bbox_inches='tight') 
+    fig.savefig(path_dir / f'{plot_name}_xz_path_performance_{additional}.png', bbox_inches='tight')
     print(f'Saved at {path_dir / f"{plot_name}_xz_path_performance_{additional}.png"}')
 else:
     fig.savefig(path_dir / f'{plot_name}_xz_path_generalization_{additional}.pdf', bbox_inches='tight')

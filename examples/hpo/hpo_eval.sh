@@ -35,13 +35,13 @@ echo "task config path: ./examples/hpo/${sys_name}/config_overrides/${sys}_${tas
 echo "algo config path: ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_${task}_${prior}.yaml"
 echo "hpo config path: ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_hpo.yaml"
 
-    # Run the process in the background
-    python ./examples/hpo/hpo_experiment.py \
-        --algo "${algo}" \
-        --task "${sys_name}" \
-        --overrides ./examples/hpo/${sys_name}/config_overrides/${sys}_${task}${hpo_postfix}.yaml \
-                    ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_${task}_${prior}.yaml \
-                    ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_hpo.yaml \
-        --output_dir "${OUTPUT_DIR}" \
-        --func eval \
-        --use_gpu True &
+# Run the process in the background
+python ./examples/hpo/hpo_experiment.py \
+    --algo "${algo}" \
+    --task "${sys_name}" \
+    --overrides ./examples/hpo/${sys_name}/config_overrides/${sys}_${task}${hpo_postfix}.yaml \
+                ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_${task}_${prior}.yaml \
+                ./examples/hpo/${sys_name}/config_overrides/${algo}_${sys}_hpo.yaml \
+    --output_dir "${OUTPUT_DIR}" \
+    --func eval \
+    --use_gpu True &

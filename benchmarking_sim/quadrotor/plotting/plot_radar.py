@@ -3,12 +3,11 @@ import sys
 
 # import seaborn
 import numpy as np
-from matplotlib import pyplot as plt
 import pandas as pd
 import seaborn
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
-from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import load_metric, tag_ctrl_list
+from matplotlib import pyplot as plt
+
+from benchmarking_sim.quadrotor.benchmark_util.utils import load_metric, plot_colors, tag_ctrl_list
 
 script_dir = os.path.dirname(__file__)
 # set up Nature sytle plotting
@@ -33,7 +32,7 @@ else:
     save_folder = 'radar'
     # robustness_type = 'abs'
     # save_folder = 'radar_abs'
-print(f"Plotting with {robustness_type} robustness.")
+print(f'Plotting with {robustness_type} robustness.')
 
 # set up matplotlib parameters
 transfer_metric = {}
@@ -42,9 +41,9 @@ text_fontsize = 30
 supertitle_fontsize = 30
 subtitle_fontsize = 30
 small_text_size = 20
-padding = 0.15 # padding for the radar plot
-OOD_alpha = 0.4 # alpha for the OOD data
-ID_alpha = 0.15 
+padding = 0.15  # padding for the radar plot
+OOD_alpha = 0.4  # alpha for the OOD data
+ID_alpha = 0.15
 
 transfer_metric = load_metric(script_dir, transfer_metric, 'iLQR')
 transfer_metric = load_metric(script_dir, transfer_metric, 'F-MPC')
@@ -78,8 +77,8 @@ inverted_axes_name = [
 inverted_axes_index = [metric_index[i] for i in inverted_axes_name]
 
 axis_legend_dict = {
-    'worst_generalization_performance': '$\qquad\qquad\qquad\quad$  Generalization',
-    'performance': '$\qquad\qquad\qquad\quad$ Performance',
+    'worst_generalization_performance': r'$\qquad\qquad\qquad\quad$  Generalization',
+    'performance': r'$\qquad\qquad\qquad\quad$ Performance',
     'inference_time': 'Online     \nComputation     \n\n',
     'model_complexity': 'Required Model                    \nKnowledge                    ',
     'sampling_complexity': '\n\n\nSampling\ncomplexity',
@@ -137,83 +136,87 @@ ID_numbers_abs = {
 if robustness_type == 'abs':
     ID_numbers = ID_numbers_abs
 
+
 def load_robustness_failure_points():
-    """Load robustness failure points from process_experiment_data.py results."""
+    '''Load robustness failure points from process_experiment_data.py results.'''
     import json
     from pathlib import Path
-    
+
     # Try to load the consolidated failure results
     script_dir = os.path.dirname(__file__)
     data_dir = Path(script_dir) / 'data'
     consolidated_file = data_dir / 'robustness_failure_points.json'
-    
+
     if not consolidated_file.exists():
-        print(f"Warning: Failure results file not found at {consolidated_file}")
-        print("Using hardcoded values. Run process_experiment_data.py for all noise types to generate failure data.")
+        print(f'Warning: Failure results file not found at {consolidated_file}')
+        print('Using hardcoded values. Run process_experiment_data.py for all noise types to generate failure data.')
         return {}
-    
+
     try:
         with open(consolidated_file, 'r') as f:
             failure_data = json.load(f)
-        
-        print(f"Loaded failure results from: {consolidated_file}")
+
+        print(f'Loaded failure results from: {consolidated_file}')
         return failure_data
     except Exception as e:
-        print(f"Error loading failure results: {e}")
-        print("Using hardcoded values.")
+        print(f'Error loading failure results: {e}')
+        print('Using hardcoded values.')
         return {}
 
+
 def update_metrics_with_failure_data(metrics_data, failure_data, robustness_type):
-    """Update metrics_data with failure points from process_experiment_data.py results."""
-    
+    '''Update metrics_data with failure points from process_experiment_data.py results.'''
+
     if not failure_data:
-        print("No failure data available, using existing hardcoded values.")
+        print('No failure data available, using existing hardcoded values.')
         return metrics_data
-    
+
     # Choose the appropriate failure type
     if robustness_type == 'abs':
         failures = failure_data.get('absolute_failures', {})
-        print("Using absolute failure thresholds (0.25m RMSE)")
+        print('Using absolute failure thresholds (0.25m RMSE)')
     else:
         failures = failure_data.get('relative_failures', {})
-        print("Using relative failure thresholds (200% degradation)")
-    
+        print('Using relative failure thresholds (200% degradation)')
+
     # Map noise types to metric names
     noise_to_metric = {
         'obs_noise': 'robustness_obs',
-        'proc_noise': 'robustness_proc',  
+        'proc_noise': 'robustness_proc',
         'param': 'robustness_param'
     }
-    
+
     if robustness_type == 'abs':
         noise_to_metric = {
             'obs_noise': 'abs_robustness_obs',
             'proc_noise': 'abs_robustness_proc',
             'param': 'abs_robustness_param'
         }
-    
+
     # Update metrics for each noise type
     for noise_type, metric_name in noise_to_metric.items():
         if noise_type in failures:
-            print(f"\nUpdating {metric_name} from {noise_type} failure data:")
-            
+            print(f'\nUpdating {metric_name} from {noise_type} failure data:')
+
             for method, failure_point in failures[noise_type].items():
                 if method in metrics_data:
                     old_value = metrics_data[method][metric_name]
                     metrics_data[method][metric_name] = failure_point
-                    print(f"  {method:15}: {old_value} -> {failure_point}")
+                    print(f'  {method:15}: {old_value} -> {failure_point}')
                 else:
-                    print(f"  Warning: Method '{method}' not found in metrics_data")
-    
+                    print(f'  Warning: Method "{method}" not found in metrics_data')
+
     return metrics_data
+
 
 # Load failure data and update metrics
 failure_data = load_robustness_failure_points()
 
+
 def plot_id_number(ax, metric_name, model_name, angle, plot_colors, ID_numbers, ID_numbers_norm, small_text_size):
-    """
+    '''
     Plot an ID number point and label for a specific metric and model.
-    
+
     Args:
         ax: Matplotlib axis object
         metric_name: Name of the metric (e.g., 'robustness_obs')
@@ -223,37 +226,38 @@ def plot_id_number(ax, metric_name, model_name, angle, plot_colors, ID_numbers, 
         ID_numbers: Dictionary with original ID numbers
         ID_numbers_norm: Dictionary with normalized ID numbers
         small_text_size: Font size for text labels
-    """
+    '''
     if model_name not in ID_numbers_norm[metric_name]:
         return
-        
+
     # Get normalized value
     y_pos = ID_numbers_norm[metric_name][model_name]
-    
+
     # Plot the point
     ax.scatter(
-        angle, 
-        y_pos, 
-        facecolor=plot_colors[model_name], 
-        # edgecolor='black', 
-        # s=100, 
+        angle,
+        y_pos,
+        facecolor=plot_colors[model_name],
+        # edgecolor='black',
+        # s=100,
         # zorder=10
     )
-    
+
     # Add text with original ID number value
     x_offset = -0.3 if metric_name == 'worst_generalization_performance' else 0
-    
+
     ax.text(
-        angle + x_offset, 
+        angle + x_offset,
         y_pos,
-        f'{ID_numbers[metric_name][model_name]}', 
+        f'{ID_numbers[metric_name][model_name]}',
         size=small_text_size
     )
 
+
 def normalize_data(data, max_values, min_values, inverted_axes_name, lower_padding):
-    """
+    '''
     Normalize the data based on max and min values, applying padding and inversion where necessary.
-    
+
     Args:
         data: Dictionary with raw data values
         max_values: Dictionary with maximum values for each metric
@@ -262,31 +266,32 @@ def normalize_data(data, max_values, min_values, inverted_axes_name, lower_paddi
         lower_padding: Padding to apply to the normalized values
     Returns:
         normalized_data: Dictionary with normalized values
-    """
+    '''
     normalized_data = {}
-    
+
     for key in data.keys():
         temp_value = (np.array(data[key]) - min_values[key]) / (max_values[key] - min_values[key])
         temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
         temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
         normalized_data[key] = temp_value + lower_padding
-    
+
     return normalized_data
 
-def spider(df, 
-           *, 
-           id_column, 
-           title=None, 
-           subtitle=None, 
-           max_values=None, 
+
+def spider(df,
+           *,
+           id_column,
+           title=None,
+           subtitle=None,
+           max_values=None,
            min_values=None,
-           lower_padding=.25, 
+           lower_padding=.25,
            plt_name='',
            robustness_type='relative'):
     categories = df._get_numeric_data().columns.tolist()
-    data = df[categories].to_dict(orient='list') 
-    ids = df[id_column].tolist() # ['controller1', 'controller2', ...]
-    
+    data = df[categories].to_dict(orient='list')
+    ids = df[id_column].tolist()  # ['controller1', 'controller2', ...]
+
     if max_values is None:
         max_values = {key: max(value) for key, value in data.items()}
     if min_values is None:
@@ -295,27 +300,26 @@ def spider(df,
     normalized_data = {
         key: 0 for key in data.keys()
     }
-    
+
     # normalize the data
-    normalized_data = normalize_data(data, max_values, min_values, 
+    normalized_data = normalize_data(data, max_values, min_values,
                                      inverted_axes_name, lower_padding)
 
     # normalized ID numbers
-    num_axis = len(data.keys()) # number of axes
     tiks = list(data.keys())
     tiks = [axis_legend_dict.get(tik, tik) for tik in tiks]  # replace keys with axis legend dict
     tiks += tiks[:1]
     start_angle = np.deg2rad(0)
-    angles = [ 
-        start_angle, # worst generalization
-        np.deg2rad(60), # performance
-        np.deg2rad(120), # inference time
-        np.deg2rad(180), # model complexity
-        np.deg2rad(240), # sampling complexity
-        np.deg2rad(300 - 15), # robustness proc
-        np.deg2rad(300), # observation noise
-        np.deg2rad(300 + 15), # robustness param
-        start_angle, # close the circle
+    angles = [
+        start_angle,  # worst generalization
+        np.deg2rad(60),  # performance
+        np.deg2rad(120),  # inference time
+        np.deg2rad(180),  # model complexity
+        np.deg2rad(240),  # sampling complexity
+        np.deg2rad(300 - 15),  # robustness proc
+        np.deg2rad(300),  # observation noise
+        np.deg2rad(300 + 15),  # robustness param
+        start_angle,  # close the circle
     ]
 
     fig, ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(polar=True), )
@@ -331,12 +335,12 @@ def spider(df,
             # ax.fill(angles, values, alpha=1, color=plot_colors[model_name], )
             continue
         else:
-            ax.plot(angles, values, 
-                    label=model_name, 
+            ax.plot(angles, values,
+                    label=model_name,
                     color=plot_colors[model_name], )
             ax.scatter(angles, values, facecolor=plot_colors[model_name], )
-            ax.fill(angles, values, 
-                    alpha=OOD_alpha, 
+            ax.fill(angles, values,
+                    alpha=OOD_alpha,
                     color=plot_colors[model_name], )
 
         if model_name in ['PPO', 'SAC', 'DPPO']:
@@ -361,13 +365,18 @@ def spider(df,
             if _x == angles[metric_index['inference_time']]:
                 t = f'{t:.1E}' if isinstance(t, float) else str(t)
             elif _x == angles[metric_index['sampling_complexity']]:
-                t = '0' if t == int(1) else f'{t:.1E}' # write number in scientific notation
+                t = '0' if t == int(1) else f'{t:.1E}'  # write number in scientific notation
             elif _x == angles[metric_index['model_complexity']]:
-                if t == 3: t = 'Model-free'
-                if t == 2: t = '   Linear\n   model'
-                if t == 1: t = '   Partially uncertain \n nonlinear model'
-                if model_name == 'PID': t = '   Kinematic \n   model'
-                if t == 0: t = 'Perfect nonlinear\n   model'
+                if t == 3:
+                    t = 'Model-free'
+                if t == 2:
+                    t = '   Linear\n   model'
+                if t == 1:
+                    t = '   Partially uncertain \n nonlinear model'
+                if model_name == 'PID':
+                    t = '   Kinematic \n   model'
+                if t == 0:
+                    t = 'Perfect nonlinear\n   model'
             elif _x == angles[metric_index['robustness_param']]:
                 t = f'{t:.1f}' if isinstance(t, float) else str(t)
             elif _x in [angles[metric_index['performance']], angles[metric_index['worst_generalization_performance']]]:
@@ -381,14 +390,14 @@ def spider(df,
                 ax.text(_x + 0.3, _y + 0.2, t, size=small_text_size)
             elif _x == angles[metric_index['sampling_complexity']]:
                 ax.text(_x - 0.15, _y + 0.2, t, size=small_text_size)
-            elif _x in [angles[metric_index['robustness_proc']], 
+            elif _x in [angles[metric_index['robustness_proc']],
                         angles[metric_index['robustness_obs']],
                         angles[metric_index['robustness_param']]]:
                 ax.text(_x - 0., _y, t, size=small_text_size)
-            else: # shift all the other axes 
+            else:  # shift all the other axes
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
-            
-            # # plot extra dots for ID numbers
+
+            # # Plot extra dots for ID numbers
             # for metric_name in ['robustness_obs', 'robustness_proc', 'robustness_param', 'worst_generalization_performance']:
             #     if _x == angles[metric_index[metric_name]]:
             #         plot_id_number(
@@ -401,8 +410,7 @@ def spider(df,
             #             ID_numbers_norm=ID_numbers_norm,
             #             small_text_size=small_text_size
             #         )
-        
-            
+
     # add additional text for robustness axes
     ax.text(angles[metric_index['robustness_obs']], 1.55, 'Robustness', size=small_text_size)
     # ax.fill(angles, 1.5*np.ones(num_axis + 1), alpha=0.7, color='lightgray')
@@ -410,18 +418,21 @@ def spider(df,
     ax.set_yticklabels([])
     ax.set_xticks(angles)
     ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
-    if title is not None: plt.suptitle(title, fontsize=supertitle_fontsize)
-    if subtitle is not None: plt.title(subtitle, fontsize=subtitle_fontsize)
+    if title is not None:
+        plt.suptitle(title, fontsize=supertitle_fontsize)
+    if subtitle is not None:
+        plt.title(subtitle, fontsize=subtitle_fontsize)
     os.makedirs(os.path.join(script_dir, save_folder), exist_ok=True)
     fig_save_path = os.path.join(script_dir, f'{save_folder}/radar_{plt_name}.pdf')
     fig.savefig(fig_save_path, dpi=300, bbox_inches='tight')
     fig.savefig(fig_save_path.replace('.pdf', '.png'), dpi=300, bbox_inches='tight')
     print(f'figure saved as {fig_save_path}')
 
+
 radar = spider
 methods = [
-    'GP-MPC', 'Linear MPC', 'Nonlinear MPC', 'F-MPC', 
-    'PPO', 'SAC', 'DPPO', 'PPO-MPC', 
+    'GP-MPC', 'Linear MPC', 'Nonlinear MPC', 'F-MPC',
+    'PPO', 'SAC', 'DPPO', 'PPO-MPC',
     'Geometric Control', 'iLQR', 'LQR'
 ]
 
@@ -442,7 +453,7 @@ for method in methods:
         'abs_robustness_param': 0,
     }
 
-######################## Nominal ###############################
+# ======== Nominal ========
 # Fill in the data
 # GP-MPC
 # metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
@@ -628,20 +639,20 @@ if shared_performance_axis:
     max_values['performance'] = performance_max
     max_values['worst_generalization_performance'] = performance_max
     min_values['performance'] = performance_min
-    min_values['worst_generalization_performance'] = performance_min 
+    min_values['worst_generalization_performance'] = performance_min
 
 # prepare the ID data
 ID_numbers_norm = {
-    metric: {model: 0.0 for model in models} 
+    metric: {model: 0.0 for model in models}
     for metric, models in ID_numbers.items()
 }
 # normalize the ID numbeer acording to the max and min values of each category
 for key in ID_numbers.keys():
     for method in ID_numbers[key].keys():
         temp_number = (ID_numbers[key][method] - min_values[key]) / (max_values[key] - min_values[key])
-        ID_numbers_norm [key][method] = 1 - temp_number if key in inverted_axes_name else temp_number
-        ID_numbers_norm [key][method] = np.clip(ID_numbers_norm[key][method], 0, 1)  # clip to [0, 1]
-        ID_numbers_norm [key][method] += padding
+        ID_numbers_norm[key][method] = 1 - temp_number if key in inverted_axes_name else temp_number
+        ID_numbers_norm[key][method] = np.clip(ID_numbers_norm[key][method], 0, 1)  # clip to [0, 1]
+        ID_numbers_norm[key][method] += padding
 
 # append the max and min values to the data
 # read the argv

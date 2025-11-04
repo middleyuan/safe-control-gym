@@ -3,13 +3,13 @@
 
 # Plot model-based controller OOD robustness test
 for noise in 'obs_noise' 'proc_noise' 'param'
-# for noise in 'obs_noise' 
+# for noise in 'obs_noise'
 # for noise in 'proc_noise'
 # for noise in 'param'
 do
     echo "Processing model-based controllers for noise type: $noise"
     for algo in 'mpc_acados' 'linear_mpc_acados' 'lqr' 'ilqr' 'pid' 'gpmpc_acados_TP' 'fmpc'
-    # for algo in 'fmpc' 
+    # for algo in 'fmpc'
     # for algo in 'pid' 'lqr'
     do
         echo "  Processing $algo..."
@@ -20,7 +20,7 @@ done
 
 # Plot RL controller OOD robustness test
 for noise in 'obs_noise' 'proc_noise' 'param'
-# for noise in 'obs_noise' 
+# for noise in 'obs_noise'
 # for noise in 'proc_noise'
 # for noise in 'param'
 do
@@ -35,7 +35,7 @@ done
 
 # Generate combined plots for all methods
 for noise in 'obs_noise' 'proc_noise' 'param'
-# for noise in 'obs_noise' 
+# for noise in 'obs_noise'
 # for noise in 'proc_noise'
 # for noise in 'param'
 do
@@ -43,4 +43,3 @@ do
     python3 plot_noise_all.py $noise
     echo ""
 done
-

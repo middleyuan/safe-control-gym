@@ -290,7 +290,7 @@ python process_experiment_data.py robustness param rl
 python process_experiment_data.py trajectory all
 python process_experiment_data.py trajectory control
 
-# Generalization analysis  
+# Generalization analysis
 python process_experiment_data.py generalization all
 python process_experiment_data.py generalization rl
 

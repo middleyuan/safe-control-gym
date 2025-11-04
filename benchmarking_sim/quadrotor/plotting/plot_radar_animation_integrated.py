@@ -1,19 +1,18 @@
-import os
-import sys
 import argparse
+import os
+
 import numpy as np
-from matplotlib import pyplot as plt
-import pandas as pd
 import seaborn
+from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
-from benchmarking_sim.quadrotor.benchmark_util.utils import load_metric, tag_ctrl_list
+
+from benchmarking_sim.quadrotor.benchmark_util.utils import load_metric, plot_colors
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Generate animated radar plots for RL controllers')
-parser.add_argument('--controller', type=str, choices=['PPO', 'SAC', 'DPPO', 'all'], 
+parser.add_argument('--controller', type=str, choices=['PPO', 'SAC', 'DPPO', 'all'],
                     default='all', help='Controller to animate (default: all)')
-parser.add_argument('--robustness-type', type=str, choices=['relative', 'abs'], 
+parser.add_argument('--robustness-type', type=str, choices=['relative', 'abs'],
                     default='relative', help='Robustness type to use (default: relative)')
 parser.add_argument('--fps', type=int, default=30, help='Animation frame rate (default: 30)')
 parser.add_argument('--frames', type=int, default=180, help='Number of animation frames (default: 180)')
@@ -40,9 +39,9 @@ frame_hold = args.hold_frames
 robustness_type = args.robustness_type
 save_folder = 'radar_animation'
 
-print(f"Generating radar animation for: {args.controller}")
-print(f"Robustness type: {robustness_type}")
-print(f"Animation frames: {num_animation_frames}, Hold frames: {frame_hold}, FPS: {args.fps}")
+print(f'Generating radar animation for: {args.controller}')
+print(f'Robustness type: {robustness_type}')
+print(f'Animation frames: {num_animation_frames}, Hold frames: {frame_hold}, FPS: {args.fps}')
 
 # Load metrics
 transfer_metric = {}
@@ -119,22 +118,24 @@ padding = 0.15
 OOD_alpha = 0.4
 ID_alpha = 0.15
 
+
 def normalize_data(data, max_values, min_values, inverted_axes_name, lower_padding):
-    """Normalize the data based on max and min values, applying padding and inversion where necessary."""
+    '''Normalize the data based on max and min values, applying padding and inversion where necessary.'''
     normalized_data = {}
-    
+
     for key in data.keys():
         temp_value = (np.array(data[key]) - min_values[key]) / (max_values[key] - min_values[key])
         temp_value = (1 - temp_value) if key in inverted_axes_name else temp_value
         temp_value = np.clip(temp_value, 0, 1)  # clip to [0, 1]
         normalized_data[key] = temp_value + lower_padding
-    
+
     return normalized_data
+
 
 # Initialize metrics data
 methods = [
-    'GP-MPC', 'Linear MPC', 'Nonlinear MPC', 'F-MPC', 
-    'PPO', 'SAC', 'DPPO', 'PPO-MPC', 
+    'GP-MPC', 'Linear MPC', 'Nonlinear MPC', 'F-MPC',
+    'PPO', 'SAC', 'DPPO', 'PPO-MPC',
     'Geometric Control', 'iLQR', 'LQR'
 ]
 
@@ -234,7 +235,7 @@ if args.controller == 'all':
 else:
     target_methods = [args.controller]
 
-print(f"Target methods for animation: {target_methods}")
+print(f'Target methods for animation: {target_methods}')
 
 data_for_animation = {}
 
@@ -277,7 +278,7 @@ ax.set_xticks(angles)
 ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
 ax.set_ylim(0, 1.25)
 ax.set_yticklabels([])
-ax.grid(color="grey", linestyle='--', linewidth=0.5)
+ax.grid(color='grey', linestyle='--', linewidth=0.5)
 
 # Add robustness text
 ax.text(angles[metric_index['robustness_obs']], 1.55, 'Robustness', size=small_text_size, ha='center')
@@ -297,7 +298,7 @@ for method in target_methods:
     line, = ax.plot(angles_closed, initial_values, label=method, color=plot_colors[method], linewidth=2)
     scatter = ax.scatter(angles_closed, initial_values, facecolor=plot_colors[method], s=50)
     fill = ax.fill(angles_closed, initial_values, alpha=OOD_alpha, color=plot_colors[method])[0]
-    
+
     # ID plots (dashed lines)
     if method in id_data_for_animation:
         id_line, = ax.plot(angles_closed, initial_values, color=plot_colors[method], linestyle='--', linewidth=2)
@@ -305,7 +306,7 @@ for method in target_methods:
         id_fill = ax.fill(angles_closed, initial_values, alpha=ID_alpha, color=plot_colors[method])[0]
     else:
         id_line, id_scatter, id_fill = None, None, None
-    
+
     plot_elements[method] = {
         'line': line,
         'scatter': scatter,
@@ -318,56 +319,56 @@ for method in target_methods:
 # Add legend
 ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1.0))
 
+
 def update(frame):
-    """Animation function: this is called for each frame"""
-    total_frames = num_animation_frames + frame_hold
-    
+    '''Animation function: this is called for each frame'''
     if frame < num_animation_frames:
         # Growing phase
         progress = frame / (num_animation_frames - 1)
     else:
         # Holding phase
         progress = 1.0
-    
+
     elements_to_return = []
-    
+
     for method in target_methods:
         # Update OOD data
         current_values = data_for_animation[method] * progress
         current_values_closed = np.concatenate((current_values, [current_values[0]]))
-        
+
         # Update line
         plot_elements[method]['line'].set_ydata(current_values_closed)
         elements_to_return.append(plot_elements[method]['line'])
-        
+
         # Update scatter
         plot_elements[method]['scatter'].set_offsets(np.column_stack([angles_closed, current_values_closed]))
         elements_to_return.append(plot_elements[method]['scatter'])
-        
+
         # Update fill
         path = np.column_stack([angles_closed, current_values_closed])
         plot_elements[method]['fill'].set_xy(path)
         elements_to_return.append(plot_elements[method]['fill'])
-        
+
         # Update ID data if available
         if method in id_data_for_animation and plot_elements[method]['id_line'] is not None:
             id_current_values = id_data_for_animation[method] * progress
             id_current_values_closed = np.concatenate((id_current_values, [id_current_values[0]]))
-            
+
             # Update ID line
             plot_elements[method]['id_line'].set_ydata(id_current_values_closed)
             elements_to_return.append(plot_elements[method]['id_line'])
-            
+
             # Update ID scatter
             plot_elements[method]['id_scatter'].set_offsets(np.column_stack([angles_closed, id_current_values_closed]))
             elements_to_return.append(plot_elements[method]['id_scatter'])
-            
+
             # Update ID fill
             id_path = np.column_stack([angles_closed, id_current_values_closed])
             plot_elements[method]['id_fill'].set_xy(id_path)
             elements_to_return.append(plot_elements[method]['id_fill'])
-    
+
     return elements_to_return
+
 
 # Create the animation
 total_frames = num_animation_frames + frame_hold
@@ -387,7 +388,7 @@ final_ax.set_xticks(angles)
 final_ax.set_xticklabels(tiks, fontsize=axis_label_fontsize)
 final_ax.set_ylim(0, 1.25)
 final_ax.set_yticklabels([])
-final_ax.grid(color="grey", linestyle='--', linewidth=0.5)
+final_ax.grid(color='grey', linestyle='--', linewidth=0.5)
 final_ax.text(angles[metric_index['robustness_obs']], 1.55, 'Robustness', size=small_text_size, ha='center')
 
 # Add title to final frame
@@ -404,7 +405,7 @@ for method in target_methods:
     final_ax.plot(angles_closed, values, label=f'{method} (OOD)', color=plot_colors[method], linewidth=2)
     final_ax.scatter(angles_closed, values, facecolor=plot_colors[method], s=50)
     final_ax.fill(angles_closed, values, alpha=OOD_alpha, color=plot_colors[method])
-    
+
     # ID data (dashed lines)
     if method in id_data_for_animation:
         id_values = np.concatenate((id_data_for_animation[method], [id_data_for_animation[method][0]]))
@@ -421,14 +422,14 @@ print(f'Static final frame saved as {static_path}')
 plt.close(fig)
 plt.close(final_fig)
 
-print("\nAnimation generation complete!")
-print(f"Files created:")
-print(f"  - Animation: {gif_path}")
-print(f"  - Static final frame: {static_path}")
-print(f"\nUsage examples:")
-print(f"  python plot_radar_animation_integrated.py --controller all")
-print(f"  python plot_radar_animation_integrated.py --controller PPO")
-print(f"  python plot_radar_animation_integrated.py --controller SAC --fps 24 --frames 120")
+print('\nAnimation generation complete!')
+print('Files created:')
+print(f'  - Animation: {gif_path}')
+print(f'  - Static final frame: {static_path}')
+print('\nUsage examples:')
+print('  python plot_radar_animation_integrated.py --controller all')
+print('  python plot_radar_animation_integrated.py --controller PPO')
+print('  python plot_radar_animation_integrated.py --controller SAC --fps 24 --frames 120')
 
 # Optionally show the plot
 # plt.show()

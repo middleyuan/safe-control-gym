@@ -1,4 +1,4 @@
-"""Proximal Policy Optimization (PPO)
+'''Proximal Policy Optimization (PPO)
 
 Based on:
     * https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/ppo/ppo.py
@@ -10,7 +10,7 @@ Additional references:
     * pytorch-a2c-ppo-acktr-gail - https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail
     * openai spinning up - ppo - https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ppo
     * stable baselines3 - ppo - https://github.com/DLR-RM/stable-baselines3/tree/master/stable_baselines3/ppo
-"""
+'''
 
 import os
 import time
@@ -30,7 +30,7 @@ from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_rando
 
 
 class PPO(BaseController):
-    """Proximal policy optimization."""
+    '''Proximal policy optimization.'''
 
     def __init__(self,
                  env_func,
@@ -50,7 +50,7 @@ class PPO(BaseController):
             # Training and testing.
             self.env = make_vec_envs(env_func, None, self.rollout_batch_size, self.num_workers, seed)
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
-            self.eval_env = env_func(seed=seed+110)
+            self.eval_env = env_func(seed=seed + 110)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
             self.model = self.get_prior(self.eval_env, self.prior_info)
         else:
@@ -92,7 +92,7 @@ class PPO(BaseController):
         self.safety_filter = None
 
     def reset(self):
-        """Do initializations for training or evaluation."""
+        '''Do initializations for training or evaluation.'''
         if self.training:
             # set up stats tracking
             self.env.add_tracker('constraint_violation', 0)
@@ -111,7 +111,7 @@ class PPO(BaseController):
             self.env.add_tracker('mse', 0, mode='queue')
 
     def close(self):
-        """Shuts down and cleans up lingering resources."""
+        '''Shuts down and cleans up lingering resources.'''
         self.env.close()
         if self.training:
             self.eval_env.close()
@@ -120,7 +120,7 @@ class PPO(BaseController):
     def save(self,
              path,
              ):
-        """Saves model params and experiment state to checkpoint path."""
+        '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -141,7 +141,7 @@ class PPO(BaseController):
     def load(self,
              path,
              ):
-        """Restores model and experiment given checkpoint path."""
+        '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path, weights_only=False)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
@@ -163,7 +163,7 @@ class PPO(BaseController):
               env=None,
               **kwargs
               ):
-        """Performs learning (pre-training, training, fine-tuning, etc.)."""
+        '''Performs learning (pre-training, training, fine-tuning, etc.).'''
         # Initial Evaluation.
         eval_results = self.run(env=self.eval_env, n_episodes=self.eval_batch_size)
         self.logger.info('Eval | ep_lengths {:.2f} +/- {:.2f} | ep_return {:.3f} +/- {:.3f}'.format(
@@ -211,7 +211,7 @@ class PPO(BaseController):
                 self.log_step(results)
 
     def select_action(self, obs, info=None, extra_info=False):
-        """Determine the action to take at the current timestep.
+        '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
@@ -219,7 +219,7 @@ class PPO(BaseController):
 
         Returns:
             action (ndarray): The action chosen by the controller.
-        """
+        '''
 
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
@@ -231,7 +231,7 @@ class PPO(BaseController):
         return action
 
     def train_step(self):
-        """Performs a training/fine-tuning step."""
+        '''Performs a training/fine-tuning step.'''
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
@@ -303,7 +303,7 @@ class PPO(BaseController):
             n_episodes=10,
             verbose=False,
             ):
-        """Runs evaluation with current policy."""
+        '''Runs evaluation with current policy.'''
         self.agent.eval()
         self.obs_normalizer.set_read_only()
         if env is None:
@@ -368,7 +368,7 @@ class PPO(BaseController):
     def log_step(self,
                  results
                  ):
-        """Does logging after a training step."""
+        '''Does logging after a training step.'''
         step = results['step']
         # runner stats
         self.logger.add_scalars(

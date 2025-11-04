@@ -6,7 +6,7 @@
 # 2. Remove or backup the database if needed.
 # 3. Create a screen session screen, and detach it Ctrl+a d.
 # 4. Run this script by giving experiment name as the first arg, seed as the second, and number of parallel jobs as the third arg.
-# 5. If you want to kill them, run pkill -f "python ./.py". 
+# 5. If you want to kill them, run pkill -f "python ./.py".
 #####################
 
 cd ~/safe-control-gym
@@ -39,23 +39,18 @@ fi
 
 conda activate safe
 
-# remove the database
-# python ./safe_control_gym/hyperparameters/database.py --func drop --tag ${algo}_hpo
-# create database
-# python ./safe_control_gym/hyperparameters/database.py --func create --tag ${algo}_hpo
-
-# echo config path
+# Echo config path
 echo "task config path: ./benchmarking_sim/${sys_name}/config_overrides/${sys}_${task}.yaml"
 echo "algo config path: ./benchmarking_sim/${sys_name}/config_overrides/${algo}_${sys}_${task}_${prior}.yaml"
 echo "hpo config path: ./benchmarking_sim/${sys_name}/config_overrides/${algo}_${sys}_hpo.yaml"
 
-# Adjust the seed for each parallel job
+# Adjust the seeds for each parallel job
 seeds=()
 for ((i=0; i<parallel_jobs; i++)); do
     seeds[$i]=$((seed1 + i * 100))
 done
 
-# if resume is False, create a study for the first job and load it for the remaining jobs
+# If resume is False, create a study for the first job and load it for the remaining jobs
 if [ "$resume" == 'False' ]; then
     # First job creates the study
     if [ "$safety_filter" == 'False' ]; then
@@ -123,7 +118,7 @@ if [ "$resume" == 'False' ]; then
     fi
 fi
 
-# if resume is True, load the study for all jobs
+# If resume is True, load the study for all jobs
 if [ "$resume" == 'True' ]; then
     cd ./benchmarking_sim/hpo/${algo}/${experiment_name}
     mysql -u optuna ${algo}_hpo < ${algo}_hpo.sql
@@ -151,12 +146,12 @@ for pid in ${pids[*]}; do
     echo "Job $pid finished"
 done
 
-# back up the database after all jobs finish
+# Back up the database after all jobs finish
 echo "backing up the database"
 mysqldump --no-tablespaces -u optuna ${algo}_hpo > ${algo}_hpo.sql
 mv ${algo}_hpo.sql ./benchmarking_sim/hpo/${algo}/${experiment_name}/${algo}_hpo.sql
 mv ${algo}_hpo.db ./benchmarking_sim/hpo/${algo}/${experiment_name}/${algo}_hpo.db
 mv ${algo}_hpo.db-journal ./benchmarking_sim/hpo/${algo}/${experiment_name}/${algo}_hpo.db-journal
 mv ${algo}_hpo_endpoint.yaml ./benchmarking_sim/hpo/${algo}/${experiment_name}/${algo}_hpo_endpoint.yaml
-# remove the database
+# Remove the database
 python ./safe_control_gym/hyperparameters/database.py --func drop --tag ${algo}_hpo
