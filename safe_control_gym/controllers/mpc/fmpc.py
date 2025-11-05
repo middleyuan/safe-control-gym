@@ -287,7 +287,6 @@ class FlatMPC(BaseController):
                              'inference_time': [],
                              }
 
-    # @timing
     def select_action(self,
                       obs,
                       info=None
@@ -1109,10 +1108,10 @@ def _generate_trajectory_FMPC(traj_type='figure8',
         horizon(int, optional): FMPC horizon, trajectory gets extended such that at the final timestep there still is a full horizon in the reference
 
     Returns:
-        ndarray: The positions in x, y, z of the trajectory sampled for its entire duration.
-        ndarray: The velocities in x, y, z of the trajectory sampled for its entire duration.
-        ndarray: The acceleration in x, y, z of the trajectory sampled for its entire duration.
-        ndarray: The jerk in x, y, z of the trajectory sampled for its entire duration.
+        pos_ref_traj (ndarray): The positions in x, y, z of the trajectory sampled for its entire duration.
+        vel_ref_traj (ndarray): The velocities in x, y, z of the trajectory sampled for its entire duration.
+        acc_ref_traj (ndarray): The acceleration in x, y, z of the trajectory sampled for its entire duration.
+        jer_ref_traj (ndarray): The jerk in x, y, z of the trajectory sampled for its entire duration.
     '''
 
     # Get trajectory type.

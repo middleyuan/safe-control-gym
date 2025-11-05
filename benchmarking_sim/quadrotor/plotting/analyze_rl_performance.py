@@ -122,10 +122,7 @@ def main():
             file_path = glob.glob(path)
             if file_path:
                 temp = np.load(file_path[0], allow_pickle=True).item()
-                if 'avarage_inference_time' in temp:
-                    inference_time_list.append(temp['avarage_inference_time'][0])
-                elif 'average_inference_time' in temp:
-                    inference_time_list.append(temp['average_inference_time'][0])
+                inference_time_list.append(temp['average_inference_time'][0])
 
         if inference_time_list:
             inference_times[method] = {

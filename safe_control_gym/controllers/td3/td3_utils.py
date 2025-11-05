@@ -101,7 +101,7 @@ class TD3Agent:
         q1 = self.ac.q1(obs, act)
         q2 = self.ac.q2(obs, act)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             next_act = self.ac.actor(next_obs)
             noise = (0.5 * torch.randn_like(next_act)).clamp(-0.2, 0.2)
             next_act = (next_act + noise).clamp(self.action_space_low, self.action_space_high)

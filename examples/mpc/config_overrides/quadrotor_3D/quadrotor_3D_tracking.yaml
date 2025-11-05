@@ -1,6 +1,5 @@
 task_config:
   seed: 1337
-  info_in_reset: True
   ctrl_freq: 50
   pyb_freq: 1000
   gui: False
@@ -70,6 +69,9 @@ task_config:
     proj_normal: [0, 1, 1]
   episode_len_sec: 6
   cost: quadratic
+  # Match MPC weights
+  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  rew_act_weight: [0.1, 0.1, 0.1, 0.1]
   done_on_out_of_bound: True
   constraints:
   - constraint_form: default_constraint

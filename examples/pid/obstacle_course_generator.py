@@ -120,7 +120,6 @@ class TrajectoryBuilder:
         # Manually build the config dict with placeholders for strings/waypoints
         base_config = {
             'task_config': {
-                'info_in_reset': True,
                 'ctrl_freq': 60,
                 'pyb_freq': 60,
                 'physics': 'dyn_si_3d_delay',

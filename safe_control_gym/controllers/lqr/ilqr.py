@@ -1,4 +1,4 @@
-'''Linear Quadratic Regulator (LQR)
+'''iterative Linear Quadratic Regulator (iLQR)
 
 [1] https://studywolf.wordpress.com/2016/02/03/the-iterative-linear-quadratic-regulator-method/
 [2] https://arxiv.org/pdf/1708.09342.pdf
@@ -65,7 +65,7 @@ class iLQR(BaseController):
         self.lamb_max = lamb_max
         self.epsilon = epsilon
 
-        self.env = env_func(info_in_reset=True, done_on_out_of_bound=True, seed=self.seed)
+        self.env = env_func(done_on_out_of_bound=True, seed=self.seed)
 
         # Controller params.
         self.model = self.get_prior(self.env)
@@ -381,7 +381,7 @@ class iLQR(BaseController):
         Args:
             obs (ndarray): The observation at this timestep.
             info (dict): The info at this timestep.
-            hardware (bool): Whether the controller is running on hardware.
+            training (bool): Whether the algorithm is training or evaluating.
 
         Returns:
             action (ndarray): The action chosen by the controller.
@@ -417,7 +417,7 @@ class iLQR(BaseController):
 
         Args:
             obs (ndarray): The observation at this timestep.
-            step (int): The timestep.
+            step (int): The current step/iteration of the environment.
 
         Returns:
             action (ndarray): The calculated action.
@@ -446,6 +446,7 @@ class iLQR(BaseController):
 
     def reset_before_run(self, obs=None, info=None, env=None):
         super().reset_before_run(obs, info, env)
+        self.traj_step = 0
         self.optimization_log = {}
 
     def reset(self):

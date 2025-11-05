@@ -42,25 +42,10 @@ task_config:
       low: -0.02
       high: 0.02
 
-  task: traj_tracking
+  task: stabilization
   task_info:
-    trajectory_type: figure8
-    num_cycles: 2
-    trajectory_plane: 'xz'
-    trajectory_position_offset: [ 0., 1.]
-    trajectory_scale: 1.
-    strings:
-      - start: [2., -1.1, 1.]
-        end: [2., 1.2, 1.]
-      - start: [3., -1.1, 2.]
-        end: [3., 1.2, 2.]
-    waypoints:
-      - time: 0
-        position: [0.0, 0.0, 1.0]
-      - time: 4
-        position: [2.0, 0.0, 1.]
-      - time: 9
-        position: [5.0, 0.0, 1.0]
+    stabilization_goal: [0, 1]
+    stabilization_goal_tolerance: 0.0
 
   episode_len_sec: 11
   cost: quadratic

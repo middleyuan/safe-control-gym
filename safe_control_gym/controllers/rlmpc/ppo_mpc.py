@@ -208,7 +208,7 @@ class PPO_MPC(BaseController):
                     eval_results['ep_returns'].std()))
                 # Save best model.
                 eval_score = eval_results['ep_returns'].mean()
-                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
+                eval_best_score = getattr(self, 'eval_best_score', -np.inf)
                 if self.eval_save_best and eval_best_score < eval_score:
                     self.eval_best_score = eval_score
                     self.save(os.path.join(self.output_dir, 'model_best.pt'))
@@ -228,8 +228,7 @@ class PPO_MPC(BaseController):
             action (ndarray): The action chosen by the controller.
         '''
 
-        with torch.no_grad():
-            # obs = torch.FloatTensor(obs).to(self.device)
+        with torch.inference_mode():
             action = self.agent.ac.act(obs, info=info)
         return action
 
@@ -246,7 +245,7 @@ class PPO_MPC(BaseController):
         for env in self.venv.envs:
             agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
         for _ in range(self.rollout_steps):
-            with torch.no_grad():
+            with torch.inference_mode():
                 act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(
                     torch.FloatTensor(obs).to(self.device), info=agent_info)
             next_obs, rew, done, info = self.venv.step(act)

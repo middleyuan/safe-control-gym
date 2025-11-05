@@ -921,7 +921,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
 
         return ocp
 
-    # @timing
     def select_action(self, obs, info=None):
         time_before = time.time()
         if self.gaussian_process is None:
@@ -935,7 +934,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
 
         return action
 
-    # @timing
     def select_action_with_gp(self, obs):
         time_before = time.time()
         nx, nu = self.model.nx, self.model.nu
@@ -945,38 +943,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         # set initial condition (0-th state)
         self.acados_ocp_solver.set(0, 'lbx', obs)
         self.acados_ocp_solver.set(0, 'ubx', obs)
-        # set initial guess for the solution
-        # if self.warmstart:
-        #     if self.x_guess is None or self.u_guess is None:
-        #         if self.compute_ipopt_initial_guess:
-        #             # compute initial guess with IPOPT
-        #             self.compute_initial_guess(obs, self.get_references())
-        #         else:
-        #             # use zero initial guess (TODO: use acados warm start)
-        #             self.x_guess = np.zeros((nx, self.T + 1))
-        #             if nu == 1:
-        #                 self.u_guess = np.zeros((self.T,))
-        #             else:
-        #                 self.u_guess = np.zeros((nu, self.T))
-        #     # set initial guess
-        #     for idx in range(self.T + 1):
-        #         # if self.x_guess[:, idx].shape[0] != nx:
-        #         #     print(self.x_guess[:, idx].shape)
-        #         #     raise ValueError(f'x_guess[{idx}] has shape {self.x_guess[:, idx].shape}')
-        #         assert self.x_guess[:, idx].shape[0] == nx, f'x_guess[{idx}] has shape {self.x_guess[:, idx].shape}'
-        #         init_x = self.x_guess[:, idx]
-        #         self.acados_ocp_solver.set(idx, 'x', init_x)
-        #     for idx in range(self.T):
-        #         if nu == 1:
-        #             init_u = np.array([self.u_guess[idx]])
-        #         else:
-        #             init_u = self.u_guess[:, idx]
-        #         self.acados_ocp_solver.set(idx, 'u', init_u)
-        # else:
-        #     for idx in range(self.T + 1):
-        #         self.acados_ocp_solver.set(idx, 'x', obs)
-        #     for idx in range(self.T):
-        #         self.acados_ocp_solver.set(idx, 'u', np.zeros((nu,)))
 
         # compute the sparse GP values
         if self.recalc_inducing_points_at_every_step:
@@ -990,10 +956,8 @@ class GPMPC_ACADOS_TRPY(GPMPC):
 
         # Set the probabilistic state and input constraint set limits.
         # Tightening at the first step is possible if self.compute_initial_guess is used
-        # time_before_constraints = time.perf_counter()
         state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
-        # time_after_constraints = time.perf_counter()
-        # print(f'gpmpc constraints time: {time_after_constraints - time_before_constraints:.3f}')
+
         # set acados parameters
         if self.sparse_gp:
             # sparse GP parameters
@@ -1025,19 +989,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
             self.acados_ocp_solver.set(self.T, 'p', parameter_values)
         else:
             pass
-            # for idx in range(self.T):
-            #     # tighten initial and path constraints
-            #     state_constraint_set = state_constraint_set_prev[0][:, idx]
-            #     input_constraint_set = input_constraint_set_prev[0][:, idx]
-            #     tighten_value = np.concatenate((state_constraint_set, input_constraint_set))
-            #     self.acados_ocp_solver.set(idx, 'p', tighten_value)
-            # # tighten terminal state constraints
-            # tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
-            # self.acados_ocp_solver.set(self.T, 'p', tighten_value)
 
-        # set reference for the control horizon
-        # step = self.extract_step(info)
-        # goal_states = self.get_references(step)
         goal_states = self.get_references()
         if self.mode == 'tracking':
             self.traj_step += 1
@@ -1087,150 +1039,8 @@ class GPMPC_ACADOS_TRPY(GPMPC):
 
         if hasattr(self, 'K'):
             action += self.K @ (self.x_prev[:, 0] - obs)
-            # self.u_prev = self.u_prev + self.K @ (self.x_prev - obs)
-            # self.u_guess = self.u_prev
-            # action = self.u_prev[0] if nu == 1 else self.u_prev[:, 0]
 
         return action
-
-    # def compute_initial_guess(self, init_state, goal_states):
-    #     time_before = time.time()
-    #     nx, nu = self.model.nx, self.model.nu
-    #     ny = nx + nu
-    #     ny_e = nx
-    #     # TODO: replace this with something safer
-    #     n_ind_points = self.opti_dict['n_ind_points']
-
-    #     # set initial condition (0-th state)
-    #     self.acados_ocp_solver.set(0, 'lbx', init_state)
-    #     self.acados_ocp_solver.set(0, 'ubx', init_state)
-    #     # set initial guess for the solution
-    #     if self.warmstart:
-    #         if self.x_guess is None or self.u_guess is None:
-    #             if self.compute_ipopt_initial_guess:
-    #                 # compute initial guess with IPOPT
-    #                 self.compute_initial_guess(init_state, self.get_references())
-    #             else:
-    #                 # use zero initial guess (TODO: use acados warm start)
-    #                 self.x_guess = np.zeros((nx, self.T + 1))
-    #                 if nu == 1:
-    #                     self.u_guess = np.zeros((self.T,))
-    #                 else:
-    #                     self.u_guess = np.zeros((nu, self.T))
-    #         # set initial guess
-    #         for idx in range(self.T + 1):
-    #             init_x = self.x_guess[:, idx]
-    #             self.acados_ocp_solver.set(idx, 'x', init_x)
-    #         for idx in range(self.T):
-    #             if nu == 1:
-    #                 init_u = np.array([self.u_guess[idx]])
-    #             else:
-    #                 init_u = self.u_guess[:, idx]
-    #             self.acados_ocp_solver.set(idx, 'u', init_u)
-    #     else:
-    #         for idx in range(self.T + 1):
-    #             self.acados_ocp_solver.set(idx, 'x', init_state)
-    #         for idx in range(self.T):
-    #             self.acados_ocp_solver.set(idx, 'u', np.zeros((nu,)))
-
-    #     # compute the sparse GP values
-    #     if self.recalc_inducing_points_at_every_step:
-    #         mean_post_factor_val, _, _, z_ind_val = self.precompute_sparse_gp_values(n_ind_points)
-    #         self.results_dict['inducing_points'].append(z_ind_val)
-    #     else:
-    #         # use the precomputed values
-    #         mean_post_factor_val = self.mean_post_factor_val
-    #         z_ind_val = self.z_ind_val
-    #         self.results_dict['inducing_points'] = [z_ind_val]
-
-    #     # Set the probabilistic state and input constraint set limits.
-    #     # Tightening at the first step is possible if self.compute_initial_guess is used
-    #     state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
-    #     # set acados parameters
-    #     if self.sparse_gp:
-    #         # sparse GP parameters
-    #         assert z_ind_val.shape == (n_ind_points, 4)
-    #         assert mean_post_factor_val.shape == (2, n_ind_points)
-    #         # casadi use column major order, while np uses row major order by default
-    #         # Thus, Fortran order (column major) is used to reshape the arrays
-    #         z_ind_val = z_ind_val.reshape(-1, 1, order='F')
-    #         mean_post_factor_val = mean_post_factor_val.reshape(-1, 1, order='F')
-    #         dyn_value = np.concatenate((z_ind_val, mean_post_factor_val)).reshape(-1)
-    #         # tighten constraints
-    #         for idx in range(self.T):
-    #             # tighten initial and path constraints
-    #             state_constraint_set = state_constraint_set_prev[0][:, idx]
-    #             input_constraint_set = input_constraint_set_prev[0][:, idx]
-    #             tighten_value = np.concatenate((state_constraint_set, input_constraint_set))
-    #             # set the parameter values
-    #             parameter_values = np.concatenate((dyn_value, tighten_value))
-    #             # manually check the shapes
-    #             assert self.ocp.model.p.shape[0] == parameter_values.shape[0], \
-    #                    f'parameter_values.shape: {parameter_values.shape}; model.p.shape: {self.ocp.model.p.shape}'
-    #             # self.acados_ocp_solver.set(idx, 'p', dyn_value)
-    #             self.acados_ocp_solver.set(idx, 'p', parameter_values)
-    #         # tighten terminal state constraints
-    #         tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
-    #         # set the parameter values
-    #         parameter_values = np.concatenate((dyn_value, tighten_value))
-    #         # manually check the shapes
-    #         assert self.ocp.model.p.shape[0] == parameter_values.shape[0], \
-    #                f'parameter_values.shape: {parameter_values.shape}; model.p.shape: {self.ocp.model.p.shape}'
-    #         self.acados_ocp_solver.set(self.T, 'p', parameter_values)
-    #     else:
-    #         for idx in range(self.T):
-    #             # tighten initial and path constraints
-    #             state_constraint_set = state_constraint_set_prev[0][:, idx]
-    #             input_constraint_set = input_constraint_set_prev[0][:, idx]
-    #             tighten_value = np.concatenate((state_constraint_set, input_constraint_set))
-    #             self.acados_ocp_solver.set(idx, 'p', tighten_value)
-    #         # tighten terminal state constraints
-    #         tighten_value = np.concatenate((state_constraint_set_prev[0][:, self.T], np.zeros((2 * nu,))))
-    #         self.acados_ocp_solver.set(self.T, 'p', tighten_value)
-
-    #     # set reference for the control horizon
-    #     # goal_states = self.get_references()
-    #     for idx in range(self.T):
-    #         y_ref = np.concatenate((goal_states[:, idx], np.zeros((nu,))))
-    #         self.acados_ocp_solver.set(idx, 'yref', y_ref)
-    #     y_ref_e = goal_states[:, -1]
-    #     self.acados_ocp_solver.set(self.T, 'yref', y_ref_e)
-
-    #     # solve the optimization problem
-    #     if self.use_RTI:
-    #         # preparation phase
-    #         self.acados_ocp_solver.options_set('rti_phase', 1)
-    #         status = self.acados_ocp_solver.solve()
-
-    #         # feedback phase
-    #         self.acados_ocp_solver.options_set('rti_phase', 2)
-    #         status = self.acados_ocp_solver.solve()
-    #     else:
-    #         status = self.acados_ocp_solver.solve()
-    #     if status not in [0, 2]:
-    #         self.acados_ocp_solver.print_statistics()
-    #         print(colored(f'acados returned status {status}. ', 'red'))
-
-    #     action = self.acados_ocp_solver.get(0, 'u')
-    #     # get the open-loop solution
-    #     if self.x_prev is None and self.u_prev is None:
-    #         self.x_prev = np.zeros((nx, self.T + 1))
-    #         self.u_prev = np.zeros((nu, self.T))
-    #     if self.u_prev is not None and nu == 1:
-    #         self.u_prev = self.u_prev.reshape((1, -1))
-
-    #     for i in range(self.T + 1):
-    #         self.x_prev[:, i] = self.acados_ocp_solver.get(i, 'x')
-    #     for i in range(self.T):
-    #         self.u_prev[:, i] = self.acados_ocp_solver.get(i, 'u')
-    #     if nu == 1:
-    #         self.u_prev = self.u_prev.flatten()
-    #     self.x_guess = self.x_prev
-    #     self.u_guess = self.u_prev
-
-    #     time_after = time.time()
-    #     if hasattr(self, 'K'):
-    #         action += self.K @ (self.x_prev[:, 0] - init_state)
 
     def precompute_mean_post_factor_all_data(self):
         '''If the number of data points is less than the number of inducing points, use all the data
@@ -1240,9 +1050,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         n_training_samples = self.train_data['train_targets'].shape[0]
         inputs = self.train_data['train_inputs']
         targets = self.train_data['train_targets']
-        # if self.normalize_training_data:
-        #     inputs = (inputs - self.gaussian_process.input_scaler_mean[self.input_mask]) / self.gaussian_process.input_scaler_std[self.input_mask]
-        #     targets = (targets - self.gaussian_process.output_scaler_mean[self.target_mask]) / self.gaussian_process.output_scaler_std[self.target_mask]
         mean_post_factor = np.zeros((dim_gp_outputs, n_training_samples))
         for i in range(dim_gp_outputs):
             K_z_z = self.gaussian_process[i].model.K_plus_noise_inv
@@ -1260,10 +1067,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         dim_gp_outputs = len(self.gaussian_process)
         inputs = self.train_data['train_inputs']
         targets = self.train_data['train_targets']
-        # if self.normalize_training_data:
-        #     for i in range(inputs.shape[0]):
-        #         inputs[i, :] = (inputs[i, :] - self.gaussian_process.input_scaler_mean[self.input_mask]) / self.gaussian_process.input_scaler_std[self.input_mask]
-        #         targets[i, :] = (targets[i, :] - self.gaussian_process.output_scaler_mean[self.target_mask]) / self.gaussian_process.output_scaler_std[self.target_mask]
+
         # Get the inducing points.
         if False and self.x_prev is not None and self.u_prev is not None:
             # Use the previous MPC solution as in Hewing 2019.
@@ -1286,7 +1090,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
                 raise ValueError('[Error]: gp_mpc.precompute_sparse_gp_values: Only \'kmeans\' or \'random\' allowed.')
 
         use_pinv = True
-        # use_pinv = False
 
         # Define GP models and their corresponding data indices
         gp_models = self.gaussian_process
@@ -1351,48 +1154,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
                     Sigma_inv[i],
                     K_x_zind[i].T @ Gamma_inv_i @ target_tensor
                 )
-
-        # Gamma_T = torch.diagonal(K_plus_noise_T - Q_X_X_T)
-        # Gamma_T = torch.diag(Gamma_T)
-
-        # Gamma_P = torch.diagonal(K_plus_noise_P - Q_X_X_P)
-        # Gamma_P = torch.diag(Gamma_P)
-
-        # Sigma_inv_T = K_zind_zind_T + K_x_zind_T.T @ torch.linalg.solve(Gamma_T, K_x_zind_T)
-        # Sigma_inv_P = K_zind_zind_P + K_x_zind_P.T @ torch.linalg.solve(Gamma_P, K_x_zind_P)
-        # Sigma_inv = torch.zeros((dim_gp_outputs, n_ind_points, n_ind_points))
-        # Sigma_inv[0] = Sigma_inv_T
-        # Sigma_inv[1] = Sigma_inv_P
-
-        # Sigma_T = torch.pinverse(Sigma_inv_T)
-        # Sigma_P = torch.pinverse(Sigma_inv_P)
-
-        # mean_post_factor_T = torch.linalg.solve(Sigma_inv_T, K_x_zind_T.T @ torch.linalg.solve(Gamma_T, torch.from_numpy(targets[:, 0]).double()))
-        # mean_post_factor_P = torch.linalg.solve(Sigma_inv_P, K_x_zind_P.T @ torch.linalg.solve(Gamma_P, torch.from_numpy(targets[:, 1]).double()))
-
-        # mean_post_factor = torch.zeros((dim_gp_outputs, n_ind_points))
-        # mean_post_factor[0] = mean_post_factor_T
-        # mean_post_factor[1] = mean_post_factor_P
-        # mean_post_factor[0] = Sigma_T @ K_x_zind_T.T @ torch.linalg.solve(Gamma_T, torch.from_numpy(targets[:,0]).double())
-        # mean_post_factor[1] = Sigma_P @ K_x_zind_P.T @ torch.linalg.solve(Gamma_P, torch.from_numpy(targets[:,1]).double())
-
-        # K_zind_zind = self.gaussian_process.kernel(torch.Tensor(z_ind).double())
-        # K_zind_zind_inv = self.gaussian_process.kernel_inv(torch.Tensor(z_ind).double())
-        # K_x_zind = self.gaussian_process.kernel(torch.from_numpy(inputs[:, self.input_mask]).double(),
-        #                                         torch.tensor(z_ind).double())
-        # Q_X_X = K_x_zind @ K_zind_zind_inv @ K_x_zind.transpose(1,2)
-        # Q_X_X = K_x_zind @ torch.linalg.solve(K_zind_zind, K_x_zind.transpose(1, 2))
-        # Gamma = torch.diagonal(K_plus_noise - Q_X_X, 0, 1, 2)
-        # Gamma_inv = torch.diag_embed(1 / Gamma)
-        # # TODO: Should inverse be used here instead? pinverse was more stable previsouly.
-        # Sigma_inv = K_zind_zind + K_x_zind.transpose(1, 2) @ Gamma_inv @ K_x_zind # (dim_gp_outputs, n_ind_points, n_ind_points)
-        # Sigma = torch.pinverse(K_zind_zind + K_x_zind.transpose(1, 2) @ Gamma_inv @ K_x_zind)  # For debugging
-        # mean_post_factor = torch.zeros((dim_gp_outputs, n_ind_points))
-        # mean_post_factor[0] = torch.linalg.solve(Sigma_inv[0, :, :], K_x_zind[0, :, :].T @ Gamma_inv[0, :, :] @
-        #                                             torch.from_numpy(targets[:, 0]).float()) # NOTE: transpose to match the shape of the targets
-        # mean_post_factor[1] = torch.linalg.solve(Sigma_inv[1, :, :], K_x_zind[1, :, :].T @ Gamma_inv[1, :, :] @
-        #                                             torch.from_numpy(targets[:, 1]).float()) # NOTE: transpose to match the shape of the targets
-            # mean_post_factor[i] = Sigma[i] @ K_x_zind[i].T @ Gamma_inv[i] @ torch.from_numpy(targets[:, self.target_mask[i]]).double()
         return mean_post_factor.detach().numpy(), Sigma_inv.detach().numpy(), K_zind_zind_inv.detach().numpy(), z_ind
 
     def create_sparse_GP_machinery(self, n_ind_points):
@@ -1401,7 +1162,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         R_data_idx = [2, 3, 4]
         P_data_idx = [5, 6, 7]
         Y_data_idx = [8, 9, 10]
-        # lengthscales, signal_var, noise_var, gp_K_plus_noise = self.gaussian_process.get_hyperparameters(as_numpy=True)
+
         GP_T = self.gaussian_process[0]
         GP_R = self.gaussian_process[1]
         GP_P = self.gaussian_process[2]
@@ -1423,10 +1184,8 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         gp_K_plus_noise_R = GP_R.model.K_plus_noise.detach().numpy()
         gp_K_plus_noise_P = GP_P.model.K_plus_noise.detach().numpy()
         gp_K_plus_noise_Y = GP_Y.model.K_plus_noise.detach().numpy()
-        # gp_K_plus_noise_inv_T = GP_T.model.K_plus_noise_inv.detach().numpy()
-        # gp_K_plus_noise_inv_P = GP_P.model.K_plus_noise_inv.detach().numpy()
 
-        # stacking
+        # Stacking
         lengthscales = np.vstack((lengthscales_T, lengthscales_R, lengthscales_P, lengthscales_Y))
         signal_var = np.array([signal_var_T, signal_var_R, signal_var_P, signal_var_Y])
         noise_var = np.array([noise_var_T, noise_var_R, noise_var_P, noise_var_Y])
@@ -1443,6 +1202,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         self.noise_var = noise_var.squeeze()
         self.gp_K_plus_noise = gp_K_plus_noise
         Nx = self.train_data['train_inputs'].shape[1]
+
         # Create CasADI function for computing the kernel K_z_zind with parameters for z, z_ind, length scales and signal variance.
         # We need the CasADI version of this so that it can by symbolically differentiated in in the MPC optimization.
         z1_T = cs.SX.sym('z1', 2)
@@ -1578,13 +1338,7 @@ class GPMPC_ACADOS_TRPY(GPMPC):
             cov_d_batch_P = np.diag(GP_P.predict(P_pred_point_batch, return_pred=False)[1])
             cov_d_batch_Y = np.diag(GP_Y.predict(Y_pred_point_batch, return_pred=False)[1])
             num_batch = z_batch.shape[0]
-            # cov_d_batch = np.zeros((num_batch, 6, 6))
-            # cov_d_batch[:, 0, 0] = cov_d_batch_T * (np.cos(z_batch[:, self.phi_idx])*np.sin(z_batch[:, self.theta_idx]))**2
-            # cov_d_batch[:, 1, 1] = cov_d_batch_T * (-np.sin(z_batch[:, self.phi_idx]))**2
-            # cov_d_batch[:, 2, 2] = cov_d_batch_T * (np.cos(z_batch[:, self.phi_idx])*np.cos(z_batch[:, self.theta_idx]))**2
-            # cov_d_batch[:, 3, 3] = cov_d_batch_R
-            # cov_d_batch[:, 4, 4] = cov_d_batch_P
-            # cov_d_batch[:, 5, 5] = cod_d_batch_Y
+
             cov_d_batch = np.zeros((num_batch, 4, 4))
             cov_d_batch[:, 0, 0] = cov_d_batch_R
             cov_d_batch[:, 1, 1] = cov_d_batch_P
@@ -1595,9 +1349,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
             cov_noise_P = GP_P.likelihood.noise.detach().numpy()
             cov_noise_Y = GP_Y.likelihood.noise.detach().numpy()
             cov_noise_batch = np.zeros((num_batch, 4, 4))
-            # cov_noise_batch[:, 0, 0] = cov_noise_T * (np.cos(z_batch[:, self.phi_idx])*np.sin(z_batch[:, self.theta_idx]))**2
-            # cov_noise_batch[:, 1, 1] = cov_noise_T * (-np.sin(z_batch[:, self.phi_idx]))**2
-            # cov_noise_batch[:, 2, 2] = cov_noise_T * (np.cos(z_batch[:, self.phi_idx])*np.cos(z_batch[:, self.theta_idx]))**2
             cov_noise_batch[:, 0, 0] = cov_noise_R
             cov_noise_batch[:, 1, 1] = cov_noise_P
             cov_noise_batch[:, 2, 2] = cov_noise_Y
@@ -1611,21 +1362,10 @@ class GPMPC_ACADOS_TRPY(GPMPC):
                 cov_u = self.lqr_gain @ cov_x @ self.lqr_gain.T
                 input_covariances[i] = cov_u
                 cov_xu = cov_x @ self.lqr_gain.T
-                # if nu == 1:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[i]))
-                # else:
-                #     z = np.hstack((self.x_prev[:, i], self.u_prev[:, i]))
                 if self.gp_approx == 'taylor':
                     raise NotImplementedError('Taylor GP approximation is currently not working.')
                 elif self.gp_approx == 'mean_eq':
-                    # TODO: Addition of noise here! And do we still need initial_rollout_std
-                    # _, cov_d_tensor = self.gaussian_process.predict(z[None, :], return_pred=False)
-                    # cov_d = cov_d_tensor.detach().numpy()
                     cov_d = cov_d_batch[i, :, :]
-                    # _, _, cov_noise, _ = self.gaussian_process.get_hyperparameters()
-                    # if self.normalize_training_data:
-                    #     cov_noise = torch.from_numpy(self.gaussian_process.output_scaler_std)**2 * cov_noise.T
-                    # cov_d = cov_d + np.diag(cov_noise.detach().numpy())
                     cov_noise = cov_noise_batch[i, :, :]
                     cov_d = cov_d + cov_noise
                 else:
@@ -1681,7 +1421,6 @@ class GPMPC_ACADOS_TRPY(GPMPC):
         self.prior_ctrl.reset()
         self.setup_prior_dynamics()
         if self.gaussian_process is not None:
-            # self.compute_terminal_cost_and_ancillary_gain()
             # sparse GP
             if self.sparse_gp and self.train_data['train_targets'].shape[0] <= self.n_ind_points:
                 n_ind_points = self.train_data['train_targets'].shape[0]

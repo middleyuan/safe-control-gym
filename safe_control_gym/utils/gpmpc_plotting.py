@@ -25,7 +25,7 @@ def get_runtime(test_runs, train_runs):
     for epoch in range(num_epochs):
         num_samples = len(train_runs[epoch].keys())
         num_train_samples_by_epoch.append(num_samples)
-        runtime = test_runs[epoch][0][0]['inference_time_data'][0][1:]  # remove the first step
+        runtime = test_runs[epoch][0][0]['inference_time_data'][1:]  # remove the first step
 
         mean_runtime[epoch] = np.mean(runtime)
         std_runtime[epoch] = np.std(runtime)

@@ -198,7 +198,7 @@ def extract_rollouts(notebook_dir, data_folder, controller_name, additional=''):
                     # Split the text between : and \n
                     line = line.split(': ')[-1].split('\n')[0]
                     metrics.append(eval(line))
-                if line.startswith('avarage_inference_time'):
+                if line.startswith('average_inference_time'):
                     line = line.split(': ')[-1].split('\n')[0]
                     timing_data.append(eval(line))
 

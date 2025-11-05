@@ -325,7 +325,7 @@ class PPOBuffer(object):
             vshape = info['vshape']
             dtype = info.get('dtype', np.float32)
             init = info.get('init', np.zeros)
-            self.__dict__[k] = init(vshape, dtype=dtype)
+            self.__dict__[k] = init(vshape).astype(dtype)
         self.t = 0
 
     def push(self,

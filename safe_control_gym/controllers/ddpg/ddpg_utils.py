@@ -87,7 +87,7 @@ class DDPGAgent:
         obs, act, rew, next_obs, mask = batch['obs'], batch['act'], batch['rew'], batch['next_obs'], batch['mask']
         q = self.ac.q(obs, act)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             next_act = self.ac.actor(next_obs)
             next_q_targ = self.ac_targ.q(next_obs, next_act)
             # q value regression target
@@ -172,7 +172,7 @@ class MLPActorCritic(nn.Module):
 
     def act(self, obs, **kwargs):
         a = self.actor(obs)
-        return a.cpu().numpy()
+        return a.cpu().numpy().astype(np.float32)
 
 
 # -----------------------------------------------------------------------------------

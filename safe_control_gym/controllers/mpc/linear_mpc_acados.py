@@ -222,7 +222,6 @@ class LinearMPC_ACADOS(MPC_ACADOS):
 
         return ocp
 
-    # @timing
     def select_action(self,
                       obs,
                       info=None

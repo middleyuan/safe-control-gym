@@ -206,7 +206,7 @@ class SAC(BaseController):
                                                                       eval_results['ep_returns'].std()))
                 # save best model
                 eval_score = eval_results['ep_returns'].mean()
-                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
+                eval_best_score = getattr(self, 'eval_best_score', -np.inf)
                 if self.eval_save_best and eval_best_score < eval_score:
                     self.eval_best_score = eval_score
                     self.save(os.path.join(self.output_dir, 'model_best.pt'), save_buffer=False)
@@ -226,7 +226,7 @@ class SAC(BaseController):
             action (ndarray): The action chosen by the controller.
         '''
 
-        with torch.no_grad():
+        with torch.inference_mode():
             obs = torch.FloatTensor(obs).to(self.device)
             start = time.time()
             action = self.agent.ac.act(obs, deterministic=True)
@@ -243,7 +243,7 @@ class SAC(BaseController):
         if self.total_steps < self.warm_up_steps:
             action = np.stack([self.env.action_space.sample() for _ in range(self.rollout_batch_size)])
         else:
-            with torch.no_grad():
+            with torch.inference_mode():
                 action = self.agent.ac.act(torch.FloatTensor(obs).to(self.device), deterministic=False)
         next_obs, rew, done, info = self.env.step(action)
 

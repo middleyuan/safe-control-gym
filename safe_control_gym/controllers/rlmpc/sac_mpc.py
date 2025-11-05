@@ -218,7 +218,7 @@ class SAC_MPC(BaseController):
                     eval_results['ep_returns'].std()))
                 # Save best model.
                 eval_score = eval_results['ep_returns'].mean()
-                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
+                eval_best_score = getattr(self, 'eval_best_score', -np.inf)
                 if self.eval_save_best and eval_best_score < eval_score:
                     self.eval_best_score = eval_score
                     self.save(os.path.join(self.output_dir, 'model_best.pt'))
@@ -238,8 +238,7 @@ class SAC_MPC(BaseController):
             action (ndarray): The action chosen by the controller.
         '''
 
-        with torch.no_grad():
-            # obs = torch.FloatTensor(obs).to(self.device)
+        with torch.inference_mode():
             action = self.agent.ac.act(obs, info=info)
         return action
 
@@ -251,8 +250,8 @@ class SAC_MPC(BaseController):
 
         obs = self.obs
         start = time.time()
-        with torch.no_grad():
-            action, logp, soln_info, results_dict, optimal = self.agent.ac.step(
+        with torch.inference_mode():
+            action, _, soln_info, results_dict, optimal = self.agent.ac.step(
                 torch.FloatTensor(obs).to(self.device), info=self.agent_info
             )
         next_obs, rew, done, info = self.venv.step(action)

@@ -60,7 +60,6 @@ class BenchmarkEnv(gym.Env, ABC):
     def __init__(self,
                  output_dir=None,
                  seed=None,
-                 info_in_reset: bool = False,
                  gui: bool = False,
                  verbose: bool = False,
                  normalized_rl_action_space: bool = False,
@@ -86,7 +85,7 @@ class BenchmarkEnv(gym.Env, ABC):
                  constraints=None,
                  done_on_violation: bool = False,
                  use_constraint_penalty=False,
-                 constraint_penalty=-1,
+                 constraint_penalty=1.0,
                  # Disturbance.
                  disturbances=None,
                  adversary_disturbance=None,
@@ -99,8 +98,6 @@ class BenchmarkEnv(gym.Env, ABC):
         Args:
             output_dir (str, optional): Path to directory to save any env outputs.
             seed (int, optional): Seed for the random number generator.
-            info_in_reset (bool, optional): Whether .reset() returns a dictionary with the
-                                            environment's symbolic model.
             gui (bool, optional): Whether to show PyBullet's GUI.
             verbose (bool, optional): If to suppress environment print statements.
             normalized_rl_action_space (bool, optional): Whether to normalize the action space.
@@ -205,7 +202,6 @@ class BenchmarkEnv(gym.Env, ABC):
         self.seed(seed)
         self.initial_reset = False
         self.at_reset = False
-        self.INFO_IN_RESET = info_in_reset
 
     def seed(self,
              seed=None
@@ -530,6 +526,8 @@ class BenchmarkEnv(gym.Env, ABC):
                 info['constraint_violation'] = 1
                 if self.DONE_ON_VIOLATION:
                     done = True
+                    if self.COST == Cost.RL_REWARD and self.use_constraint_penalty:
+                        rew = 0
             else:
                 info['constraint_violation'] = 0
         else:
@@ -542,14 +540,13 @@ class BenchmarkEnv(gym.Env, ABC):
                     and self.constraints.is_violated(self, c_value=c_value)):
                 if self.rew_exponential:
                     rew = np.log(rew)
-                    rew += self.constraint_penalty
+                    rew -= self.constraint_penalty
                     rew = np.exp(rew)
                 else:
-                    rew += self.constraint_penalty
+                    rew -= self.constraint_penalty
 
         # Terminate when reaching time limit,
         # but distinguish between done due to true termination or time limit reached
-        # if self.ctrl_step_counter >= self.CTRL_STEPS:
         if self.ctrl_step_counter >= self.episode_len * self.CTRL_FREQ:
             info['TimeLimit.truncated'] = not done
             done = True
@@ -580,9 +577,10 @@ class BenchmarkEnv(gym.Env, ABC):
             waypoint_list (list, optional): List of waypoints trajectory should go through
 
         Returns:
-            ndarray: The positions in x, y, z of the trajectory sampled for its entire duration.
-            ndarray: The velocities in x, y, z of the trajectory sampled for its entire duration.
-            ndarray: The scalar speed of the trajectory sampled for its entire duration.
+            pos_ref_traj (ndarray): The positions in x, y, z of the trajectory sampled for its entire duration.
+            vel_ref_traj (ndarray): The velocities in x, y, z of the trajectory sampled for its entire duration.
+            acc_ref_traj (ndarray): The accelerations in x, y, z of the trajectory sampled for its entire duration.
+            speed_traj (ndarray): The scalar speed of the trajectory sampled for its entire duration.
         '''
 
         # Get trajectory type.
@@ -658,8 +656,6 @@ class BenchmarkEnv(gym.Env, ABC):
             vel_ref_traj = pva[1, :, :]
             acc_ref_traj = pva[2, :, :]
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
-            # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
-            # print(f'Max acceleration: {np.max(acc_mag)}')
             print(f'Max speed: {np.max(speed_traj)}')
             print()
 
@@ -675,19 +671,12 @@ class BenchmarkEnv(gym.Env, ABC):
                                                                                position_offset[1],
                                                                                scaling)
                 speed_traj[t[0]] = np.linalg.norm(vel_ref_traj[t[0]])
-        #
+
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
-        #       ptherwise flying on the floor with z=0.0
+        #       otherwise flying on the floor with z=0.0
         if 'z' not in traj_plane and traj_type not in ['snap_custom', 'snap_figure8']:
             pos_ref_traj[:, 2] = position_offset[2]
             vel_ref_traj[:, 2] = 0.0
-
-        # # calculate the maximul acceleration and velocity
-        # max_vel = np.max(speed_traj)
-        # max_acc = np.max(np.diff(speed_traj) / sample_time)
-        # print(colored(f'Max velocity: {max_vel}, Max acceleration: {max_acc}', 'green'))
-        # if max_acc > 1.8 * 9.81 or max_acc < 0.3 * 9.81:
-        #     raise ValueError(f'Max acceleration is not in the range of 0.3g to 1.8g')
 
         return pos_ref_traj, vel_ref_traj, acc_ref_traj, speed_traj
 

@@ -1,11 +1,9 @@
 '''General MPC utility functions.'''
 
 import casadi as cs
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import scipy.linalg
-from termcolor import colored
 
 from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
 from safe_control_gym.envs.constraints import ConstraintList
@@ -15,13 +13,17 @@ def compute_discrete_lqr_gain_from_cont_linear_system(dfdx, dfdu, Q_lqr, R_lqr, 
     '''Computes the LQR gain used for propograting GP uncertainty from the prior model dynamics.
 
     Args:
-        dfdx (np.array): CT A matrix
-        dfdu (np.array): CT B matrix
-        Q, R (np.array): Gain matrices
-        dt (float): Time discretization
+        dfdx (np.array): Continuous-time A matrix.
+        dfdu (np.array): Continuous-time B matrix.
+        Q_lqr (np.array): State cost matrix.
+        R_lqr (np.array): Input cost matrix.
+        dt (float): Time discretization.
 
-    Retrun:
-        lqr_gain (np.array): LQR optimal gain, such that (A+BK) is hurwitz
+    Returns:
+        lqr_gain (np.array): LQR optimal gain, such that (A+BK) is Hurwitz.
+        A (np.array): Discretized A matrix.
+        B (np.array): Discretized B matrix.
+        P (np.array): Solution to the discrete-time Riccati equation.
     '''
     # Determine the LQR gain K to propogate the input uncertainty (doing this at each timestep will increase complexity).
     A, B = discretize_linear_system(dfdx, dfdu, dt)
@@ -33,16 +35,16 @@ def compute_discrete_lqr_gain_from_cont_linear_system(dfdx, dfdu, Q_lqr, R_lqr, 
 
 
 def rk_discrete(f, n, m, dt):
-    '''Runge Kutta discretization for the function.
+    '''Runge-Kutta discretization for the function.
 
     Args:
-        f (casadi function): Function to discretize.
-        n (int): state dimensions.
-        m (int): input dimension.
-        dt (float): discretization time.
+        f (casadi.Function): Function to discretize.
+        n (int): State dimension.
+        m (int): Input dimension.
+        dt (float): Discretization time.
 
-    Return:
-        x_next (casadi function?):
+    Returns:
+        rk_dyn (casadi.Function): Discretized function.
     '''
     X = cs.SX.sym('X', n)
     U = cs.SX.sym('U', m)
@@ -58,7 +60,15 @@ def rk_discrete(f, n, m, dt):
 
 
 def compute_state_rmse(state_error):
-    '''Compute root-mean-square error.'''
+    '''Compute root-mean-square error.
+
+    Args:
+        state_error (np.array): State error array.
+
+    Returns:
+        state_rmse (np.array): Root-mean-square error of the state.
+        state_rmse_scalar (float): Total RMSE across all states.
+    '''
     mse = np.mean(state_error ** 2, axis=0)
     state_rmse = np.sqrt(mse)
     state_rmse_scalar = np.sqrt(np.sum(mse))
@@ -67,10 +77,15 @@ def compute_state_rmse(state_error):
 
 
 def reset_constraints(constraints):
-    '''Setup the constraints list.
+    '''Set up the constraints list.
 
     Args:
-        constraints (list): List of constraints controller is subject too.
+        constraints (list): List of constraints the controller is subject to.
+
+    Returns:
+        constraints_list (ConstraintList): List of constraints.
+        state_constraints_sym (list): Symbolic state constraints.
+        input_constraints_sym (list): Symbolic input constraints.
     '''
 
     constraints_list = ConstraintList(constraints)
@@ -100,38 +115,3 @@ def set_acados_constraint_bound(constraint,
             bound_value = -1e-6
 
     return bound_value * np.ones(constraint.shape)
-
-
-def plot_open_loop_sol(ctrl):
-    '''Plot the open loop predction of the MPC controller.
-
-    Args:
-        ctrl (MPC): MPC controller object.
-    '''
-    if ctrl.x_prev is not None and ctrl.u_prev is not None:
-        nx = ctrl.x_prev.shape[0]  # state dim
-        nu = ctrl.u_prev.shape[0]  # input dim
-        steps = ctrl.T  # prediction horizon
-        dt = ctrl.dt  # ctrl frequency
-        x = ctrl.x_prev  # open loop state (nx, steps + 1)
-        u = ctrl.u_prev  # open loop input (nu, steps)
-
-        # get the reference trajectory
-        goal_states = ctrl.get_references()
-
-        # Plot the open loop prediction
-        fig, axs = plt.subplots(nx + nu, 1, figsize=(5, 8))
-        fig.tight_layout()
-        for i in range(nx):
-            axs[i].plot(np.arange(steps + 1) * dt, x[i, :], 'b', label='pred')
-            axs[i].plot(np.arange(steps + 1) * dt, goal_states[i, :], 'r--', label='ref', )
-            axs[i].set_ylabel(f'$x_{i}$')
-            axs[i].legend()
-        for i in range(nu):
-            axs[nx + i].plot(np.arange(steps) * dt, u[i, :], 'b', label='pred')
-            axs[nx + i].set_ylabel(f'$u_{i}$')
-
-        plt.xlabel('Time [s]')
-        plt.show()
-    else:
-        print(colored('[Warning] No open loop solution to plot.', 'yellow'))

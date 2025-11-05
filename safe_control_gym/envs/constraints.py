@@ -178,7 +178,7 @@ class Constraint:
             raise ValueError('[ERROR] the tolerance dimension does not match the number of constraints.')
 
 
-class QuadraticContstraint(Constraint):
+class QuadraticConstraint(Constraint):
     '''Constraint class for constraints of the form x.T @ P @ x <= b.'''
 
     def __init__(self,
@@ -264,8 +264,8 @@ class LinearConstraint(Constraint):
                          active_dims=active_dims,
                          tolerance=tolerance,
                          decimals=decimals)
-        A = np.array(A, ndmin=1)
-        b = np.array(b, ndmin=1)
+        A = np.asarray(A, dtype=np.float32).reshape(-1, self.dim)
+        b = np.asarray(b, dtype=np.float32).reshape(-1)
         assert A.shape[1] == self.dim, '[ERROR] A has the wrong dimension!'
         self.A = A
         assert b.shape[0] == A.shape[0], '[ERROR] Dimension 0 of b does not match A!'
@@ -300,7 +300,7 @@ class BoundedConstraint(LinearConstraint):
         Args:
             env (BenchmarkEnv): The environment to constraint.
             lower_bounds (ndarray or list): Lower bound of constraint.
-            upper_bounds (ndarray or list): Uppbound of constraint.
+            upper_bounds (ndarray or list): Upper bound of constraint.
             constrained_variable (ConstrainedVariableType): Type of constraint.
             strict (optional, bool): Whether the constraint is violated also when equal to its threshold.
             active_dims (list or int): List specifying which dimensions the constraint is active for. Note that
@@ -446,7 +446,6 @@ class SymmetricStateConstraint(BoundedConstraint):
         c_value = np.round(np.abs(self.constraint_filter @ env.state) - self.bound, decimals=self.decimals)
         return c_value
 
-    # TODO: temp addition
     def check_tolerance_shape(self):
         '''Note we compare tolerance shape to bound shape (instead of num_constraints), since
         num_constraints will be set as 2x due to subclassing BoundedConstraint,
@@ -639,7 +638,7 @@ class ConstraintList:
 
 GENERAL_CONSTRAINTS = {
     'linear_constraint': LinearConstraint,
-    'quadratic_constraint': QuadraticContstraint,
+    'quadratic_constraint': QuadraticConstraint,
     'bounded_constraint': BoundedConstraint,
     'default_constraint': DefaultConstraint
 }

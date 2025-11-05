@@ -31,12 +31,6 @@ def run(gui=False, plot=False, n_episodes=1, n_steps=None, save_data=False, curr
     CONFIG_FACTORY = ConfigFactory()
     config = CONFIG_FACTORY.merge()
 
-    config.task_config['gui'] = gui
-    if curr_path is None:
-        algo_name = config.algo
-        ep_len_sec = getattr(config.task_config, 'episode_len_sec', 'unknown')
-        curr_path = f'./experiment_results/{algo_name}/{ep_len_sec}'
-
     custom_trajectory = False
     if config.task_config.task == 'traj_tracking' and config.task_config.task_info.trajectory_type == 'custom':
         custom_trajectory = True
@@ -49,6 +43,8 @@ def run(gui=False, plot=False, n_episodes=1, n_steps=None, save_data=False, curr
                        config.task,
                        **config.task_config
                        )
+    env = env_func(gui=gui)
+
     # Create controller.
     ctrl = make(config.algo,
                 env_func,
@@ -73,21 +69,19 @@ def run(gui=False, plot=False, n_episodes=1, n_steps=None, save_data=False, curr
         ref_y = fy(t_scaled)
         ref_z = fz(t_scaled)
 
-        X_GOAL = np.zeros((ITERATIONS, ctrl.env.symbolic.nx))
+        X_GOAL = np.zeros((ITERATIONS, env.symbolic.nx))
         X_GOAL[:, 0] = ref_x
         X_GOAL[:, 2] = ref_y
         X_GOAL[:, 4] = ref_z
 
-        ctrl.env.X_GOAL = X_GOAL
+        env.X_GOAL = X_GOAL
         ctrl.reference = X_GOAL
-
-    obs, _ = ctrl.env.reset()
 
     if config.task_config.task == 'traj_tracking' and gui is True:
         if config.task_config.quad_type == 2:
-            ref_3D = np.hstack([ctrl.env.X_GOAL[:, [0]], np.zeros(ctrl.env.X_GOAL[:, [0]].shape), ctrl.env.X_GOAL[:, [2]]])
+            ref_3D = np.hstack([env.X_GOAL[:, [0]], np.zeros(env.X_GOAL[:, [0]].shape), env.X_GOAL[:, [2]]])
         else:
-            ref_3D = ctrl.env.X_GOAL[:, [0, 2, 4]]
+            ref_3D = env.X_GOAL[:, [0, 2, 4]]
         # Plot in 3D.
         ax = plt.axes(projection='3d')
         ax.plot3D(ref_3D[:, 0], ref_3D[:, 1], ref_3D[:, 2])
@@ -95,21 +89,21 @@ def run(gui=False, plot=False, n_episodes=1, n_steps=None, save_data=False, curr
             ax.scatter3D(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2])
         plt.show()
 
-        for i in range(10, ctrl.env.X_GOAL.shape[0], 10):
+        for i in range(10, env.X_GOAL.shape[0], 10):
             p.addUserDebugLine(lineFromXYZ=[ref_3D[i - 10, 0], ref_3D[i - 10, 1], ref_3D[i - 10, 2]],
                                lineToXYZ=[ref_3D[i, 0], ref_3D[i, 1], ref_3D[i, 2]],
                                lineColorRGB=[1, 0, 0],
-                               physicsClientId=ctrl.env.PYB_CLIENT)
+                               physicsClientId=env.PYB_CLIENT)
 
         if custom_trajectory:
             for point in waypoints:
-                p.loadURDF(os.path.join(ctrl.env.URDF_DIR, 'gate.urdf'),
+                p.loadURDF(os.path.join(env.URDF_DIR, 'gate.urdf'),
                            [point[0], point[1], point[2] - 0.05],
                            p.getQuaternionFromEuler([0, 0, 0]),
-                           physicsClientId=ctrl.env.PYB_CLIENT)
+                           physicsClientId=env.PYB_CLIENT)
 
     # Run the experiment.
-    experiment = BaseExperiment(ctrl.env, ctrl)
+    experiment = BaseExperiment(env, ctrl)
     trajs_data, metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
     experiment.close()
 

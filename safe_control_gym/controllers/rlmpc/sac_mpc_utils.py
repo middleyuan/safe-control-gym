@@ -157,7 +157,7 @@ class SAC_MPC_Agent:
         q1 = self.ac.q1(obs, act)
         q2 = self.ac.q2(obs, act)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             _, next_act, next_logp, _, _, optimal_flag = self.ac.actor.forward_train(
                 next_obs_np, info, update_info=True, compute_sensitivities=False,
             )

@@ -33,7 +33,6 @@ class CartPole(BenchmarkEnv):
     multiple cost functions, stabilization and trajectory tracking references.
 
     task_config:
-        info_in_reset: True
         randomized_inertial_prop: True
         inertial_prop_randomization_info:
             pole_length:
@@ -133,6 +132,7 @@ class CartPole(BenchmarkEnv):
                  rew_act_weight=0.0001,
                  rew_exponential=True,
                  done_on_out_of_bound=True,
+                 info_mse_metric_state_weight=None,
                  **kwargs
                  ):
         '''Initialize a cartpole environment.
@@ -147,6 +147,7 @@ class CartPole(BenchmarkEnv):
             rew_act_weight (list/ndarray): Quadratic weights for action in rl reward.
             rew_exponential (bool): If to exponentiate negative quadratic cost to positive, bounded [0,1] reward.
             done_on_out_of_bound (bool): If to termiante when state is out of bound.
+            info_mse_metric_state_weight (list/ndarray): Quadratic weights for state in mse calculation for info dict.
         '''
         self.obs_goal_horizon = obs_goal_horizon
         self.obs_wrap_angle = obs_wrap_angle
@@ -156,6 +157,15 @@ class CartPole(BenchmarkEnv):
         self.R = get_cost_weight_matrix(self.rew_act_weight, 1)
         self.rew_exponential = rew_exponential
         self.done_on_out_of_bound = done_on_out_of_bound
+
+        if info_mse_metric_state_weight is None:
+            self.info_mse_metric_state_weight = np.array([1, 0, 1, 0], ndmin=1, dtype=float)
+        else:
+            if len(info_mse_metric_state_weight) == 4:
+                self.info_mse_metric_state_weight = np.array(info_mse_metric_state_weight, ndmin=1, dtype=float)
+            else:
+                raise ValueError('[ERROR] in CartPole.__init__(), wrong info_mse_metric_state_weight argument size.')
+
         # BenchmarkEnv constructor, called after defining the custom args,
         # since some BenchmarkEnv init setup can be task(custom args)-dependent.
         super().__init__(init_state=init_state, inertial_prop=inertial_prop, **kwargs)
@@ -205,16 +215,21 @@ class CartPole(BenchmarkEnv):
         # Create X_GOAL and U_GOAL references for the assigned task.
         self.U_GOAL = np.zeros(1)
         if self.TASK == Task.STABILIZATION:
+            self.episode_len = self.EPISODE_LEN_SEC
             self.X_GOAL = np.hstack([self.TASK_INFO['stabilization_goal'][0], 0., 0., 0.])  # x = {x, x_dot, theta, theta_dot}.
         elif self.TASK == Task.TRAJ_TRACKING:
-            POS_REF, VEL_REF, _ = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
-                                                            traj_length=self.EPISODE_LEN_SEC,
-                                                            num_cycles=self.TASK_INFO['num_cycles'],
-                                                            traj_plane=self.TASK_INFO['trajectory_plane'],
-                                                            position_offset=np.array(self.TASK_INFO['trajectory_position_offset']),
-                                                            scaling=self.TASK_INFO['trajectory_scale'],
-                                                            sample_time=self.CTRL_TIMESTEP
-                                                            )
+            if isinstance(self.EPISODE_LEN_SEC, list):
+                self.episode_len = self.np_random.choice(self.EPISODE_LEN_SEC)
+            else:
+                self.episode_len = self.EPISODE_LEN_SEC
+            POS_REF, VEL_REF, _, _ = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                                                               traj_length=self.EPISODE_LEN_SEC,
+                                                               num_cycles=self.TASK_INFO['num_cycles'],
+                                                               traj_plane=self.TASK_INFO['trajectory_plane'],
+                                                               position_offset=np.array(self.TASK_INFO['trajectory_position_offset']),
+                                                               scaling=self.TASK_INFO['trajectory_scale'],
+                                                               sample_time=self.CTRL_TIMESTEP
+                                                               )
             self.X_GOAL = np.vstack([
                 POS_REF[:, 0],  # Possible feature: add initial position.
                 VEL_REF[:, 0],
@@ -339,10 +354,7 @@ class CartPole(BenchmarkEnv):
         obs, info = self._get_observation(), self._get_reset_info()
         obs, info = super().after_reset(obs, info)
         # Return either an observation and dictionary or just the observation.
-        if self.INFO_IN_RESET:
-            return obs, info
-        else:
-            return obs
+        return obs, info
 
     def render(self, mode='human'):
         '''Retrieves a frame from PyBullet rendering.
@@ -679,7 +691,15 @@ class CartPole(BenchmarkEnv):
             info['out_of_bounds'] = self.out_of_bounds
         # Add MSE.
         state = deepcopy(self.state)
-        info['mse'] = np.sum(state ** 2)
+        if self.TASK == Task.STABILIZATION:
+            state_error = state - self.X_GOAL
+        elif self.TASK == Task.TRAJ_TRACKING:
+            state[2] = normalize_angle(state[2])
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[0] - 1)  # +1 so that state is being compared with proper reference state.
+            state_error = state - self.X_GOAL[wp_idx]
+        # Filter only relevant dimensions.
+        state_error = state_error * self.info_mse_metric_state_weight
+        info['mse'] = np.sum(state_error ** 2)
         return info
 
     def _get_reset_info(self):

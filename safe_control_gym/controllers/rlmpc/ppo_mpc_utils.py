@@ -154,7 +154,7 @@ class PPO_MPC_Agent:
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     (theta_loss.sum()).backward()
                     self.actor_opt.step()
-                    with torch.no_grad():
+                    with torch.inference_mode():
                         self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
 
                     p_loss_epoch += policy_loss.item()

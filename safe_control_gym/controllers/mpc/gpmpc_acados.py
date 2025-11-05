@@ -421,7 +421,6 @@ class GPMPC_ACADOS(GPMPC):
 
         return action
 
-    # @timing
     def select_action_with_gp(self, obs):
         time_before = time.time()
         nx, nu = self.model.nx, self.model.nu

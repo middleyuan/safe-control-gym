@@ -202,7 +202,7 @@ class PPO(BaseController):
                     eval_results['ep_returns'].std()))
                 # Save best model.
                 eval_score = eval_results['ep_returns'].mean()
-                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
+                eval_best_score = getattr(self, 'eval_best_score', -np.inf)
                 if self.eval_save_best and eval_best_score < eval_score:
                     self.eval_best_score = eval_score
                     self.save(os.path.join(self.output_dir, 'model_best.pt'))
@@ -221,7 +221,7 @@ class PPO(BaseController):
             action (ndarray): The action chosen by the controller.
         '''
 
-        with torch.no_grad():
+        with torch.inference_mode():
             obs = torch.FloatTensor(obs).to(self.device)
             start = time.time()
             action, v, logp = self.agent.ac.act(obs, True)
@@ -239,7 +239,7 @@ class PPO(BaseController):
         info = self.info
         start = time.time()
         for _ in range(self.rollout_steps):
-            with torch.no_grad():
+            with torch.inference_mode():
                 action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
                 unsafe_action = action
 

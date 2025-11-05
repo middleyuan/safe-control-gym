@@ -1,8 +1,8 @@
 '''To standardize training/evaluation interface.'''
 
+import time
 from collections import defaultdict
 from copy import deepcopy
-from time import time
 
 import gymnasium as gym
 import numpy as np
@@ -56,7 +56,15 @@ class BaseExperiment:
         if reset_when_created:
             self.reset()
 
-    def run_evaluation(self, training=False, n_episodes=None, n_steps=None, done_on_max_steps=None, log_freq=None, verbose=True, **kwargs):
+    def run_evaluation(self,
+                       training=False,
+                       n_episodes=None,
+                       n_steps=None,
+                       done_on_max_steps=None,
+                       log_freq=None,
+                       verbose=True,
+                       visualization_time_multiplier=1,
+                       **kwargs):
         '''Evaluate a trained controller.
 
         Args:
@@ -64,11 +72,14 @@ class BaseExperiment:
             n_episodes (int): Number of runs to execute.
             n_steps (int): The number of steps to collect in total.
             log_freq (int): The frequency with which to log information.
+            visualization_time_multiplier (float): Changes speed of visualization, where 1x is realtime,
+                2x is twice as fast as real-time, etc. None results in fastest visualization.
 
         Returns:
             trajs_data (dict): The raw data from the executed runs.
             metrics (dict): The metrics calculated from the raw data.
         '''
+        self.visualization_time_multiplier = visualization_time_multiplier
 
         if not training:
             self.reset()
@@ -123,9 +134,9 @@ class BaseExperiment:
         agent_info = [{'current_step': 0, 'x_ref': self.env.X_GOAL}]
         if n_episodes is not None:
             while trajs < n_episodes:
-                time_start = time()
+                time_start = time.time()
                 action = self._select_action(obs=obs, info=agent_info)
-                inference_time_data.append(time() - time_start)
+                inference_time_data.append(time.time() - time_start)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
                     steps += 1
@@ -144,9 +155,9 @@ class BaseExperiment:
                 agent_info[0] = {'current_step': info['current_step'], 'x_ref': self.env.X_GOAL}
         elif n_steps is not None:
             while steps < n_steps:
-                time_start = time()
+                time_start = time.time()
                 action = self._select_action(obs=obs, info=agent_info)
-                inference_time_data.append(time() - time_start)
+                inference_time_data.append(time.time() - time_start)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
                     steps += 1
@@ -170,10 +181,10 @@ class BaseExperiment:
                 agent_info[0] = {'current_step': info['current_step'], 'x_ref': self.env.X_GOAL}
 
         trajs_data = self.env.data
-        trajs_data['controller_data'].append(munchify(dict(ctrl_data)))
-        trajs_data['inference_time_data'].append(inference_time_data)
+        trajs_data['controller_data'] = munchify(dict(ctrl_data))
+        trajs_data['inference_time_data'] = munchify(inference_time_data)
         if self.safety_filter is not None:
-            trajs_data['safety_filter_data'].append(munchify(dict(sf_data)))
+            trajs_data['safety_filter_data'] = munchify(dict(sf_data))
         return munchify(trajs_data)
 
     def _select_action(self, obs, info):
@@ -195,6 +206,14 @@ class BaseExperiment:
             if success:
                 action = self.env.normalize_action(certified_action)
 
+        if self.last_step_timestep is not None and \
+                self.env.GUI is True and \
+                self.visualization_time_multiplier is not None:
+            # Sleep to maintain real-time pacing
+            elapsed = time.time() - self.last_step_timestep
+            time.sleep(max(0, 1.0 / self.env.CTRL_FREQ / self.visualization_time_multiplier - elapsed))
+        self.last_step_timestep = time.time()
+
         return action
 
     def _evaluation_reset(self, ctrl_data, sf_data, seed=None):
@@ -209,11 +228,8 @@ class BaseExperiment:
             obs (ndarray): The initial observation.
             info (dict): The initial info.
         '''
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(seed=seed)
-        else:
-            obs = self.env.reset(seed=seed)
-            info = None
+        obs, info = self.env.reset(seed=seed)
+
         if ctrl_data is not None:
             for data_key, data_val in self.ctrl.results_dict.items():
                 ctrl_data[data_key].append(np.array(deepcopy(data_val)))
@@ -275,6 +291,8 @@ class BaseExperiment:
         if self.train_env is not None:
             self.train_env.reset()
             self.train_env.clear_data()
+
+        self.last_step_timestep = None
 
     def close(self):
         '''Closes the environments, controller, and safety filter.'''
@@ -349,26 +367,17 @@ class RecordDataWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         '''Wrapper for the gym.env reset function.'''
 
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(**kwargs)
-            if 'symbolic_model' in info:
-                info.pop('symbolic_model')
-            if 'symbolic_constraints' in info:
-                info.pop('symbolic_constraints')
-            step_data = dict(
-                obs=obs, info=info, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs, info
-        else:
-            obs = self.env.reset(**kwargs)
-            step_data = dict(
-                obs=obs, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs
+        obs, info = self.env.reset(**kwargs)
+        if 'symbolic_model' in info:
+            info.pop('symbolic_model')
+        if 'symbolic_constraints' in info:
+            info.pop('symbolic_constraints')
+        step_data = dict(
+            obs=obs, info=info, state=self.env.state
+        )
+        for key, val in step_data.items():
+            self.episode_data[key].append(val)
+        return obs, info
 
     def step(self, action):
         '''Wrapper for the gym.env step function.'''
@@ -386,7 +395,7 @@ class RecordDataWrapper(gym.Wrapper):
             current_physical_action=self.env.current_physical_action,
             current_noisy_physical_action=self.env.current_noisy_physical_action,
             current_clipped_action=self.env.current_clipped_action,
-            timestamp=time(),
+            timestamp=time.time(),
         )
         for key, val in step_data.items():
             self.episode_data[key].append(val)
@@ -439,25 +448,29 @@ class MetricExtractor:
             'average_constraint_violation': np.asarray(self.get_episode_constraint_violation_steps()).mean(),
             'constraint_violation_std': np.asarray(self.get_episode_constraint_violation_steps()).std(),
             'constraint_violation': np.asarray(self.get_episode_constraint_violation_steps()) if len(self.get_episode_constraint_violation_steps()) > 1 else self.get_episode_constraint_violation_steps()[0],
-            'avarage_inference_time': np.asarray(self.get_episode_inference_time()),
+            'average_inference_time': np.asarray(self.get_episode_inference_time()),
             'early_stop': np.asarray(self.get_episode_early_stop()),
             # others ???
         }
         return metrics
 
-    def get_episode_data(self, key, postprocess_func=lambda x: x):
+    def get_episode_data(self, key, postprocess_func=lambda x: x, second_key=None):
         '''Extract data field from recorded trajectory data, optionally postprocess each episode data (e.g. get sum).
 
         Args:
             key (str): The key of the data to retrieve.
             postprocess_func (lambda): A function to process the outgoing data.
+            second_key (str): The second key of the data to retrieve.
 
         Returns:
             episode_data (list): The desired data.
         '''
 
         if key in self.data:
-            episode_data = [postprocess_func(ep_val) for ep_val in self.data[key]]
+            if key in ['safety_filter_data', 'controller_data']:
+                episode_data = [postprocess_func(ep_val) for ep_val in self.data[key][second_key]]
+            else:
+                episode_data = [postprocess_func(ep_val) for ep_val in self.data[key]]
         elif key in self.data['info'][0][-1]:
             # if the data field is contained in step info dict
             episode_data = []
@@ -543,10 +556,10 @@ class MetricExtractor:
         Returns:
             episode_inference_time (double): The average inference time of all episodes.
         '''
-        # self.data['controller_data']
-        if hasattr(self.data['controller_data'][0], 'inference_time'):
+        if hasattr(self.data['controller_data'], 'inference_time'):
             return self.get_episode_data('controller_data',
-                                         postprocess_func=lambda x: np.mean(x['inference_time'][0]))
+                                         postprocess_func=lambda x: np.mean(x),
+                                         second_key='inference_time')
         else:
             return self.get_episode_data('inference_time_data',
                                          postprocess_func=lambda x: np.mean(x))

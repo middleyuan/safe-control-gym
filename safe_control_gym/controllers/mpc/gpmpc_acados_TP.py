@@ -766,7 +766,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         return ocp
 
-    # @timing
     def select_action(self, obs, info=None):
         time_before = time.time()
         if self.gaussian_process is None:
@@ -780,7 +779,6 @@ class GPMPC_ACADOS_TP(GPMPC):
 
         return action
 
-    # @timing
     def select_action_with_gp(self, obs):
         nx, nu = self.model.nx, self.model.nu
         # TODO: replace this with something safer

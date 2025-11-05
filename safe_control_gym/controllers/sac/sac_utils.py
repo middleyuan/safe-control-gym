@@ -130,7 +130,7 @@ class SACAgent:
         q1 = self.ac.q1(obs, act)
         q2 = self.ac.q2(obs, act)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             next_act, next_logp = self.ac.actor(next_obs, deterministic=False, with_logprob=True)
             next_q1_targ = self.ac_targ.q1(next_obs, next_act)
             next_q2_targ = self.ac_targ.q2(next_obs, next_act)
@@ -319,7 +319,7 @@ class MLPActorCritic(nn.Module):
 
     def act(self, obs, deterministic=False):
         a, _ = self.actor(obs, deterministic, False)
-        return a.cpu().numpy()
+        return a.cpu().numpy().astype(np.float32)
 
 
 # -----------------------------------------------------------------------------------
@@ -377,7 +377,7 @@ class SACBuffer(object):
             vshape = info['vshape']
             dtype = info.get('dtype', np.float32)
             init = info.get('init', np.zeros)
-            self.__dict__[k] = init(vshape, dtype=dtype)
+            self.__dict__[k] = init(vshape).astype(dtype)
 
         self.pos = 0
         self.buffer_size = 0
