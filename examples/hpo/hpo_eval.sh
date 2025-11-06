@@ -8,7 +8,7 @@ sys_name=${sys%%_*} # cartpole, or quadrotor
 algo=$3
 prior=$4
 safety_filter=$5 # True or False
-task=$6 # stab, or tracking
+task=$6 # stab, or track
 FOLDER="./examples/hpo/hpo/${algo}"
 OUTPUT_DIR=(${FOLDER})
 hpo_postfix=$7 # ""  "_eval" "_basic" "_dw_h=1dot5" "_dw_h=2dot5" "_dw_h=4" "_ob_ns=5" "_ob_ns=15" "_ob_ns=25" "_proc_ns=5" "_proc_ns=15" "_proc_ns=25"

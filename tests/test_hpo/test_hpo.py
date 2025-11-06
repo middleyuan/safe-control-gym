@@ -109,7 +109,7 @@ def test_hpo_cartpole(SYS, TASK, ALGO, PRIOR, SAFETY_FILTER, SAMPLER):
 
 
 @pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude', 'quadrotor_3D_attitude'])
-@pytest.mark.parametrize('TASK', ['tracking'])
+@pytest.mark.parametrize('TASK', ['track'])
 @pytest.mark.parametrize('ALGO', ['pid', 'lqr', 'ilqr', 'gp_mpc', 'gpmpc_acados', 'gpmpc_acados_TP', 'fmpc', 'linear_mpc', 'linear_mpc_acados', 'mpc_acados', 'ppo', 'sac', 'dppo'])
 @pytest.mark.parametrize('PRIOR', [''])
 @pytest.mark.parametrize('SAFETY_FILTER', ['', 'linear_mpsc', 'nl_mpsc'])

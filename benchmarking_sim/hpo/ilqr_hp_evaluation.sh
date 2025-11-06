@@ -58,8 +58,8 @@ for seed in "${seeds[@]}"; do
         python ./examples/hpo/hpo_experiment.py \
             --algo ilqr \
             --task "${sys}" \
-            --overrides ./benchmarking_sim/quadrotor/config_overrides/quadrotor_2D_attitude_tracking.yaml \
-                        ./benchmarking_sim/quadrotor/config_overrides/ilqr_quadrotor_2D_attitude_tracking_100.yaml \
+            --overrides ./benchmarking_sim/quadrotor/config_overrides/quadrotor_2D_attitude_track.yaml \
+                        ./benchmarking_sim/quadrotor/config_overrides/ilqr_quadrotor_2D_attitude_track_100.yaml \
             --output_dir "${OUTPUT_DIR}" \
             --opt_hps "${hp_path}" \
             --n_episodes 10 \

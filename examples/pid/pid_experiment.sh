@@ -7,8 +7,8 @@
 # SYS='quadrotor_3D'
 SYS='quadrotor_3D_attitude'
 
-# TASK='stabilization'
-TASK='tracking'
+# TASK='stab'
+TASK='track'
 
 # TRAJ_TYPE='figure8'
 # TRAJ_TYPE='circle'

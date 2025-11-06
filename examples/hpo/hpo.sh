@@ -19,7 +19,7 @@ sys_name=${sys%%_*} # cartpole, or quadrotor
 algo=$7 # ilqr, gpmpc_acados, ppo
 prior=$8
 safety_filter=$9 # True or False
-task=${10} # stab, or tracking
+task=${10} # stab, or track
 resume=${11} # 0 or 1
 hpo_postfix=${12} # ""  "_eval" "_basic" "_dw_h=1dot5" "_dw_h=2dot5" "_dw_h=4" "_ob_ns=5" "_ob_ns=15" "_ob_ns=25" "_proc_ns=5" "_proc_ns=15" "_proc_ns=25"
 

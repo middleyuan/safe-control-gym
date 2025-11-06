@@ -21,7 +21,7 @@ sys_name=${sys%%_*} # cartpole, or quadrotor
 algo=$7 # ilqr, gpmpc_acados
 prior=$8
 safety_filter=$9 # True or False
-task=${10} # stab, or tracking
+task=${10} # stab, or track
 resume=${11} # True or False
 
 

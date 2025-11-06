@@ -8,7 +8,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 
 
 @pytest.mark.parametrize('SYS', ['quadrotor_2D_attitude', 'quadrotor_3D_attitude'])
-@pytest.mark.parametrize('TASK', ['tracking'])
+@pytest.mark.parametrize('TASK', ['track'])
 @pytest.mark.parametrize('ALGO', ['pid', 'lqr', 'ilqr', 'mpc_acados', 'gpmpc_acados_TP', 'ppo', 'fmpc'])
 @pytest.mark.parametrize('PRIOR', [''])
 @pytest.mark.parametrize('SAFETY_FILTER', ['', 'linear_mpsc', 'nl_mpsc'])

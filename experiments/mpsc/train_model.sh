@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SYS='quadrotor_2D_attitude'
-TASK='tracking'
+TASK='track'
 ALGO='ppo'
 
 SAFETY_FILTER='nl_mpsc'
