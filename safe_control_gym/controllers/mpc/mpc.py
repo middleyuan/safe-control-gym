@@ -439,7 +439,6 @@ class MPC(BaseController):
             TODO: if using the extended reference trajectory,
             variable remain will always be 0. Consider removing it.
             '''
-            # print('start:', start, 'end:', end, 'remain:', remain)
             goal_states = np.concatenate([
                 self.extended_ref_traj[:, start:end],
                 np.tile(self.extended_ref_traj[:, -1:], (1, remain))
@@ -564,13 +563,3 @@ class MPC(BaseController):
             raise Exception('[ERROR] mpc.run().py: MPC could not find a solution for the first step given the initial conditions. '
                             'Check to make sure initial conditions are feasible.')
         return deepcopy(self.results_dict)
-
-    # def reset_before_run(self, obs, info=None, env=None):
-    #     '''Reinitialize just the controller before a new run.
-
-    #     Args:
-    #         obs (ndarray): The initial observation for the new run.
-    #         info (dict): The first info of the new run.
-    #         env (BenchmarkEnv): The environment to be used for the new run.
-    #     '''
-    #     self.reset()

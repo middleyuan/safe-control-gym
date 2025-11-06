@@ -230,7 +230,7 @@ class MLPActorCritic(nn.Module):
     def act(self, obs):
         dist, _, _, _, _ = self.actor(obs)
         a = dist.mode()
-        return a.cpu().numpy()
+        return a.cpu().numpy().astype(np.float32)
 
     def reset(self):
         self.actor.reset()

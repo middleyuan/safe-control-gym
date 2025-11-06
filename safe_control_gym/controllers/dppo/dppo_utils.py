@@ -242,7 +242,7 @@ class MLPActorCritic(nn.Module):
     def act(self, obs):
         dist, _ = self.actor(obs)
         a = dist.mode()
-        return a.cpu().numpy()
+        return a.cpu().numpy().astype(np.float32)
 
 
 class MLPActor(nn.Module):

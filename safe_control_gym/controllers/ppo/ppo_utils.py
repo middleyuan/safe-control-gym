@@ -256,8 +256,8 @@ class MLPActorCritic(nn.Module):
         logp_a = dist.log_prob(action)
         v = self.critic(obs)
         if extra_info:
-            return action.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy()
-        return action.cpu().numpy()
+            return action.cpu().numpy().astype(np.float32), v.cpu().numpy().astype(np.float32), logp_a.cpu().numpy().astype(np.float32)
+        return action.cpu().numpy().astype(np.float32)
 
 
 class PPOBuffer(object):

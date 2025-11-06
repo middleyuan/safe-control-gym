@@ -251,7 +251,6 @@ class iLQR(BaseController):
 
             self.ite_counter += 1
 
-        # self.plot_optimization_log()
         self.reset()
 
     def plot_optimization_log(self):

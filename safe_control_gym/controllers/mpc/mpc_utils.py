@@ -10,7 +10,7 @@ from safe_control_gym.envs.constraints import ConstraintList
 
 
 def compute_discrete_lqr_gain_from_cont_linear_system(dfdx, dfdu, Q_lqr, R_lqr, dt):
-    '''Computes the LQR gain used for propograting GP uncertainty from the prior model dynamics.
+    '''Compute the LQR gain used for propagating GP uncertainty from the prior model dynamics.
 
     Args:
         dfdx (np.array): Continuous-time A matrix.
@@ -94,24 +94,3 @@ def reset_constraints(constraints):
     if len(constraints_list.input_state_constraints) > 0:
         raise NotImplementedError('[Error] Cannot handle combined state input constraints yet.')
     return constraints_list, state_constraints_sym, input_constraints_sym
-
-
-def set_acados_constraint_bound(constraint,
-                                bound_type,
-                                bound_value=None,
-                                ):
-    '''Set the acados constraint bound.
-
-    Note:
-        all constraints in safe-control-gym are defined as g(x, u) <= constraint_tol
-        However, acados requires the constraints to be defined as lb <= g(x, u) <= ub
-        Thus, a large negative number (-1e8) is used as the lower bound.
-        See: https://github.com/acados/acados/issues/650
-    '''
-    if bound_value is None:
-        if bound_type == 'lb':
-            bound_value = -1e8
-        elif bound_type == 'ub':
-            bound_value = -1e-6
-
-    return bound_value * np.ones(constraint.shape)

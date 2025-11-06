@@ -154,7 +154,7 @@ class MLPActorCritic(ppo_utils.MLPActorCritic):
             ):
         dist, _ = self.actor(obs, c=c)
         a = dist.mode()
-        return a.numpy()
+        return a.numpy().astype(np.float32)
 
 
 class SafePPOBuffer(ppo_utils.PPOBuffer):
