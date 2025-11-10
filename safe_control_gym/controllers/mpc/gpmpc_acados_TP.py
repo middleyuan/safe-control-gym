@@ -531,7 +531,13 @@ class GPMPC_ACADOS_TP(GPMPC):
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         acados_model.name = model_name + '_' + current_time
 
-        z = cs.vertcat(acados_model.x, acados_model.u)  # GP prediction point
+        # define GP prediction points
+        z = cs.vertcat(acados_model.x, acados_model.u)  
+        T_pred_point = z[self.model.nx+self.action_labels.index('T_c')]
+        P_pred_point = z[[self.state_labels.index('theta'),
+                            self.state_labels.index('theta_dot'),
+                            self.model.nx+self.action_labels.index('P_c')]]
+        
         if self.sparse_gp:
             # sparse GP inducing points
             '''
@@ -544,38 +550,22 @@ class GPMPC_ACADOS_TP(GPMPC):
             mean_post_factor = cs.MX.sym('mean_post_factor', 2, n_ind_points)
             acados_model.p = cs.vertcat(cs.reshape(z_ind, -1, 1), cs.reshape(mean_post_factor, -1, 1))
             # define the dynamics
-            T_pred_point = z[self.model.nx+self.action_labels.index('T_c')]
-            P_pred_point = z[[self.state_labels.index('theta'),
-                              self.state_labels.index('theta_dot'),
-                              self.model.nx+self.action_labels.index('P_c')]]
             T_pred = cs.sum2(self.K_z_zind_func_T(z1=T_pred_point, z2=z_ind)['K'] * mean_post_factor[0, :])
             P_pred = cs.sum2(self.K_z_zind_func_P(z1=P_pred_point, z2=z_ind)['K'] * mean_post_factor[1, :])
-            augmented_dynamics = cs.MX.zeros(self.model.nx, 1)
-            augmented_dynamics[self.state_labels.index('x_dot')] = \
-                cs.sin(acados_model.x[self.state_labels.index('theta')]) * T_pred
-            augmented_dynamics[self.state_labels.index('z_dot')] = \
-                cs.cos(acados_model.x[self.state_labels.index('theta')]) * T_pred
-            augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
-
-            f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
         else:
             GP_T = self.gaussian_process[0]
             GP_P = self.gaussian_process[1]
-            T_pred_point = z[self.model.nx+self.action_labels.index('T_c')]
-            P_pred_point = z[[self.state_labels.index('theta'),
-                              self.state_labels.index('theta_dot'),                              
-                              self.model.nx+self.action_labels.index('P_c')]]
             T_pred = GP_T.casadi_predict(z=T_pred_point)['mean']
             P_pred = GP_P.casadi_predict(z=P_pred_point)['mean']
-            augmented_dynamics = cs.MX.zeros(self.model.nx, 1)
-            augmented_dynamics[self.state_labels.index('x_dot')] = \
-                cs.sin(acados_model.x[self.state_labels.index('theta')]) * T_pred
-            augmented_dynamics[self.state_labels.index('z_dot')] = \
-                cs.cos(acados_model.x[self.state_labels.index('theta')]) * T_pred
-            augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
-            
-            f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
+        augmented_dynamics = cs.MX.zeros(self.model.nx, 1)
+        augmented_dynamics[self.state_labels.index('x_dot')] = \
+            cs.sin(acados_model.x[self.state_labels.index('theta')]) * T_pred
+        augmented_dynamics[self.state_labels.index('z_dot')] = \
+            cs.cos(acados_model.x[self.state_labels.index('theta')]) * T_pred
+        augmented_dynamics[self.state_labels.index('theta_dot')] = P_pred
         
+        f_cont = self.prior_dynamics_func_c(x=acados_model.x, u=acados_model.u)['f'] + augmented_dynamics
+    
         acados_model.f_expl_expr = f_cont
 
         acados_model.x_labels = self.env.STATE_LABELS
