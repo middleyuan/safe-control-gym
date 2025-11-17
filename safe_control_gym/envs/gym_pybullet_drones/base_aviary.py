@@ -1325,7 +1325,8 @@ class BaseAviary(BenchmarkEnv):
             # normalized forces_motor
             df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
 
-            params_acc = [0.09, 0.77, 0.0814]
+            # params_acc = [0.09, 0.77, 0.0814]
+            params_acc = [0.041, 0.87, 0.105]
             params_roll_rate = [-238.1, -21.35, 179.65]
             params_pitch_rate = [-238.1, -21.35, 179.65]
             params_yaw_rate = [-170.4, -22.22, 280]

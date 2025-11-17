@@ -1,6 +1,6 @@
 algo_config:
   # model args
-  hidden_dim: 128
+  hidden_dim: 256
   activation: "relu"
 
   # loss args
@@ -19,47 +19,17 @@ algo_config:
   critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 1320000
+  max_env_steps: 2640000
+  # max_env_steps: 1320000
   rollout_batch_size: 5
   rollout_steps: 660
   eval_batch_size: 10
 
   # misc
   log_interval: 13200
-  save_interval: 1320000
+  save_interval: 2640000
+  # max_env_steps: 1320000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
   tensorboard: False
-# # algo_config:
-#   # model args
-#   hidden_dim: 64
-#   activation: "relu"
-
-#   # loss args
-#   gamma: 0.98
-#   use_gae: True
-#   gae_lambda: 0.92
-#   clip_param: 0.2
-#   target_kl: 1.0e-2
-#   entropy_coef: 0.005
-
-#   # optim args
-#   opt_epochs: 20
-#   mini_batch_size: 256
-#   actor_lr: 0.001
-#   critic_lr: 0.001
-
-#   # runner args
-#   max_env_steps: 1320000
-#   rollout_batch_size: 5
-#   rollout_steps: 660
-#   eval_batch_size: 10
-
-#   # misc
-#   log_interval: 13200
-#   save_interval: 1320000
-#   num_checkpoints: 0
-#   eval_interval: 13200
-#   eval_save_best: True
-#   tensorboard: False

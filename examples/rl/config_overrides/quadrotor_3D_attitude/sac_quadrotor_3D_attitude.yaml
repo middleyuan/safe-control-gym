@@ -12,7 +12,7 @@ algo_config:
   entropy_lr: 0.0003
 
   # runner args
-  max_env_steps: 660000
+  max_env_steps: 2640000
   warm_up_steps: 1000
   rollout_batch_size: 5
   num_workers: 1
@@ -22,7 +22,7 @@ algo_config:
 
   # misc
   log_interval: 13200
-  save_interval: 660000
+  save_interval: 2640000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True

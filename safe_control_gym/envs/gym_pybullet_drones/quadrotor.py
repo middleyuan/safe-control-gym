@@ -505,7 +505,7 @@ class Quadrotor(BaseAviary):
                 else:
                     strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
                     waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
-                    POS_REF, VEL_REF, ACC_REF, SPD_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                    POS_REF, VEL_REF, ACC_REF, JRK_REF, SPD_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
                                                                     traj_length=self.episode_len,
                                                                     num_cycles=self.TASK_INFO['num_cycles'],
                                                                     traj_plane=self.TASK_INFO['trajectory_plane'],
@@ -519,19 +519,21 @@ class Quadrotor(BaseAviary):
                     CUSTOM_REF_TRAJ = {}
                     CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
                     CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
-                    # np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                    #                      'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
-                    # # add attribute to self.TASK_INFO
-                    # self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                    #                      'custom_snap_ref_traj.npy')
-                    # _plot_trajectory(POS_REF,
-                    #                  waypoints=waypoints,
-                    #                  strings=strings,
-                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
-                    # _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
-                    #                  waypoints=waypoints,
-                    #                  strings=strings,
-                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    CUSTOM_REF_TRAJ['ACC_REF'] = ACC_REF
+                    CUSTOM_REF_TRAJ['JRK_REF'] = JRK_REF
+                    np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                                         'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    # add attribute to self.TASK_INFO
+                    self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                                         'custom_snap_ref_traj.npy')
+                    _plot_trajectory(POS_REF,
+                                     waypoints=waypoints,
+                                     strings=strings,
+                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
+                                     waypoints=waypoints,
+                                     strings=strings,
+                                     save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
@@ -1390,8 +1392,9 @@ class Quadrotor(BaseAviary):
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             elif model_choice == "linear":
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
-                params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
                 # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
+                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
                 params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
                 params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
                 params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])

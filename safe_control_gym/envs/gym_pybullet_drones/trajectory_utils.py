@@ -540,7 +540,7 @@ def _plot_trajectory(pos_ref, waypoints=None, strings=None, save_path=None):
         print(f"Trajectory plot saved to {save_path}")
     except:
         pass
-    # # plt.show()
+    # plt.show()
     plt.close(fig)
 
 def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, waypoints=None, strings=None, save_path=None):
@@ -646,13 +646,14 @@ def _plot_xyz_kinematics(pos_ref, vel_ref=None, acc_ref=None, speed_ref=None, wa
     
 
 class TrajectoryPlanner:
-    def __init__(self, waypoint_list, string_list, N=30):
+    def __init__(self, waypoint_list, string_list, N=60):
+        #N= 60 for slow, 80 for fast
         self.waypoint_list = waypoint_list
         self.string_list = string_list
         self.T = waypoint_list[-1]['time']  # Trajectory length in time
         self.N = N  # number of waypoints
         self.dt = self.T / N
-        self.string_discrete_point = 10
+        self.string_discrete_point = 3
         # # waypoints
         # length_w = len(waypoint_list)
         # self.start_loc = waypoint_list[0]['position']
@@ -782,7 +783,10 @@ class TrajectoryPlanner:
     def traj_optimizer(self):
         X = cs.MX.sym('X', 6, self.N + 1)
         U = cs.MX.sym('U', 3, self.N)
-        weights = np.array([0.5, 20.0, 100.0])  # weights for the cost function
+        # weights = np.array([0.5, 20.0, 100.0])  # weights for the cost function
+        # weights = np.array([0.25, 20.0, 100.0])  # weights for the cost function
+        weights = np.array([0.25, 30.0, 100.0])  # weights for the cost function
+        # weights = np.array([1.0, 10.0, 100.0])  # weights for the cost function
         Sigma = cs.MX.sym('Sigma', len(self.string_list) * self.string_discrete_point, self.N + 1)
         opt_vars = cs.vertcat(
             cs.reshape(U, -1, 1),
@@ -790,8 +794,10 @@ class TrajectoryPlanner:
             cs.reshape(Sigma, -1, 1)
         )
         # acceleration limits
-        lb = np.array([-10.0, -10.0, -10.0])
-        ub = np.array([10.0, 10.0, 10.0])
+        lb = np.array([-7.0, -7.0, -7.0])
+        ub = np.array([7.0, 7.0, 7.0])
+        # lb = np.array([-20.0, -20.0, -20.0])
+        # ub = np.array([20.0, 20.0, 20.0])
         cost = 0
         g, h = [], []
         g.append(X[:3, 0] - np.array(self.start_loc))
@@ -807,7 +813,9 @@ class TrajectoryPlanner:
             for j, string in enumerate(self.string_list):
                 for k, point in enumerate(np.linspace(string['start'], string['end'], self.string_discrete_point)):
                     d = _distance_to_point(point, X[:3, i])
-                    h.append(0.25 - d - Sigma[j * k, i]) 
+                    # h.append(0.25 - d - Sigma[j * k, i]) 
+                    h.append(0.2 - d - Sigma[j * k, i]) 
+                    # h.append(0.3 - d - Sigma[j * k, i])
                     h.append(-Sigma[j * k, i])
             # cost += 60 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 10 seconds 
             # cost += 10 * Sigma[:, i].T @ Sigma[:, i] #obstacle course for 20 seconds 
@@ -828,9 +836,11 @@ class TrajectoryPlanner:
         opts_setting = {
             'print_time': 0,
             'expand': True,
-            'fatrop.max_iter': 200,
+            'fatrop.max_iter': 150,
+            # 'fatrop.max_iter': 50,
             'fatrop.print_level': 0,
             'fatrop.acceptable_tol': 1e-4,
+            # 'fatrop.acceptable_tol': 1e-3,
         }
         nlp_prob = {
             'f': cost,

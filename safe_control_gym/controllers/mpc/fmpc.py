@@ -321,6 +321,7 @@ class FlatMPC(BaseController):
         # Note: using the feedforward v_horizon[:,1] works slightly better than v_horizon[:,0]
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 1], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
+            action[0] = np.clip(action[0], 0.08, 0.45)
         else:
             action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 0], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
         self.results_dict['inference_time'].append(self.mpc.acados_ocp_solver.get_stats("time_tot"))
@@ -1056,8 +1057,10 @@ def get_full_reference_trajectory_FMPC(QUAD_TYPE: QuadType,
     position_offset = task_info.trajectory_position_offset
     traj_plane = task_info.trajectory_plane
     traj_type = task_info.trajectory_type
-
-    pos_ref_traj, vel_ref_traj, acc_ref_traj, jer_ref_traj = _generate_trajectory_FMPC(traj_type, traj_length, num_cycles, traj_plane, position_offset, scaling, sample_time, horizon)
+    custom_snap_ref_traj = getattr(task_info, 'custom_snap_ref_traj', None)
+    pos_ref_traj, vel_ref_traj, acc_ref_traj, jer_ref_traj = _generate_trajectory_FMPC(
+        traj_type, traj_length, num_cycles, traj_plane, position_offset, scaling, sample_time, horizon, custom_snap_ref_traj
+    )
     num_times = np.shape(pos_ref_traj)[0]
     if QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
         z_ref = np.zeros([num_times, 12])
@@ -1114,12 +1117,13 @@ def _generate_trajectory_FMPC(traj_type='figure8',
                              position_offset=np.array([0, 0]),
                              scaling=1.0,
                              sample_time=0.01,
-                             horizon=0
+                             horizon=0,
+                             custom_snap_ref_traj=None  # <-- new argument
                              ):
     """Generates a 2D trajectory.
 
     Args:
-        traj_type (str, optional): The type of trajectory (circle, square, figure8).
+        traj_type (str, optional): The type of trajectory (circle, figure8, snap_custom).
         traj_length (float, optional): The length of the trajectory in seconds.
         num_cycles (int, optional): The number of cycles within the length.
         traj_plane (str, optional): The plane of the trajectory (e.g. 'xz').
@@ -1135,39 +1139,53 @@ def _generate_trajectory_FMPC(traj_type='figure8',
         ndarray: The jerk in x, y, z of the trajectory sampled for its entire duration.
     """
 
-    # Get trajectory type.
-    valid_traj_type = ['circle', 'figure8']
+    valid_traj_type = ['circle', 'figure8', 'snap_custom']
     if traj_type not in valid_traj_type:
         raise ValueError(
-            'Trajectory type should be one of [circle, figure8] for FMPC full reference'
+            'Trajectory type should be one of [circle, figure8, snap_custom] for FMPC full reference'
         )
+    if traj_type == 'snap_custom':
+        if custom_snap_ref_traj is None or not os.path.exists(custom_snap_ref_traj):
+            raise ValueError(f"custom_snap_ref_traj file not found: {custom_snap_ref_traj}")
+        traj_data = np.load(custom_snap_ref_traj, allow_pickle=True).item()
+        # Prefer POS_REF/VEL_REF/ACC_REF/JER_REF if present, else fallback to 'obs'
+        pos_ref_traj = traj_data.get('POS_REF')
+        vel_ref_traj = traj_data.get('VEL_REF')
+        acc_ref_traj = traj_data.get('ACC_REF')
+        jer_ref_traj = traj_data.get('JRK_REF')
+        # If any are missing, try to extract from 'obs'
+        if pos_ref_traj is None or vel_ref_traj is None:
+            state_ref = traj_data.get('obs')
+            if state_ref is None:
+                raise ValueError("custom_snap_ref_traj .npy file must contain either 'POS_REF'/'VEL_REF' or 'obs' key with state trajectory")
+            pos_ref_traj = state_ref[:, :3]
+            vel_ref_traj = state_ref[:, 3:6] if state_ref.shape[1] >= 6 else np.zeros_like(pos_ref_traj)
+            acc_ref_traj = state_ref[:, 6:9] if state_ref.shape[1] >= 9 else np.zeros_like(pos_ref_traj)
+            jer_ref_traj = state_ref[:, 9:12] if state_ref.shape[1] >= 12 else np.zeros_like(pos_ref_traj)
+        # If any are still None, fill with zeros
+        if acc_ref_traj is None:
+            acc_ref_traj = np.zeros_like(pos_ref_traj)
+        if jer_ref_traj is None:
+            jer_ref_traj = np.zeros_like(pos_ref_traj)
+        return pos_ref_traj, vel_ref_traj, acc_ref_traj, jer_ref_traj
+
     traj_period = traj_length / num_cycles
     direction_list = ['x', 'y', 'z']
-    # Get coordinates indexes.
     if traj_plane[0] in direction_list and traj_plane[1] in direction_list and traj_plane[0] != traj_plane[1]:
         coord_index_a = direction_list.index(traj_plane[0])
         coord_index_b = direction_list.index(traj_plane[1])
     else:
         raise ValueError('Trajectory plane should be in form of ab, where a and b can be {x, y, z}.')
-    # Generate time stamps.
-    times = np.arange(0, traj_length + sample_time*(1+horizon), sample_time)  # sample time added to make reference one step longer than traj_length
+    times = np.arange(0, traj_length + sample_time*(1+horizon), sample_time)
     pos_ref_traj = np.zeros((len(times), 3))
     vel_ref_traj = np.zeros((len(times), 3))
     acc_ref_traj = np.zeros((len(times), 3))
     jer_ref_traj = np.zeros((len(times), 3))
 
-    # Compute trajectory points.
     for t in enumerate(times):
-        pos_ref_traj[t[0]], vel_ref_traj[t[0]], acc_ref_traj[t[0]], jer_ref_traj[t[0]] = _get_coordinates(t[1],
-                                                                        traj_type,
-                                                                        traj_period,
-                                                                        coord_index_a,
-                                                                        coord_index_b,
-                                                                        position_offset[0],
-                                                                        position_offset[1],
-                                                                        scaling)
-    # manually shift the z axis to 1.0 if not in the traj plane
-    # otherwise flying on the floor with z=0.0
+        pos_ref_traj[t[0]], vel_ref_traj[t[0]], acc_ref_traj[t[0]], jer_ref_traj[t[0]] = _get_coordinates(
+            t[1], traj_type, traj_period, coord_index_a, coord_index_b, position_offset[0], position_offset[1], scaling)
+
     if 'z' not in traj_plane:
         pos_ref_traj[:, 2] = 1.0
         vel_ref_traj[:, 2] = 0.0

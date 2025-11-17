@@ -1,0 +1,135 @@
+task_config:
+  info_in_reset: true
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  init_state:
+    init_x: 2.75
+    init_x_dot: 0
+    init_y: 1.5
+    init_y_dot: 0
+    init_z: 1.2
+    init_z_dot: 0
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 1
+    trajectory_plane: xy
+    trajectory_position_offset: [0.0, 0.0, 0.0]
+    trajectory_scale: 1.0
+    strings:
+      # === Section: Randomized String Obstacles ===
+      - start: [1.8, 1.125, 1.8]
+        end: [0.0, 0.675, 0.0]
+      - start: [1.8, -1.125, 0.0]
+        end: [0.0, -0.675, 1.8]
+      - start: [1.8, -1.125, 1.8]
+        end: [1.8, 1.125, 1.8]
+      - start: [0.0, -0.675, 0.0]
+        end: [0.0, -0.675, 1.8]
+      - start: [0.0, 0.675, 0.0]
+        end: [0.0, 0.675, 1.8]
+      - start: [1.8, -1.125, 0.0]
+        end: [1.8, -1.125, 1.8]
+      - start: [1.8, 1.125, 0.0]
+        end: [1.8, 1.125, 1.8]
+      # === Section 2: Fixed Strings ===
+      - start: [0.0, 0.675, 1.8]
+        end: [-1.8, -1.125, 1.8]
+      - start: [0.0, -0.675, 0.0]
+        end: [-1.8, 1.125, 1.2]
+      - start: [-1.8, 1.125, 1.8]
+        end: [-1.8, -1.125, 0.0]
+      - start: [-1.8, -1.125, 0.0]
+        end: [-1.8, -1.125, 1.8]
+      - start: [-1.8, 1.125, 0.0]
+        end: [-1.8, 1.125, 1.8]
+    waypoints:
+      # === Section: Randomized String Obstacles ===
+      - time: 0.0
+        position: [2.475, 1.35, 1.2]
+      - time: 1.5
+        position: [1.575, 1.665, 1.35]
+      - time: 3.75
+        position: [0.99, 0.9, 1.5]
+      - time: 5.25
+        position: [1.8, 0.0, 1.2]
+      - time: 6.75
+        position: [2.475, -1.125, 1.0]
+      - time: 8.62
+        position: [1.8, -1.575, 0.8]
+      - time: 10.5
+        position: [0.36, -0.72, 0.7]
+      - time: 12.38
+        position: [1.44, 0.99, 0.8]
+      - time: 13.88
+        position: [0.9, 1.35, 1.0]
+      - time: 15.75
+        position: [0.45, 0.81, 1.2]
+      - time: 17.62
+        position: [1.35, -0.99, 1.3]
+      # === Section 2: Fixed Strings ===
+      - time: 19.12
+        position: [0.45, -1.35, 1.2]
+      - time: 20.25
+        position: [-0.45, -1.125, 1.2]
+      - time: 20.81
+        position: [-1.62, -0.54, 1.35]
+      - time: 21.38
+        position: [-2.475, -1.125, 1.5]
+      - time: 22.5
+        position: [-1.8, -1.575, 1.35]
+      - time: 23.62
+        position: [-1.125, -1.125, 1.2]
+      - time: 24.75
+        position: [-0.45, -0.27, 1.0]
+      - time: 25.88
+        position: [-0.675, 0.54, 0.8]
+      - time: 27.0
+        position: [-1.35, 0.675, 0.6]
+      - time: 28.12
+        position: [-1.8, 0.54, 0.8]
+      - time: 28.69
+        position: [-2.25, 0.225, 1.2]
+      - time: 29.25
+        position: [-1.8, -0.225, 1.35]
+      - time: 30.38
+        position: [-0.45, -0.225, 1.5]
+      - time: 31.5
+        position: [0.45, 0.81, 1.5]
+      - time: 32.62
+        position: [0.0, 1.35, 1.2]
+      # === Section 3: Disturbance Obstacles ===
+      - time: 34.12
+        position: [-0.9, 1.8, 1.0]
+      - time: 35.02
+        position: [-2.25, 1.35, 1.0]
+      - time: 35.92
+        position: [-2.475, 0.45, 1.0]
+      - time: 36.83
+        position: [-2.475, -0.45, 1.0]
+      - time: 37.73
+        position: [-2.25, -1.35, 1.0]
+      - time: 38.62
+        position: [-0.9, -1.8, 1.0]
+      - time: 39.52
+        position: [0.9, -1.8, 1.0]
+      - time: 40.42
+        position: [2.25, -1.35, 1.0]
+      - time: 41.33
+        position: [2.475, -0.45, 1.0]
+      - time: 42.45
+        position: [2.475, 0.45, 1.0]
+      - time: 43.58
+        position: [2.475, 1.35, 1.0]
+  inertial_prop:
+    M: 0.037
+  episode_len_sec: 43.575
+  cost: quadratic
+  constraints:
+  - constraint_form: default_constraint
+    constrained_variable: state
+  - constraint_form: default_constraint
+    constrained_variable: input
+  done_on_violation: false

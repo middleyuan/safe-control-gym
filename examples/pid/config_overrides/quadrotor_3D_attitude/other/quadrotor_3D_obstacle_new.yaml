@@ -1,0 +1,258 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  # normalized_rl_action_space: False
+
+  init_state:
+    init_x: 2.5
+    init_x_dot: 0
+    init_y: -1.5
+    init_y_dot: 0
+    init_z: 1.00
+    init_z_dot: 0
+  
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [ 0., 0.]
+    trajectory_scale: 1.
+    strings:
+      # === Random String Obstacle Course (Generalization) ===
+      # Random strings between waypoints 1 and 2 (varies between [-2.5, -1.5] and [2.5, -1.5])
+      - start: [0.0, -1.5, 0.0]
+        end: [0.0, -1.5, 2.0]
+      - start: [-1.0, -1.5, 0.0]
+        end: [-1.0, -1.5, 2.0]
+      - start: [1.0, -1.5, 0.0]
+        end: [1.0, -1.5, 2.0]
+      
+      # === Fixed String Obstacle Course (Accuracy) ===
+      # Fixed vertical strings between adjacent waypoints
+      # Between waypoints 2-3 ([-2.5, -1.5] to [-2.5, 0.0])
+      - start: [-2.5, -0.75, 0.0]
+        end: [-2.5, -0.75, 2.0]
+      
+      # Between waypoints 3-4 ([-2.5, 0.0] to [-1.5, 0.0])
+      - start: [-2.0, 0.0, 0.0]
+        end: [-2.0, 0.0, 2.0]
+      
+      # Between waypoints 4-5 ([-1.5, 0.0] to [-0.5, 0.0])
+      - start: [-1.0, 0.0, 0.0]
+        end: [-1.0, 0.0, 2.0]
+      
+      # Between waypoints 5-6 ([-0.5, 0.0] to [0.5, 0.0])
+      - start: [0.0, 0.0, 0.0]
+        end: [0.0, 0.0, 2.0]
+      
+      # Between waypoints 6-7 ([0.5, 0.0] to [1.5, 0.0])
+      - start: [1.0, 0.0, 0.0]
+        end: [1.0, 0.0, 2.0]
+      
+      # Between waypoints 7-8 ([1.5, 0.0] to [2.5, 0.0])
+      - start: [2.0, 0.0, 0.0]
+        end: [2.0, 0.0, 2.0]
+      
+      # === Wall Obstacle Course (Robustness) ===
+      # # Between waypoints 8-9 ([2.5, 0.0] to [2.0, 1.0])
+      # - start: [2.25, 0.5, 0.0]
+      #   end: [2.25, 0.5, 2.0]
+      
+      # # Between waypoints 9-10 ([2.0, 1.0] to [1.5, 1.25])
+      # - start: [1.75, 1.125, 0.0]
+      #   end: [1.75, 1.125, 2.0]
+      
+      # # Between waypoints 10-11 ([1.5, 1.25] to [0.0, 1.5])
+      # - start: [0.75, 1.375, 0.0]
+      #   end: [0.75, 1.375, 2.0]
+      
+      # # Between waypoints 11-12 ([0.0, 1.5] to [-1.5, 1.25])
+      # - start: [-0.75, 1.375, 0.0]
+      #   end: [-0.75, 1.375, 2.0]
+      
+      # # Between waypoints 12-13 ([-1.5, 1.25] to [-2.0, 1.0])
+      # - start: [-1.75, 1.125, 0.0]
+      #   end: [-1.75, 1.125, 2.0]
+      
+      # # Between waypoints 13-14 ([-2.0, 1.0] to [-2.5, 0.0])
+      # - start: [-2.25, 0.5, 0.0]
+      #   end: [-2.25, 0.5, 2.0]
+      
+      # # Between waypoints 14-15 ([-2.5, 0.0] to [-2.5, -1.5])
+      # - start: [-2.5, -0.75, 0.0]
+      #   end: [-2.5, -0.75, 2.0]
+      
+      # # Between waypoints 15-16 ([-2.5, -1.5] to [2.5, -1.5])
+      # - start: [0.0, -1.5, 0.0]
+      #   end: [0.0, -1.5, 2.0]
+        
+    waypoints:
+      # === 1.5s difference ===
+      - time: 1.5
+        position: [2.5, -1.5, 1.00]
+      - time: 3.0
+        position: [-2.5, -1.5, 1.00]
+      # === Fixed String Obstacle Course (Accuracy) ===
+      - time: 4.5
+        position: [-2.5, 0.0, 1.00]
+      - time: 6.0
+        position: [-1.5, 0.0, 1.00]
+      - time: 7.5
+        position: [-0.5, 0.0, 1.00]
+      - time: 9.0
+        position: [0.5, 0.0, 1.00]
+      - time: 10.5
+        position: [1.5, 0.0, 1.00]
+      - time: 12.0
+        position: [2.5, 0.0, 1.00]
+      # === Wall Obstacle Course (Robustness) ===      
+      - time: 13.5
+        position: [2.0, 1.0, 1.00]
+      - time: 15.0
+        position: [1.5, 1.25, 1.00]
+      - time: 16.5
+        position: [0.0, 1.5, 1.00]
+      - time: 18.0
+        position: [-1.5, 1.25, 1.00]
+      - time: 19.5
+        position: [-2.0, 1.0, 1.00]
+      - time: 21.0
+        position: [-2.5, 0.0, 1.00]
+      - time: 22.5
+        position: [-2.5, -1.5, 1.00] 
+      - time: 24.0
+        position: [2.5, -1.5, 1.00]
+
+      # === 2s difference ===
+      # - time: 2
+      #   position: [2.5, -1.5, 1.00]
+      # - time: 4
+      #   position: [-2.5, -1.5, 1.00]
+      # # === Fixed String Obstacle Course (Accuracy) ===
+      # - time: 6
+      #   position: [-2.5, 0.0, 1.00]
+      # - time: 8
+      #   position: [-1.5, 0.0, 1.00]
+      # - time: 10
+      #   position: [-0.5, 0.0, 1.00]
+      # - time: 12
+      #   position: [0.5, 0.0, 1.00]
+      # - time: 14
+      #   position: [1.5, 0.0, 1.00]
+      # - time: 16
+      #   position: [2.5, 0.0, 1.00]
+      # # === Wall Obstacle Course (Robustness) ===      
+      # - time: 18
+      #   position: [2.0, 1.0, 1.00]
+      # - time: 20
+      #   position: [1.5, 1.25, 1.00]
+      # - time: 22
+      #   position: [0.0, 1.5, 1.00]
+      # - time: 24
+      #   position: [-1.5, 1.25, 1.00]
+      # - time: 26
+      #   position: [-2.0, 1.0, 1.00]
+      # - time: 28
+      #   position: [-2.5, 0.0, 1.00]
+      # - time: 30
+      #   position: [-2.5, -1.5, 1.00] 
+      # - time: 32
+      #   position: [2.5, -1.5, 1.00]
+
+      # === 3s difference ===
+      # - time: 3
+      #   position: [2.5, -1.5, 1.00]
+      # - time: 6
+      #   position: [-2.5, -1.5, 1.00]
+      # # === Fixed String Obstacle Course (Accuracy) ===
+      # - time: 9
+      #   position: [-2.5, 0.0, 1.00]
+      # - time: 12
+      #   position: [-1.5, 0.0, 1.00]
+      # - time: 15
+      #   position: [-0.5, 0.0, 1.00]
+      # - time: 18
+      #   position: [0.5, 0.0, 1.00]
+      # - time: 21
+      #   position: [1.5, 0.0, 1.00]
+      # - time: 24
+      #   position: [2.5, 0.0, 1.00]
+      # # === Wall Obstacle Course (Robustness) ===      
+      # - time: 27
+      #   position: [2.0, 1.0, 1.00]
+      # - time: 30
+      #   position: [1.5, 1.25, 1.00]
+      # - time: 33
+      #   position: [0.0, 1.5, 1.00]
+      # - time: 36
+      #   position: [-1.5, 1.25, 1.00]
+      # - time: 39
+      #   position: [-2.0, 1.0, 1.00]
+      # - time: 42
+      #   position: [-2.5, 0.0, 1.00]
+      # - time: 45
+      #   position: [-2.5, -1.5, 1.00] 
+      # - time: 48
+      #   position: [2.5, -1.5, 1.00]
+
+      # === 4s difference ===
+      # === Random String Obstacle Course (Generalization) ===
+      - time: 2
+        position: [2.5, -1.5, 1.00]
+      - time: 6
+        position: [-2.5, -1.5, 1.00]
+      # === Fixed String Obstacle Course (Accuracy) ===
+      - time: 10
+        position: [-2.5, 0.0, 1.00]
+      - time: 14
+        position: [-1.5, 0.0, 1.00]
+      - time: 18
+        position: [-0.5, 0.0, 1.00]
+      - time: 22
+        position: [0.5, 0.0, 1.00]
+      - time: 26
+        position: [1.5, 0.0, 1.00]
+      - time: 30
+        position: [2.5, 0.0, 1.00]
+      # === Wall Obstacle Course (Robustness) ===      
+      - time: 34
+        position: [2.0, 1.0, 1.00]
+      - time: 38
+        position: [1.5, 1.25, 1.00]
+      - time: 42
+        position: [0.0, 1.5, 1.00]
+      - time: 46
+        position: [-1.5, 1.25, 1.00]
+      - time: 50
+        position: [-2.0, 1.0, 1.00]
+      - time: 54
+        position: [-2.5, 0.0, 1.00]
+      - time: 58
+        position: [-2.5, -1.5, 1.00] 
+      - time: 60
+        position: [2.5, -1.5, 1.00]
+      
+  inertial_prop:
+    M: 0.032
+  # episode_len_sec: 15
+  # episode_len_sec: 20
+  # episode_len_sec: 30
+  # episode_len_sec: 40
+  episode_len_sec: 60  # Updated for 1.5s timing (24s total trajectory time)
+  
+  # cost: rl_reward
+  cost: quadratic
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+  done_on_violation: False
