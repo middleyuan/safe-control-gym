@@ -1430,22 +1430,30 @@ class Quadrotor(BaseAviary):
                                 params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
                                 (f_max - f_min)/2 * df_dot)
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
-            # lr_param = cs.MX.sym('learnable_param', 12)
-            #     parameterized_X_dot = cs.vertcat(
-            #         x_dot,
-            #         1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-            #         y_dot,
-            #         1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-            #         z_dot,
-            #         1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
-            #         phi_dot,
-            #         theta_dot,
-            #         psi_dot,
-            #         lr_param[0]*params_roll_rate[0] * phi + lr_param[1]*params_roll_rate[1] * phi_dot + lr_param[2]*params_roll_rate[2] * R_c,
-            #         lr_param[3]*params_pitch_rate[0] * theta + lr_param[4]*params_pitch_rate[1] * theta_dot + lr_param[5]*params_pitch_rate[2] * P_c,
-            #         lr_param[6]*params_yaw_rate[0] * psi + lr_param[7]*params_yaw_rate[1] * psi_dot + lr_param[8]*params_yaw_rate[2] * Y_c,
-            #         (lr_param[9]*params_acc[1] * (T_c + lr_param[10]*params_acc[0]) - force_motor) / lr_param[11]*params_acc[2]
-            #     )
+
+                lr_param = cs.MX.sym('learnable_param', 12)
+                df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[
+                        2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot +
+                    lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] *
+                    params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot
+                )
 
         # Expand Q and R to be full matrices.
         self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
@@ -1788,10 +1796,10 @@ class Quadrotor(BaseAviary):
 
         # Identified dynamics model works with collective thrust and pitch directly
         # No need to compute RPMs, (save compute)
-        # self.current_clipped_action = np.clip(self.current_noisy_physical_action,
-        #                                       self.action_space.low,
-        #                                       self.action_space.high)
-        self.current_clipped_action = self.current_noisy_physical_action
+        self.current_clipped_action = np.clip(self.current_noisy_physical_action,
+                                              self.action_space.low,
+                                              self.action_space.high)
+        # self.current_clipped_action = self.current_noisy_physical_action
         # TODO: double check why a mixture of PHYSICS and QUAD_TYPE is used here
         if self.PHYSICS in [Physics.DYN_SI, Physics.DYN_SI_3D, Physics.DYN_SI_3D_10, Physics.DYN_SI_3D_DELAY]:
             return self.current_clipped_action
