@@ -85,9 +85,9 @@ class PPO_MPC_Agent:
         '''Sets evaluation mode.'''
         self.ac.eval()
 
-    def reset(self):
+    def reset(self, idx=None):
         '''Reset function, especially needed for resetting MPC actor'''
-        self.ac.reset()
+        self.ac.reset(idx)
 
     def state_dict(self):
         '''Snapshots agent state.'''
@@ -149,8 +149,8 @@ class PPO_MPC_Agent:
 
                     # Passing the gradients through the mpc
                     theta = self.ac.actor.get_theta_param(batch_th['obs'])
-                    # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     theta_loss = action_th.grad.unsqueeze(1) @ nabla_pi_theta @ theta.unsqueeze(2)
+                    # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     (theta_loss.sum()).backward()
                     self.actor_opt.step()
@@ -228,8 +228,8 @@ class MLPActorCritic(nn.Module):
         a = dist.mode()
         return a.cpu().numpy()
 
-    def reset(self):
-        self.actor.reset()
+    def reset(self, idx):
+        self.actor.reset(idx)
 
 
 class MLPCritic(nn.Module):
@@ -310,8 +310,8 @@ class MPCActor(nn.Module):
         logp_a = dist.log_prob(act)
         return action_th, dist, logp_a, nabla_pi_ref, nabla_pi_theta, optimal_flag
 
-    def reset(self):
-        self.mpc.reset()
+    def reset(self, idx):
+        self.mpc.reset(idx)
 
     def get_theta_param(self, obs):
         if obs.ndim > 1:
@@ -411,7 +411,7 @@ class MPCPolicyFunction:
         self.mode = None
         self.traj = None
         self.traj_step = 0
-        self.infos = None
+        self.infos = [None] * self.n_parallel_solver
         # Setup reference input.
         if self.env.TASK == Task.STABILIZATION:
             self.mode = 'stabilization'
@@ -428,7 +428,13 @@ class MPCPolicyFunction:
         self.set_dynamics_func()
         self.setup_optimizer()
 
-    def reset(self):
+        # Parallel solvers
+        self.pi_solvers, self.rkkt_fns, _ = self.get_parallel_solver(self.n_parallel_solver)
+        self.pi_solvers_train, self.rkkt_fns_train, self.dpidp_fns_train = self.get_parallel_solver(
+            self.n_train_solver
+        )
+
+    def reset(self, idx=None):
         # Previously solved states & inputs, useful for warm start.
         self.u_prev = None
         self.x_prev = None
@@ -436,7 +442,10 @@ class MPCPolicyFunction:
         self.x_goal = None
         self.traj = None
         self.traj_step = 0
-        self.infos = None
+        if idx is not None:
+            self.infos[idx] = None
+        else:
+            self.infos = [None] * self.n_parallel_solver
         # self.X_EQ = self.env.X_EQ
         # self.U_EQ = self.env.U_EQ
 
@@ -532,9 +541,9 @@ class MPCPolicyFunction:
 
         # Learnable parameters
         # Cost
-        Q, th_q, nq = _create_semi_definite_matrix(nx)
-        R, th_r, nr = _create_semi_definite_matrix(nu)
-        Qt, th_qt, nqt = _create_semi_definite_matrix(nx)
+        Q, th_q, _ = _create_semi_definite_matrix(nx)
+        R, th_r, _ = _create_semi_definite_matrix(nu)
+        Qt, th_qt, _ = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
         back_off_param = cs.MX.sym('back_off_param', nx)
@@ -636,8 +645,8 @@ class MPCPolicyFunction:
         mult, lamb, mu = cs.vcat(mult), cs.vcat(lamb), cs.vcat(mu)
         con_lbg, con_ubg = cs.vcat(con_lbg), cs.vcat(con_ubg)
         lang_mult_fn = cs.Function('lang_mult_fn', [mult], [lamb, mu])
-        lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, 'thread')
-        lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, 'thread')
+        # lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, 'thread')
+        # lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, 'thread')
 
         # Create solver (IPOPT solver in this version)
         opts_setting = {
@@ -662,9 +671,9 @@ class MPCPolicyFunction:
             'p': cs.vertcat(fixed_param, ref_param, cost_param, back_off_param, model_param),
             'g': con_list,
         }
-        vsolver = cs.nlpsol('vsolver', 'fatrop', vnlp_prob, opts_setting)
-        vsolver_parallel = vsolver.map(self.n_parallel_solver, 'thread')
-        vsolver_parallel_train = vsolver.map(self.n_train_solver, 'thread')
+        pisolver = cs.nlpsol('pisolver', 'fatrop', vnlp_prob, opts_setting)
+        # pisolver_parallel = pisolver.map(self.n_parallel_solver, 'thread')
+        # pisolver_parallel_train = pisolver.map(self.n_train_solver, 'thread')
 
         # Build Lagrangian
         lagrangian = (
@@ -680,13 +689,13 @@ class MPCPolicyFunction:
             mu * H_ieq + etau,
         )
         # z contains all variables of the lagrangian
-        z = cs.vertcat(opt_vars, lamb, mu)
+        z = cs.vertcat(opt_vars, mult)
         theta = cs.vertcat(cost_param, back_off_param, model_param)
 
         # Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function('rkkt_fn', [z, fixed_param, ref_param, theta], [R_kkt])
-        rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, 'thread')
-        rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, 'thread')
+        # rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, 'thread')
+        # rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, 'thread')
         dR_sensfunc = rkkt_fn.factory('dR', ['i0', 'i1', 'i2', 'i3'], ['jac:o0:i0', 'jac:o0:i2', 'jac:o0:i3'])
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
         # dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
@@ -700,7 +709,7 @@ class MPCPolicyFunction:
         f_true = cs.Function('f_true', [z, fixed_param, ref_param, theta], [dPi])
         f_false = cs.Function('f_false', [z, fixed_param, ref_param, theta], [dPi_zeros])
         dPi_fn = cs.Function.if_else('dPi_fn', f_true, f_false)
-        dPi_train = dPi_fn.map(self.n_train_solver, 'thread')
+        # dPi_train = dPi_fn.map(self.n_train_solver, 'thread')
 
         self.solver_dict = {
             'x_var': x_var,
@@ -714,16 +723,9 @@ class MPCPolicyFunction:
             'lower_bound': con_lbg,
             'upper_bound': con_ubg,
             'lang_mult_fn': lang_mult_fn,
-            'lang_mult_fn_parallel': lang_mult_fn_parallel,
-            'lang_mult_fn_train': lang_mult_fn_train,
-            'solver': vsolver,
-            'solver_parallel': vsolver_parallel,
-            'solver_train': vsolver_parallel_train,
+            'solver': pisolver,
             'rkkt_fn': rkkt_fn,
-            'rkkt_fn_parallel': rkkt_fn_parallel,
-            'rkkt_fn_train': rkkt_fn_parallel_train,
-            'dpi_fn': dPi_fn,
-            'dpi_fn_train': dPi_train
+            'dpi_fn': dPi_fn
         }
 
     def get_references(self, traj_step=None, traj_ref=None):
@@ -818,14 +820,13 @@ class MPCPolicyFunction:
         return action, info, results_dict, optimal
 
     def select_action_batch(self, obs_batch, theta, traj_ref, actor_info):
-        solver_dict = self.solver_dict
-        solver = solver_dict['solver_parallel']
-        con_lbg = solver_dict['lower_bound']
-        con_ubg = solver_dict['upper_bound']
-        opt_vars_fn = solver_dict['opt_vars_fn']
-        xus_fn = solver_dict['xus_fn']
-        lang_mult_fn = solver_dict['lang_mult_fn_parallel']
-        rkkt_fn = solver_dict['rkkt_fn_parallel']
+        if not obs_batch.ndim > 1:
+            obs_batch = obs_batch[None, :]
+        # solver, rkkt_fn, _ = self.get_parallel_solver(obs_batch.shape[0])
+        con_lbg = self.solver_dict['lower_bound']
+        con_ubg = self.solver_dict['upper_bound']
+        opt_vars_fn = self.solver_dict['opt_vars_fn']
+        xus_fn = self.solver_dict['xus_fn']
         traj_step = self.traj_step
         # goal_states = self.get_references(traj_step, traj_ref)
         if self.mode == 'tracking':
@@ -836,13 +837,11 @@ class MPCPolicyFunction:
         # ref_param = goal_states.T.reshape(-1, 1).repeat(obs_batch.shape[0], 1)
         lbg = con_lbg.full().repeat(obs_batch.shape[0], 1)
         ubg = con_ubg.full().repeat(obs_batch.shape[0], 1)
-        if not obs_batch.ndim > 1:
-            obs_batch = obs_batch[None, :]
         for i, obs in enumerate(obs_batch):
             fixed_param = obs[:self.model.nx]
             ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
-            opt_vars_init = np.zeros((solver_dict['opt_vars'].shape[0], solver_dict['opt_vars'].shape[1]))
-            if self.infos is not None:  # shift previous solutions by 1 step based on last soln
+            opt_vars_init = np.zeros((self.solver_dict['opt_vars'].shape[0], self.solver_dict['opt_vars'].shape[1]))
+            if self.infos[i] is not None:  # shift previous solutions by 1 step based on last soln
                 opt_vars_init = self.infos[i]['opt_var']
                 x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
                 x_prev, u_prev, sigma_prev = x_prev.full(), u_prev.full(), sigma_prev.full()
@@ -853,16 +852,14 @@ class MPCPolicyFunction:
             x0.append(opt_vars_init[:, 0])
             fixed_p.append(fixed_param)
             ref_p.append(ref_param)
-        x0 = np.array(x0).T
-        fixed_p = np.array(fixed_p).T
-        ref_p = np.array(ref_p).T
+        x0, fixed_p, ref_p = np.array(x0).T, np.array(fixed_p).T, np.array(ref_p).T
         p = np.concatenate((fixed_p, ref_p, theta.T), axis=0)
-        soln_batch = solver(x0=x0, p=p, lbg=lbg, ubg=ubg)
-        lamb_batch, mu_batch = lang_mult_fn(soln_batch['lam_g'])
-        z = cs.vertcat(soln_batch['x'], lamb_batch, mu_batch)
-        rkkt_batch = rkkt_fn(z, fixed_p, ref_p, theta.T)
-        optimal_batch = [True if np.linalg.norm(rkkt_batch[:, i]) ** 2 <= 1e-3 else False for i in
-                         range(obs_batch.shape[0])]
+
+        # Forward pass through solver
+        soln_batch = self.pi_solvers(x0=x0, p=p, lbg=lbg, ubg=ubg)
+        z = cs.vertcat(soln_batch['x'], soln_batch['lam_g'])
+        rkkt_batch = self.rkkt_fns(z, fixed_p, ref_p, theta.T)
+        optimal_batch = np.linalg.norm(rkkt_batch.full(), axis=0) ** 2 <= 1e-5
 
         # Post-processing the solution
         action_batch, results_dict_batch, info_batch = [], [], []
@@ -905,14 +902,9 @@ class MPCPolicyFunction:
         return action_batch, info_batch, results_dict_batch, optimal_batch
 
     def select_action_batch_train(self, obs_batch, theta, traj_ref, info_batch):
-        solver_dict = self.solver_dict
-        solver = solver_dict['solver_train']
-        con_lbg = solver_dict['lower_bound']
-        con_ubg = solver_dict['upper_bound']
-        lang_mult_fn_train = solver_dict['lang_mult_fn_train']
-        rkkt_fn = solver_dict['rkkt_fn_train']
-        opt_act_fn = solver_dict['opt_act_fn']
-        dpi_fn_train = solver_dict['dpi_fn_train']
+        con_lbg = self.solver_dict['lower_bound']
+        con_ubg = self.solver_dict['upper_bound']
+        opt_act_fn = self.solver_dict['opt_act_fn']
 
         x0, fixed_p, ref_p = [], [], []
         lbg = con_lbg.full().repeat(obs_batch.shape[0], 1)
@@ -931,19 +923,18 @@ class MPCPolicyFunction:
             x0.append(opt_vars_init)
             fixed_p.append(fixed_param)
             ref_p.append(ref_param)
-        x0 = np.array(x0).T
-        fixed_p, ref_p = np.array(fixed_p).T, np.array(ref_p).T
+        x0, fixed_p, ref_p = np.array(x0).T, np.array(fixed_p).T, np.array(ref_p).T
         p = np.concatenate((fixed_p, ref_p, theta.T), axis=0)
-        soln_batch = solver(x0=x0, p=p, lbg=lbg, ubg=ubg)
-        lamb_batch, mu_batch = lang_mult_fn_train(soln_batch['lam_g'])
-        z = cs.vertcat(soln_batch['x'], lamb_batch, mu_batch)
-        rkkt_batch = rkkt_fn(z, fixed_p, ref_p, theta.T)
-        optimal_batch = [True if np.linalg.norm(rkkt_batch[:, i]) ** 2 <= 1e-3 else False for i in
-                         range(obs_batch.shape[0])]
+
+        # Forward pass through solver
+        soln_batch = self.pi_solvers_train(x0=x0, p=p, lbg=lbg, ubg=ubg)
+        z = cs.vertcat(soln_batch['x'], soln_batch['lam_g'])
+        rkkt_batch = self.rkkt_fns_train(z, fixed_p, ref_p, theta.T)
+        optimal_batch = np.linalg.norm(rkkt_batch.full(), axis=0) ** 2 <= 1e-5
         optimal_batch = np.array(optimal_batch)[None, :]
 
         action_batch = opt_act_fn(soln_batch['x']).full().T
-        dpi_cs = dpi_fn_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
+        dpi_cs = self.dpidp_fns_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
         nabla_pi_ref_batch = []
         nabla_pi_theta_batch = []
         for i in range(obs_batch.shape[0]):
@@ -955,6 +946,12 @@ class MPCPolicyFunction:
         nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
         optimal_batch = torch.FloatTensor(np.array(optimal_batch)).T
         return action_batch, nabla_pi_ref_batch, nabla_pi_theta_batch, optimal_batch
+
+    def get_parallel_solver(self, n_solvers):
+        pi_solvers = self.solver_dict['solver'].map(n_solvers, 'thread')
+        rkkt_solvers = self.solver_dict['rkkt_fn'].map(n_solvers, 'thread')
+        dpi_solvers = self.solver_dict['dpi_fn'].map(n_solvers, 'thread')
+        return pi_solvers, rkkt_solvers, dpi_solvers
 
 
 class PPOBuffer(object):

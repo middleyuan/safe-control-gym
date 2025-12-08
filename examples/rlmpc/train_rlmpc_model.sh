@@ -2,8 +2,8 @@
 
 # SYS='cartpole'
 # SYS='quadrotor_2D'
-# SYS='quadrotor_2D_attitude'
-SYS='quadrotor_3D_attitude'
+SYS='quadrotor_2D_attitude'
+# SYS='quadrotor_3D_attitude'
 
 # TASK='stab'
 TASK='track'
@@ -15,7 +15,7 @@ ALGO='ppo_mpc'
 # ALGO='appo_mpc'
 # ALGO='sac_mpc'
 
-EXP_NAME='test'
+EXP_NAME='quad_2d_attitude_track'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -26,6 +26,7 @@ fi
 # Train the unsafe controller/agent.
 for SEED in {0..0}
 do
+    echo "Training ${ALGO} on ${SYS_NAME} with seed ${SEED}"
     python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         --algo ${ALGO} \
         --task ${SYS_NAME} \
@@ -33,7 +34,7 @@ do
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
             ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./Results/${EXP_NAME} \
-        --tag ${SYS}_${ALGO}_data \
+        --tag ${SYS}_${ALGO} \
         --seed ${SEED} \
         --kv_overrides \
             task_config.randomized_init=True
