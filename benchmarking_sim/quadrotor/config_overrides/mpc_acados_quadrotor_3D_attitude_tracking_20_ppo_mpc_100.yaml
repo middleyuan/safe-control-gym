@@ -1,10 +1,10 @@
 algo: mpc_acados
 algo_config:
   horizon: 30
-  q_mpc: [9.8955e+00, 7.0513e-01, 9.2504e+00, 7.5310e-01, 1.0117e+01, 7.7827e-01,
-        8.7613e-01, 8.1572e-01, 7.7938e-01, 5.4262e-02, 1.6934e-02, 6.5382e-03,
-        6.1464e-01]
-  r_mpc: [2.1183e+00, 1.1198e+00, 8.8845e-01, 8.5757e-01]
+  q_mpc: [1.0242e+01, 8.2599e-01, 1.1472e+01, 3.0250e-01, 1.0430e+01, 8.2724e-01,
+        2.0423e-01, 1.7937e-02, 2.0456e+00, 2.6895e-03, 8.1531e-03, 2.2326e-02,
+        1.2715e-05]
+  r_mpc: [4.8776e-01, 3.5994e-01, 5.5628e-01, 4.3874e-01]
   gamma: 1.0
   # Prior info
   prior_info:
@@ -16,12 +16,12 @@ algo_config:
     #   params_acc: [0.0905, 0.8, 0.0814]
     prior_prop:
       M: 0.037  # Must be capital M
-      params_roll_rate: [-2.5486e+02, -2.9706e+01,  1.3782e+02]
-      params_pitch_rate: [-2.9642e+02, -1.4004e+01,
-         1.4339e+02]
-      params_yaw_rate: [-6.8283e+01, -2.0776e+01,  3.6314e+02]
-      params_acc: [4.6545e-02,
-         7.6392e-01,  1.0356e-01]
+      params_roll_rate: [-2.5648e+02, -6.1545e+00,  2.0118e+02]
+      params_pitch_rate: [-2.9038e+02, -1.2924e+01,
+         2.1209e+02]
+      params_yaw_rate: [-7.3923e+01, -2.3360e+01,  3.8677e+02]
+      params_acc: [4.3845e-02,
+         7.9855e-01,  6.4163e-02]
   #  randomize_prior_prop: False
   #  prior_prop_rand_info: null
   warmstart: True
