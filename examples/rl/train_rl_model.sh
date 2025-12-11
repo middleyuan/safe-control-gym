@@ -56,15 +56,14 @@ for SEED in "${SEEDS[@]}"; do
         --task ${SYS_NAME} \
         --overrides \
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+            ./config_overrides/${SYS}/obstacle_course.yaml \
         --output_dir ./Results/${EXP_NAME} \
         --tag ${SYS}_${ALGO}_data_seed${SEED} \
         --seed ${SEED} \
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
-            task_config.normalized_rl_action_space=False 
-            # task_config.episode_len_sec=${SEED}
+            task_config.normalized_rl_action_space=False
 done
 
 # Move the newly trained unsafe model.

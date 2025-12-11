@@ -76,8 +76,7 @@ task_config:
   rew_state_weight: [3.0, 0.1, 3.0, 0.1, 3.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
   rew_act_weight: [0.1, 0.1, 0.1, 0.1] #set to 1 if action noise is too large
   rew_exponential: True
-  inertial_prop:
-    M: 0.037
+
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state
