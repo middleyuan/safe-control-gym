@@ -385,6 +385,7 @@ class Quadrotor(BaseAviary):
         # Set previous physical action (for input rate quadrotor)
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
             self.prev_physical_action = np.zeros(self.action_dim)
+            self.current_physical_action = np.zeros(self.action_dim)
 
         # initialize disturbance model
         if 'downwash' in self.disturbances:
@@ -834,6 +835,7 @@ class Quadrotor(BaseAviary):
         # Reset previous action.
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
             self.prev_physical_action = np.zeros(self.action_dim)
+            self.current_physical_action = np.zeros(self.action_dim)
 
         # Update BaseAviary internal variables before calling self._get_observation().
         self._update_and_store_kinematic_information()
@@ -1976,9 +1978,9 @@ class Quadrotor(BaseAviary):
         action = self.denormalize_action(action)
         # self.current_physical_action = self.normalize_action(action)
         self.current_physical_action = action
-        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
-            # self.current_physical_action += self.prev_physical_action.copy()
-            self.prev_physical_action = self.current_physical_action.copy()
+        # if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        #     # self.current_physical_action += self.prev_physical_action.copy()
+        #     self.prev_physical_action = self.current_physical_action.copy()
 
         # Apply disturbances.
         if 'action' in self.disturbances:
@@ -2156,7 +2158,7 @@ class Quadrotor(BaseAviary):
             # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
             force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
             self.state = np.hstack(
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor, self.prev_physical_action]
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor, self.current_physical_action]
                 # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
             ).reshape((17,))
         # if not np.array_equal(self.state,
@@ -2201,6 +2203,10 @@ class Quadrotor(BaseAviary):
         if self.COST == Cost.RL_REWARD:
             act = np.asarray(self.current_noisy_physical_action)
             act_error = act - self.U_GOAL
+            # if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+            #     act_error -= self.prev_physical_action
+            #     self.prev_physical_action = self.current_physical_action.copy()
+
             # Quadratic costs w.r.t state and action
             # TODO: consider using multiple future goal states for cost in tracking
             if self.TASK == Task.STABILIZATION:
