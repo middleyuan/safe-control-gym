@@ -32,4 +32,4 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
-  tensorboard: True
+  tensorboard: False

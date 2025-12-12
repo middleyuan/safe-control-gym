@@ -253,10 +253,13 @@ class PPO_MPC(BaseController):
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
+
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
                 agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
+                if done[idx]:
+                    self.agent.reset(idx)
                 if 'terminal_info' not in inf:
                     continue
                 inff = inf['terminal_info']
@@ -265,7 +268,6 @@ class PPO_MPC(BaseController):
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
                     terminal_v[idx] = terminal_val
-                    # self.agent.reset()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
                  'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
@@ -333,7 +335,7 @@ class PPO_MPC(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, env_info = env.reset()
                 info['current_step'] = 0
-                # self.agent.reset()
+                self.agent.reset()
             obs = self.obs_normalizer(obs)
             agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.

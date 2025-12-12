@@ -1,22 +1,30 @@
 algo: mpc_acados
 algo_config:
   horizon: 30
-  q_mpc: [1.9784e+01, 7.5093e-02, 1.9734e+01, 2.9363e-01, 2.0183e+01, 2.4793e-01, 2.2362e-01, 9.1660e-01, 3.2496e-01, 7.7808e-03, 6.0792e-03, 7.4568e-03, 1.8337e-01]
-  r_mpc: [1.3958e+00, 1.3075e+00, 1.4373e+00, 1.5363e+00]
+  q_mpc: [9.8980e+00, 6.9983e-01, 1.0100e+01, 4.7097e-01, 9.1912e+00, 1.3316e-01,
+        4.0216e-01, 6.7354e-01, 7.2526e-01, 1.0000e-05, 1.5779e-02, 1.1508e-02,
+        1.9995e-01]
+  r_mpc: [1.8322e+00, 9.8817e-01, 1.1954e+00, 1.8208e+00]
+  qt_mpc: [8.9884e+00,
+        8.0571e-01, 9.6635e+00, 1.4036e+00, 1.1075e+01, 1.4927e-01, 1.5303e+00,
+        1.3646e+00, 8.0885e-01, 1.0470e+00, 2.2232e-03, 4.7349e-01, 1.8811e-01]
   # Prior info
   prior_info:
-#    prior_prop:
-#      params_roll_rate: [-238.1, -21.35, 179.65]
-#      params_pitch_rate: [-238.1, -21.35, 179.65]
-#      params_yaw_rate: [-170.4, -22.22, 280]
-#      params_acc: [0.0905, 0.8, 0.0814]
+    # prior_prop:
+    #   params_roll_rate: [-238.1, -21.35, 179.65]
+    #   params_pitch_rate: [-238.1, -21.35, 179.65]
+    #   params_yaw_rate: [-170.4, -22.22, 280]
+    #   params_acc: [0.0905, 0.8, 0.0814]
     prior_prop:
-      params_roll_rate: [-4.01762641e+02, -2.38694101e+01, 1.07942668e+02]
-      params_pitch_rate: [-3.05487634e+02, -2.72854526e+01, 1.57105559e+02]
-      params_yaw_rate: [-2.40937216e+02, -3.28557137e+01, 9.71176267e+01]
-      params_acc: [8.85788754e-02,  7.72293282e-01,  7.59109393e-02]
-#     randomize_prior_prop: False
-#     prior_prop_rand_info: null
+      M: 0.037  # Must be capital M
+      params_roll_rate: [-3.6739e+02, -2.6983e+01,  1.4813e+02]
+      params_pitch_rate: [-3.4661e+02, -2.6493e+01,
+         1.1037e+02]
+      params_yaw_rate: [-2.4012e+02, -4.0388e+01,  4.6993e+01]
+      params_acc: [5.1729e-02,
+         8.5129e-01,  8.0014e-02]
+    # randomize_prior_prop: False
+    # prior_prop_rand_info: null
   warmstart: True
   soft_constraints: True
   use_RTI: True
