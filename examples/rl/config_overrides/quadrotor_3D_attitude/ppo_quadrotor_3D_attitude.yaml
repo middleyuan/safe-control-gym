@@ -9,7 +9,7 @@ algo_config:
   gae_lambda: 0.92
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.002  # 0.008
+  entropy_coef: 0.01  # 0.008
   exploration_init: -0.5
 
   # optim args
@@ -19,17 +19,17 @@ algo_config:
   critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 2640000
+  max_env_steps: 3960000
   # max_env_steps: 1320000
-  rollout_batch_size: 5
-  rollout_steps: 660
+  rollout_batch_size: 10
+  rollout_steps: 450
   eval_batch_size: 10
 
   # misc
   log_interval: 13200
-  save_interval: 2640000
+  save_interval: 3960000
   # max_env_steps: 1320000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True

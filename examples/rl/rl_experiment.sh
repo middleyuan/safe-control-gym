@@ -36,8 +36,8 @@ else
     SYS_NAME='quadrotor'
 fi
 EXP_DATA='test'
-SEED=3
-SUBSEED=3
+SEED=2
+SUBSEED=0
 # Set episode_len_sec and trajectory file based on SEED
 if [ "$SEED" -eq 0 ]; then
     EPISODE_LEN=13.0

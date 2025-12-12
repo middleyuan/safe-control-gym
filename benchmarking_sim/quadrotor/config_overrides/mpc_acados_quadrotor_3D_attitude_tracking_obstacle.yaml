@@ -1,0 +1,85 @@
+# algo: mpc_acados
+# algo_config:
+#   horizon: 50
+#   q_mpc:  
+#   - 75  # x position (increased from 50)
+#   - 0.5  # x velocity (increased from 0.5)
+#   - 75  # y position (increased from 50)
+#   - 0.5  # y velocity (increased from 0.5)
+#   - 125  # z position (increased from 50)
+#   - 0.5  # z velocity (increased from 0.5)
+#   - 10   # phi (increased from 5)
+#   - 10   # theta (increased from 5)
+#   - 10   # psi (increased from 5)
+#   - 0.01 # phi_dot (increased from 0.001)
+#   - 0.01 # theta_dot (increased from 0.001)
+#   - 0.01 # psi_dot (increased from 0.001)
+#   - 10   # force_motor (increased from 5)
+#   r_mpc:
+#   - 10
+#   - 50
+#   - 50
+#   - 50
+#   warmstart: True
+#   soft_constraints: True
+#   use_RTI: True
+#   output_dir: ./mpc_acados/results
+
+
+
+algo: mpc_acados
+algo_config:
+  # horizon: 40
+  # r_mpc:
+  #   - 0.8
+  #   - 0.8
+  # q_mpc:
+  #   - 5.0
+  #   - 0.1
+  #   - 5.0
+  #   - 0.1
+  #   - 0.5
+  #   - 0.001
+  horizon: 30
+  # q_mpc: [18, 0.1, 18, 0.5, 0.5, 1.0]
+  # q_mpc: [18, 0.1, 18, 0.1, 18, 0.1, 0.5, 0.5, 0.001, 0.001]
+  # r_mpc: [10., 3., 3.]
+  q_mpc:  
+  - 50
+  - 0.5
+  - 50
+  - 0.5
+  - 50
+  - 0.5
+  - 5
+  - 5
+  - 5
+  - 0.00001
+  - 0.00001
+  - 0.00001
+  - 5
+  r_mpc:
+  - 3
+  - 3
+  - 3
+  - 3
+  # r_mpc: [10, 10]
+  # Prior info
+  # prior_info:
+  #   # prior_prop: null
+  #   prior_prop: 
+  #     beta_1: 18.11298
+  #     beta_2: 3.6800
+  #     beta_3: 0
+  #     alpha_1: -140.8
+  #     alpha_2: -13.4
+  #     alpha_3: 124.8
+  #   #   pitch_bias: 0.0 # in radian
+  #   randomize_prior_prop: False
+  #   prior_prop_rand_info: null
+  warmstart: True
+  soft_constraints: True
+  use_RTI: True
+  output_dir: ./mpc_acados/results
+
+

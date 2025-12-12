@@ -603,6 +603,7 @@ class BenchmarkEnv(gym.Env, ABC):
         pos_ref_traj = np.zeros((len(times), 3))
         vel_ref_traj = np.zeros((len(times), 3))
         acc_ref_traj = np.zeros((len(times), 3))
+        jrk_ref_traj = np.zeros((len(times), 3))
         speed_traj = np.zeros((len(times), 1))
         # Initial trajectory for snap trajectory
         if traj_type == 'snap_figure8':
@@ -623,6 +624,7 @@ class BenchmarkEnv(gym.Env, ABC):
             pos_ref_traj = pva[0, :, :]
             vel_ref_traj = pva[1, :, :]
             acc_ref_traj = pva[2, :, :]
+            jrk_ref_traj = pva[3, :, :]
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
             print(f'Max acceleration: {np.max(acc_mag)}')
@@ -652,10 +654,11 @@ class BenchmarkEnv(gym.Env, ABC):
                 num_continuous_orders=3,  # Constrain continuity of derivatives up to order (>= 3)
                 algorithm='closed-form'  # "closed-form" Or "constrained"
             )
-            pva = compute_trajectory_derivatives(polys, times, 3)
+            pva = compute_trajectory_derivatives(polys, times, 4)
             pos_ref_traj = pva[0, :, :]
             vel_ref_traj = pva[1, :, :]
             acc_ref_traj = pva[2, :, :]
+            jrk_ref_traj = pva[3, :, :]
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
             # print(f"Max acceleration: {np.max(acc_mag)}")
@@ -688,7 +691,7 @@ class BenchmarkEnv(gym.Env, ABC):
         # if max_acc > 1.8 * 9.81 or max_acc < 0.3 * 9.81:
         #     raise ValueError(f"Max acceleration is not in the range of 0.3g to 1.8g")
 
-        return pos_ref_traj, vel_ref_traj, acc_ref_traj, speed_traj
+        return pos_ref_traj, vel_ref_traj, acc_ref_traj, jrk_ref_traj, speed_traj
 
     def _get_coordinates(self,
                          t,

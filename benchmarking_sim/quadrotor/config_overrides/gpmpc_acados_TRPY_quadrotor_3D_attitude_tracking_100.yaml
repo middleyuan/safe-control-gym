@@ -40,10 +40,10 @@
       # prior_prop:
       prior_prop: 
         M: 0.037 # Must be capitcal M 
-        params_acc: [-0.1, 1.2, 0.2]
-        params_roll_rate: [-286.2, -23.03, 225.6]
-        params_pitch_rate: [-286.2, -23.03, 225.6]
-        params_yaw_rate: [-192.9, -22.22, 323.5]
+        param_acc: [0.059, 0.85, 0.12]
+        params_pitch_rate: [-238.1, -21.35, 179.65]
+        params_roll_rate: [-238.1, -21.35, 179.65]
+        params_yaw_rate: [-170.4, -22.22, 280]
     use_linear_prior: False
     # use_linear_prior: True
     obs_noise_std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
@@ -64,6 +64,7 @@
     overwrite_saved_data: false
     online_learning: False
     additional_constraints: null
+    gp_model_path: /home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/gp_TRPY_fitting
     # input_mask: null
     # target_mask: null
     # target_mask: [1, 3, 5]

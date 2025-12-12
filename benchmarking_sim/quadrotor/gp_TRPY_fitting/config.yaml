@@ -1,0 +1,40 @@
+data_source: wandb:resilient-plant-1988
+fitting_params:
+  data_cutoff: 0
+  dt: 0.016666666666666666
+  filter_data: true
+  num_samples: 300
+  output_mask:
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  random_data: false
+  validation_split: 0.2
+  wandb_project: benchmark
+model_performance:
+  Motor Force (Tau):
+    lengthscale: 2.27545428276062
+    noise: 0.004935557954013348
+    outputscale: 0.005611412692815065
+    rmse: 0.0104362266138196
+  Pitch:
+    lengthscale: 1.1632667779922485
+    noise: 0.050259217619895935
+    outputscale: 0.20550183951854706
+    rmse: 0.1465221792459488
+  Roll:
+    lengthscale: 1.192680835723877
+    noise: 0.30864232778549194
+    outputscale: 0.35195356607437134
+    rmse: 0.22111280262470245
+  Yaw:
+    lengthscale: 1.1101884841918945
+    noise: 0.30591803789138794
+    outputscale: 0.34215208888053894
+    rmse: 0.10316964238882065
+num_samples: 300
+scg_available: true
+wandb_run_name: resilient-plant-1988

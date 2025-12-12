@@ -60,7 +60,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gp_mpc'
         # ALGO = 'gpmpc_acados'
         # ALGO = 'gpmpc_acados_TP'
-        # ALGO = 'gpmpc_acados_TRP'
+        # ALGO = 'gpmpc_acados_TRPY'
         # ALGO = 'mpc'
         ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
@@ -68,7 +68,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
-        ALGO = 'fmpc'
+        # ALGO = 'fmpc'
         # ALGO = 'ppo_mpc_acados'
         #ADDITIONAL = ''
         #CTRL_ADD = ''
@@ -213,7 +213,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
 
         # Create experiment, train, and run evaluation
         if SAFETY_FILTER is None:
-            if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
+            if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP', 'gpmpc_acados_TRPY']:
                 experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
                 if config.algo_config.num_epochs == 1:
                     print('Evaluating prior controller')

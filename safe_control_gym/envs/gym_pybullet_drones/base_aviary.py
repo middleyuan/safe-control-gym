@@ -200,7 +200,23 @@ class BaseAviary(BenchmarkEnv):
             self.setup_dynamics_si_3d_10_expression()
         elif physics == Physics.DYN_SI_3D_DELAY:
             self.setup_dynamics_si_3d_delay_expression()
-        
+        logging = True 
+        gp_model_path = '/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/gp_TRPY_fitting'
+        if logging:
+            print(gp_model_path)
+        # Load GP model if path provided
+        if gp_model_path is not None:
+            if logging:
+                print(f"[INFO] Loading GP model from: {gp_model_path}")
+            # self.use_gp_dynamics = True
+            self.use_gp_dynamics = False
+            if self.use_gp_dynamics:
+                self._load_gp_model(gp_model_path)
+        else:
+            if logging:
+                print(colored("[WARNING] No GP model path provided", "yellow"))
+            self.gp_model = None
+            self.use_gp_dynamics = True
     def close(self):
         '''Terminates the environment.'''
         if self.RECORD and self.GUI:
@@ -1159,44 +1175,59 @@ class BaseAviary(BenchmarkEnv):
 
     def _dynamics_si_3d_delay(self, action, nth_drone, disturbance_force=None):
         '''Explicit dynamics implementation from the identified model.
-           NOTE: The dynamics update is independent of the pybullet simulation.
-        Args:
-            action (ndarray): (4)-shaped array of ints containing the desired collective thrust, roll, pitch and yaw.
-            nth_drone (int): The ordinal number/position of the desired drone in list self.DRONE_IDS.
-            disturbance_force (ndarray): (3)-shaped array of floats containing the disturbance force.
-                                         with the format [f_x, f_y, f_z].
+        NOTE: The dynamics update is independent of the pybullet simulation.
+        GP corrections are applied numerically during integration.
         '''
-        # Current state.
+        # Current state
+        time_logging = False
+        tic = time.time()
+        use_gp_dynamics_fnc = False
+        # use_gp_dynamics_fnc = False
         pos = self.pos[nth_drone, :]
-        # quat = self.quat[nth_drone, :]
         rpy = self.rpy[nth_drone, :]
         vel = self.vel[nth_drone, :]
         ang_v = self.ang_v[nth_drone, :]
         rpy_rates = self.rpy_rates[nth_drone, :]
         motor_forces = self.motor_forces[nth_drone, :]
-        # Compute forces and torques.
-        # Update state with discrete time dynamics.
-        # state = np.hstack([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2],
-        #                    rpy[0], rpy[1], rpy[2], ang_v[0], ang_v[1], ang_v[2], 
-        #                     motor_forces])
-        state = np.hstack([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2],
-                            rpy[0], rpy[1], rpy[2], ang_v[0], ang_v[1], ang_v[2],
-                            motor_forces])
-        # print(f"State before dynamics: {state}")
-                            
         
-        # update state
+        state = np.hstack([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2],
+                        rpy[0], rpy[1], rpy[2], ang_v[0], ang_v[1], ang_v[2],
+                        motor_forces])
+        
+        # Disturbance
         if disturbance_force is not None:
             d = np.array([disturbance_force[0], disturbance_force[1], disturbance_force[2]])
         else:
             d = np.array([0, 0, 0])
-        # perform euler integration
-        # next_state = state + self.PYB_TIMESTEP * self.X_dot_fun(state, action, d).full()[:, 0]
-        # perform RK4 integration
-        k1 = self.X_dot_fun(state, action, d).full()[:, 0]
-        k2 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k1, action, d).full()[:, 0]
-        k3 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k2, action, d).full()[:, 0]
-        k4 = self.X_dot_fun(state + self.PYB_TIMESTEP * k3, action, d).full()[:, 0]
+        
+        # Helper function to compute state derivative with GP correction
+        def get_state_derivative(state, action, d):
+            """Get state derivative with GP correction if available."""
+            # Get prior dynamics from symbolic CasADi model
+            prior_deriv = self.X_dot_fun(state, action, d).full()[:, 0]
+            # print(f"[DEBUG] GP Flags: has use_gp_dynamics={hasattr(self, 'use_gp_dynamics')}, "
+            #       f"use_gp_dynamics={getattr(self, 'use_gp_dynamics', False)}, "
+            #       f"gp_model is not None={self.gp_model is not None if hasattr(self, 'gp_model') else False}, "
+            #       f"use_gp_dynamics_fnc={use_gp_dynamics_fnc}")
+            
+            # Add GP correction if model is loaded
+            if use_gp_dynamics_fnc:
+                gp_residual = self._get_gp_prediction(state, action)
+                # print(gp_residual)
+                # print(prior_deriv)
+                return prior_deriv + gp_residual
+            else:
+                # print("NOTHING HAPPENED")
+                return prior_deriv
+        
+        # RK4 integration with GP-augmented derivatives
+        k1 = get_state_derivative(state, action, d)
+        k2 = get_state_derivative(state + 0.5 * self.PYB_TIMESTEP * k1, action, d)
+        k3 = get_state_derivative(state + 0.5 * self.PYB_TIMESTEP * k2, action, d)
+        k4 = get_state_derivative(state + self.PYB_TIMESTEP * k3, action, d)
+        toc_gp = time.time()
+        if time_logging:
+            print("GP dynamics time:", toc_gp - tic)
         delta_state = (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         next_state = state + delta_state
         
@@ -1205,18 +1236,8 @@ class BaseAviary(BenchmarkEnv):
         vel = np.array([next_state[1], next_state[3], next_state[5]])
         rpy = np.array([next_state[6], next_state[7], next_state[8]])
         rpy_rates = np.array([next_state[9], next_state[10], next_state[11]])
-        
-        # # normalize motor forces
-        # normal_motor_forces = 2 * (motor_forces - f_min) / (f_max - f_min) - 1
-        # # apply delta to normalized motor forces
-        # next_normal_motor_forces = normal_motor_forces + delta_state[12]
-        # # denominate motor forces to raw force space
-        # next_motor_forces = (next_normal_motor_forces + 1) * (f_max - f_min) / 2 + f_min
-        # motor_forces = next_motor_forces.copy()
-        
         motor_forces = np.array([next_state[12]])
         motor_forces = np.clip(motor_forces, 0.08, 0.45)
-        # print(f"Motor forces after dynamics: {motor_forces}")
         
         self.pos[nth_drone, :] = pos.copy()
         self.rpy[nth_drone, :] = rpy.copy()
@@ -1224,9 +1245,175 @@ class BaseAviary(BenchmarkEnv):
         self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         self.motor_forces[nth_drone, :] = motor_forces.copy()
         self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
-        
+
+    def _load_gp_model(self, model_path):
+        """Load trained GP model from disk (component-based: T, R, P, Y) and create CasADi prediction functions."""
+        # if hasattr(self, 'gp_predict_fun') and self.gp_predict_fun:
+        #     print("[INFO] GP model already loaded, skipping reload.")
+        #     return
+        import os
+        import numpy as np
+        import casadi as cs
+        import yaml
+        from safe_control_gym.controllers.mpc.gp_utils import covSE_single
+
+        logging = True
+        if logging:
+            print(f"\n[DEBUG] _load_gp_model called with path: {model_path}")
+            print(f"[DEBUG] Path exists: {os.path.exists(model_path)}")
+
+        try:
+            if not os.path.isdir(model_path):
+                if logging:
+                    print(colored(f'[ERROR] Model path must be a directory: {model_path}', 'red'))
+                self.gp_model = None
+                self.use_gp_dynamics = False
+                return
+
+            if logging:
+                print(colored(f'[INFO] Loading GP component models from: {model_path}', 'cyan'))
+
+            # Load training data and GP hyperparameters from npz files
+            data_path = os.path.join(model_path, 'data.npz')
+            config_path = os.path.join(model_path, 'config.yaml')
+            if not os.path.exists(data_path) or not os.path.exists(config_path):
+                if logging:
+                    print(colored(f'[ERROR] data.npz or config.yaml not found in {model_path}', 'red'))
+                self.gp_model = None
+                self.use_gp_dynamics = False
+                return
+
+            # Load training data
+            data = np.load(data_path)
+            train_inputs = data['data_inputs']  # shape (N, input_dim)
+            train_targets = data['data_targets']  # shape (N, 4) for T, R, P, Y
+
+            # Load config.yaml for lengthscales, outputscales, and noise
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+            model_perf = config['model_performance']
+
+            # Map config names to GP components
+            config_map = {
+                'Motor Force (Tau)': 'T',
+                'Roll': 'R',
+                'Pitch': 'P',
+                'Yaw': 'Y'
+            }
+
+            # Extract hyperparameters for each component
+            lengthscales = []
+            outputscales = []
+            noises = []
+            for key in ['T', 'R', 'P', 'Y']:
+                for config_name, comp in config_map.items():
+                    if comp == key:
+                        lengthscales.append(model_perf[config_name]['lengthscale'])
+                        outputscales.append(model_perf[config_name]['outputscale'])
+                        noises.append(model_perf[config_name]['noise'])
+
+            self.gp_model = {}
+            self.gp_predict_fun = {}
+
+            for i, component in enumerate(['T', 'R', 'P', 'Y']):
+                lengthscale = np.array(lengthscales[i])
+                outputscale = outputscales[i]
+                noise = noises[i]
+                N = train_inputs.shape[0]
+                Nx = train_inputs.shape[1]
+                z = cs.SX.sym('z', Nx)
+
+                # Build kernel vector between z and all training points
+                K_z_ztrain = cs.vertcat(*[
+                    covSE_single(z, train_inputs[j, :], lengthscale, outputscale)
+                    for j in range(N)
+                ])
+                # Build kernel matrix K(X,X) + noise*I
+                K_xx = np.zeros((N, N)) 
+                for m in range(N):
+                    for n in range(N):
+                        K_xx[m, n] = float(covSE_single(train_inputs[m, :], train_inputs[n, :], lengthscale, outputscale))
+                K_xx += noise * np.eye(N)
+                K_xx_inv = np.linalg.inv(K_xx)
+
+                # GP mean prediction
+                pred_mean = cs.dot(K_z_ztrain, K_xx_inv @ train_targets[:, i])
+                pred_func = cs.Function(f'gp_pred_{component}', [z], [pred_mean])
+                self.gp_predict_fun[component] = pred_func
+
+                self.gp_model[component] = {
+                    'lengthscale': lengthscale,
+                    'outputscale': outputscale,
+                    'noise': noise,
+                    'kernel': 'RBF_single'
+                }
+
+                if logging:
+                    print(colored(f'  ✓ Loaded {component} CasADi GP function (RBF_single)', 'green'))
+            # print(self.gp_model)
+            # print(self.gp_predict_fun)
+            if len(self.gp_predict_fun) > 0:
+                self.use_gp_dynamics = True
+                if logging:
+                    print(colored(f'\n[SUCCESS] Loaded {len(self.gp_predict_fun)} GP component models', 'green'))
+                self.gp_component_mapping = {'T': 12, 'R': 6, 'P': 7, 'Y': 8}
+                # self.gp_model_path = model_path  # Save the loaded path
+            else:
+                if logging:
+                    print(colored('[ERROR] No GP models loaded', 'red'))
+                self.gp_model = None
+                self.use_gp_dynamics = False
+            
+
+        except Exception as e:
+            if logging:
+                print(colored(f'[ERROR] Failed to load GP model: {e}', 'red'))
+                import traceback
+                traceback.print_exc()
+            self.gp_model = None
+            self.use_gp_dynamics = False
+
+    def _get_gp_prediction(self, state, action):
+        """Get GP residual prediction from CasADi GP model using correct input construction."""
+        gp_residual = np.zeros(13)
+        # Indices for state variables (adjust if your state ordering is different)
+        tau_idx = 12          # motor force (tau)
+        phi_idx = 6           # roll
+        phi_dot_idx = 9       # roll rate
+        theta_idx = 7         # pitch
+        theta_dot_idx = 10    # pitch rate
+        psi_idx = 8           # yaw
+        psi_dot_idx = 11      # yaw rate
+
+        # Indices for action variables
+        T_cmd_idx = 0         # thrust command
+        phi_cmd_idx = 1       # roll command
+        theta_cmd_idx = 2     # pitch command
+        psi_cmd_idx = 3       # yaw command
+
+        # Build GP input vector (order: tau, T_cmd, phi, phi_dot, phi_cmd, theta, theta_dot, theta_cmd, psi, psi_dot, psi_cmd)
+        gp_input = np.array([
+            state[tau_idx],      # tau
+            action[T_cmd_idx],   # T_cmd
+            state[phi_idx],      # phi
+            state[phi_dot_idx],  # phi_dot
+            action[phi_cmd_idx], # phi_cmd
+            state[theta_idx],    # theta
+            state[theta_dot_idx],# theta_dot
+            action[theta_cmd_idx],# theta_cmd
+            state[psi_idx],      # psi
+            state[psi_dot_idx],  # psi_dot
+            action[psi_cmd_idx]  # psi_cmd
+        ])
+
+        component_to_index = {'T': 12, 'R': 6, 'P': 7, 'Y': 8}
+        for comp, fun in self.gp_predict_fun.items():
+            idx = component_to_index[comp]
+            gp_residual[idx] = float(fun(gp_input).full().flatten()[0])
+        return gp_residual
+
     def setup_dynamics_si_3d_delay_expression(self, prop_values=None):
-        
+        logging = False
         overridden_mass = self.MASS
         if prop_values is not None:
             overridden_mass = prop_values.get('M', self.MASS)
@@ -1260,7 +1447,137 @@ class BaseAviary(BenchmarkEnv):
         # model_choice = "quartic"  # options: linear, quadratic, quartic
         # model_choice = "quadratic"  # options: linear, quadratic
         model_choice = "linear"  # options: linear, quadratic
-        if model_choice == "quartic":
+        # model_choice = "drag"  # options: linear, quadratic, quartic
+     
+        if model_choice == "drag":
+            # Transformation parameters from sys_id with mode 3 
+            cmd_min = -1
+            cmd_max = 1
+            f_min = -1
+            f_max = 1 
+            
+            # Transform input command T from raw to normalized space (mode 3)
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+            
+            # normalized forces_motor
+            df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
+
+            # Dynamics parameters
+            params_acc = [0.13, 0.7200, 0.08, -0.0171, 0.000811]
+            params_roll_rate = [-238.1, -21.35, 179.65]
+            params_pitch_rate = [-238.1, -21.35, 179.65]
+            params_yaw_rate = [-170.4, -22.22, 280]
+            
+            # Drag coefficients - diagonal drag matrix in body frame
+            drag_coeff_x = params_acc[3]
+            drag_coeff_y = params_acc[3]
+            drag_coeff_z = params_acc[4]
+            
+            #drag_coeff_x = 0.0
+            #drag_coeff_y = 0.0
+            #drag_coeff_z = 0.0
+            
+            # Drag matrix (diagonal, in body frame) [1/s]
+            drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+            
+            # Delay dynamics in normalized space: df_dot = (scale * (cmd + bias) - f) / tau
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+            
+            # Rotation matrices
+            Rob = csRotXYZ(phi, theta, psi)  # body to world
+            Rbo = Rob.T  # world to body
+            
+            # Velocity vector in world frame
+            vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+            
+            # Compute drag force using the drag matrix approach:
+            # drag_world = (1/m) * Rob^T @ drag_matrix @ Rbo @ vel_world
+            # This is equivalent to: Rob^T @ (drag_matrix @ (Rbo @ vel_world))
+            vel_body = Rbo @ vel_world  # transform velocity to body frame
+            drag_body = drag_matrix @ vel_body  # apply drag in body frame
+            drag_world = Rob @ drag_body  # transform back to world frame
+            
+            # Thrust force in world frame (drone z-axis in world frame)
+            thrust_force_world = 1/overridden_mass * forces_motor * cs.vertcat(
+                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                cs.cos(phi) * cs.cos(theta)
+            )
+            
+            # Define dynamics equations with drag
+            # Note: drag is already divided by mass in the drag_world computation
+            X_dot = cs.vertcat(
+                x_dot,
+                thrust_force_world[0] + 1/overridden_mass * drag_world[0] + d[0] / self.MASS,
+                y_dot,
+                thrust_force_world[1] + 1/overridden_mass * drag_world[1] + d[1] / self.MASS,
+                z_dot,
+                thrust_force_world[2] + 1/overridden_mass * drag_world[2] - g + d[2] / self.MASS,
+                phi_dot,
+                theta_dot,
+                psi_dot,
+                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                (f_max - f_min)/2 * df_dot
+            )
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        elif model_choice == "linear":
+            # Transformation parameters from sys_id with mode 3 
+            cmd_min = -1
+            cmd_max = 1
+            f_min = -1
+            f_max = 1 
+            
+            # Transform input command T from raw to normalized space (mode 3)
+            # T is expected to be in raw force units, normalize to [-1, 1]
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+            
+            # normalized forces_motor
+            df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
+
+            # params_acc = [0.041, 0.87, 0.105]
+            # params_roll_rate = [-238.1, -21.35, 179.65]
+            # params_pitch_rate = [-238.1, -21.35, 179.65]
+            # params_yaw_rate = [-170.4, -22.22, 280]
+            params_acc = [0.059, 0.85, 0.12]
+            params_pitch_rate = [-238.1, -21.35, 179.65]
+            params_roll_rate = [-238.1, -21.35, 179.65]
+            params_yaw_rate = [-170.4, -22.22, 280]
+
+            # Delay dynamics parameters (from MATLAB sys_id results)
+            # Based on estimated parameters: [bias, scale, tau]
+            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
+            # params_acc = [0.0905, 0.8, 0.0814]
+            # params_acc = [0.1052, 0.8, 0.120]
+            # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+            
+            # by definition, motor_forces_dot = 1/2 * df_dot
+            
+            # Transform normalized forces_motor to raw force for physics calculations
+            # self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
+            # update rpy parameters
+            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
+            # params_roll_rate = [-2.70609648e+02, -2.54831576e+01,  1.46664449e+02 ]
+            # params_pitch_rate = [-2.52706637e+02, -2.78661952e+01,  1.44880083e+02]
+            # params_yaw_rate = [-1.74858294e+02, -1.68371780e+01, 3.87810411e+02]
+
+            X_dot = cs.vertcat(x_dot, 
+                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
+                            y_dot,
+                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
+                            z_dot,
+                            1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
+                            phi_dot,
+                            theta_dot,
+                            psi_dot,
+                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                            (f_max - f_min)/2 * df_dot)
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        elif model_choice == "quartic":
             # params_acc = [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086]
             # params_acc = [-0.00688355, 1.78338, -7.4426, 25.4651, -29.1181, 0.1086]
             params_acc =  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086]
@@ -1311,58 +1628,7 @@ class BaseAviary(BenchmarkEnv):
                             params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
                             force_motor_dot)
             self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
-        elif model_choice == "linear":
-            # Transformation parameters from sys_id with mode 3 
-            cmd_min = -1
-            cmd_max = 1
-            f_min = -1
-            f_max = 1 
-            
-            # Transform input command T from raw to normalized space (mode 3)
-            # T is expected to be in raw force units, normalize to [-1, 1]
-            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-            
-            # normalized forces_motor
-            df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
-
-            # params_acc = [0.09, 0.77, 0.0814]
-            params_acc = [0.041, 0.87, 0.105]
-            params_roll_rate = [-238.1, -21.35, 179.65]
-            params_pitch_rate = [-238.1, -21.35, 179.65]
-            params_yaw_rate = [-170.4, -22.22, 280]
-            
-            # Delay dynamics parameters (from MATLAB sys_id results)
-            # Based on estimated parameters: [bias, scale, tau]
-            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
-            # params_acc = [0.0905, 0.8, 0.0814]
-            # params_acc = [0.1052, 0.8, 0.120]
-            # Delay dynamics in normalized space: f_dot = (scale * cmd - f) / tau
-            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-            
-            # by definition, motor_forces_dot = 1/2 * df_dot
-            
-            # Transform normalized forces_motor to raw force for physics calculations
-            # self.df_dot_fun = cs.Function("df_dot", [forces_motor, T], [df_dot])
-            # update rpy parameters
-            # params_acc = [7.98876644e-02,  7.05403709e-01,  1.19369581e-01]
-            # params_roll_rate = [-2.70609648e+02, -2.54831576e+01,  1.46664449e+02 ]
-            # params_pitch_rate = [-2.52706637e+02, -2.78661952e+01,  1.44880083e+02]
-            # params_yaw_rate = [-1.74858294e+02, -1.68371780e+01, 3.87810411e+02]
-
-            X_dot = cs.vertcat(x_dot, 
-                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
-                            y_dot,
-                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
-                            z_dot,
-                            1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
-                            phi_dot,
-                            theta_dot,
-                            psi_dot,
-                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                            (f_max - f_min)/2 * df_dot)
-            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        
 
     def _show_drone_local_axes(self, nth_drone):
         '''Draws the local frame of the n-th drone in PyBullet's GUI.

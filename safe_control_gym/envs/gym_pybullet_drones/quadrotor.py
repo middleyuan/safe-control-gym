@@ -12,6 +12,7 @@ import casadi as cs
 import numpy as np
 import pybullet as p
 from gymnasium import spaces
+from termcolor import colored
 
 from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.envs.benchmark_env import Cost, Task
@@ -838,7 +839,7 @@ class Quadrotor(BaseAviary):
 
         # Get the preprocessed rpm for each motor
         action = super().before_step(action)
-
+        action[-1] = 0.0
         # Determine disturbance force.
         disturb_force = None
         passive_disturb = 'dynamics' in self.disturbances
@@ -958,6 +959,8 @@ class Quadrotor(BaseAviary):
         u_eq = m * g
         X_dot, parameterized_X_dot, Y = None, None, None
         lr_param = None  # external model parameters
+        self.gp_model = None
+        self.use_gp_dynamics = False
         if self.QUAD_TYPE == QuadType.ONE_D:
             nx, nu = 2, 1
             # Define states.
@@ -1327,8 +1330,187 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
             # model_choice = "quartic" # options: linear, quadratic, quartic
             # model_choice = "quadratic"  # options: linear, quadratic
-            model_choice = "linear"
-            if model_choice == "quartic":
+            # model_choice = "linear"
+            model_choice = "drag"
+            
+            if model_choice == "drag":
+                 # Transformation parameters from sys_id with mode 3 
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                
+                # Transform input command T from raw to normalized space (mode 3)
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                
+                # normalized forces_motor
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+
+                # Dynamics parameters
+                params_acc = [0.13, 0.72, 0.08, -0.0171, 0.000811]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+                # Drag coefficients
+                drag_coeff_x = params_acc[3]
+                drag_coeff_y = params_acc[3]
+                drag_coeff_z = params_acc[4]
+
+                #drag_coeff_x = 0.0
+                #drag_coeff_y = 0.0
+                #drag_coeff_z = 0.0
+                
+                # Store parameters
+                self.drag_coeffs = [drag_coeff_x, drag_coeff_y, drag_coeff_z]
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                
+                # Delay dynamics in normalized space
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                
+                # Rotation matrices
+                Rob = csRotXYZ(phi, theta, psi)  # body to world
+                Rbo = Rob.T  # world to body
+                
+                # Velocity vector in world frame
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                
+                # Drag matrix (diagonal, in body frame) [1/s]
+                drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+                
+                # Compute drag force using the drag matrix approach:
+                vel_body = Rbo @ vel_world  # transform velocity to body frame
+                drag_body = drag_matrix @ vel_body  # apply drag in body frame
+                drag_world = Rob @ drag_body  # transform back to world frame
+                
+                # Thrust force in world frame (drone z-axis in world frame)
+                thrust_force_world = 1/m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                # Define dynamics equations with drag
+                X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world[0] + 1/m * drag_world[0],
+                    y_dot,
+                    thrust_force_world[1] + 1/m * drag_world[1],
+                    z_dot,
+                    thrust_force_world[2] + 1/m * drag_world[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    (f_max - f_min)/2 * df_dot
+                )
+                
+                # Define observation
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+                
+                # Learnable parameters for domain randomization/adaptation
+                lr_param = cs.MX.sym('learnable_param', 15)  # 12 for attitude/thrust + 3 for drag
+                
+                vel_body_param = Rbo @ cs.vertcat(x_dot, y_dot, z_dot)
+                drag_force_body_param = cs.vertcat(
+                    -lr_param[12] * drag_coeff_x * vel_body_param[0],
+                    -lr_param[13] * drag_coeff_y * vel_body_param[1],
+                    -lr_param[14] * drag_coeff_z * vel_body_param[2]
+                )
+                drag_force_world_param = Rob @ drag_force_body_param
+                
+                df_dot_param = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                
+                thrust_force_world_param = 1 / m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world_param[0] + 1/m * drag_force_world_param[0],
+                    y_dot,
+                    thrust_force_world_param[1] + 1/m * drag_force_world_param[1],
+                    z_dot,
+                    thrust_force_world_param[2] + 1/m * drag_force_world_param[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot + lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] * params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot_param
+                )
+            elif model_choice == "linear":
+                # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
+                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+                params_acc = [0.059, 0.85, 0.12]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+                params_acc = prior_prop.get('param_acc', params_acc)
+                params_roll_rate = prior_prop.get('params_roll_rate', params_roll_rate)
+                params_pitch_rate = prior_prop.get('params_pitch_rate', params_pitch_rate)
+                params_yaw_rate = prior_prop.get('params_yaw_rate', params_yaw_rate)
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                # Define dynamics equations.
+                X_dot = cs.vertcat(x_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                (f_max - f_min)/2 * df_dot)
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
+                lr_param = cs.MX.sym('learnable_param', 12)
+                df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[
+                        2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot +
+                    lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] *
+                    params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot
+                )
+            elif model_choice == "quartic":
                 #Quartic Model
                 # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
                 # params_acc = prior_prop.get('param_acc', [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086])
@@ -1390,70 +1572,7 @@ class Quadrotor(BaseAviary):
                                 force_motor_dot)
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
-            elif model_choice == "linear":
-                # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
-                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
-                # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
-                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
-                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
-                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
-                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
-                # params_acc = prior_prop.get('param_acc', [7.98876644e-02, 7.05403709e-01, 1.19369581e-01])
-                # params_roll_rate = prior_prop.get('params_roll_rate', [-2.70609648e+02, -2.54831576e+01, 1.46664449e+02])
-                # params_pitch_rate = prior_prop.get('params_pitch_rate', [-2.52706637e+02, -2.78661952e+01, 1.44880083e+02])
-                # params_yaw_rate = prior_prop.get('params_yaw_rate', [-1.74858294e+02, -1.68371780e+01, 3.87810411e+02])
-                self.params_roll_rate = params_roll_rate
-                self.params_pitch_rate = params_pitch_rate
-                self.params_yaw_rate = params_yaw_rate
-                self.params_acc = params_acc
-
-                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
-                cmd_min = -1
-                cmd_max = 1
-                f_min = -1
-                f_max = 1 
-                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
-                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-                # Define dynamics equations.
-                X_dot = cs.vertcat(x_dot,
-                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-                                y_dot,
-                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                                z_dot,
-                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
-                                phi_dot,
-                                theta_dot,
-                                psi_dot,
-                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                                (f_max - f_min)/2 * df_dot)
-                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
-
-                lr_param = cs.MX.sym('learnable_param', 12)
-                df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
-                            lr_param[11] * params_acc[2])
-                parameterized_X_dot = cs.vertcat(
-                    x_dot,
-                    1 / self.MASS * force_motor * (
-                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-                    y_dot,
-                    1 / self.MASS * force_motor * (
-                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                    z_dot,
-                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
-                    phi_dot,
-                    theta_dot,
-                    psi_dot,
-                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[
-                        2] * params_roll_rate[2] * R_c,
-                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot +
-                    lr_param[5] * params_pitch_rate[2] * P_c,
-                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] *
-                    params_yaw_rate[2] * Y_c,
-                    (f_max - f_min) / 2 * df_dot
-                )
+            
 
         # Expand Q and R to be full matrices.
         self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
@@ -1512,7 +1631,245 @@ class Quadrotor(BaseAviary):
         }
         # Setup symbolic model.
         self.symbolic = SymbolicModel(dynamics=dynamics, cost=cost, dt=dt, params=params)
+    # def _load_gp_model(self, model_path):
+    #     """Load trained GP model from disk (component-based: T, R, P, Y)."""
+    #     import torch
+    #     import os
+        
+    #     print(f"\n[DEBUG] _load_gp_model called with path: {model_path}")
+    #     print(f"[DEBUG] Path exists: {os.path.exists(model_path)}")
+        
+    #     try:
+    #         if not os.path.isdir(model_path):
+    #             print(colored(f'[ERROR] Model path must be a directory: {model_path}', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+    #             return
+                
+    #         print(colored(f'[INFO] Loading GP component models from: {model_path}', 'cyan'))
+            
+    #         # Load training data to get dimensions
+    #         data_path = os.path.join(model_path, 'data.npz')
+    #         if not os.path.exists(data_path):
+    #             print(colored(f'[ERROR] data.npz not found in {model_path}', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+    #             return
+            
+    #         data = np.load(data_path)
+    #         train_inputs = data['data_inputs']
+    #         train_targets = data['data_targets']
+    #         print(f"  Training data shapes: inputs {train_inputs.shape}, targets {train_targets.shape}")
+            
+    #         # Import GP utilities
+    #         from safe_control_gym.controllers.mpc.gp_utils import ZeroMeanIndependentGPModel
+    #         import gpytorch
+            
+    #         # Load the component models (T, R, P, Y)
+    #         self.gp_model = {}
+    #         component_info = {
+    #             'T': {'index': 12, 'description': 'Thrust/Force dynamics'},
+    #             'R': {'index': 6, 'description': 'Roll rate dynamics'},
+    #             'P': {'index': 7, 'description': 'Pitch rate dynamics'},
+    #             'Y': {'index': 8, 'description': 'Yaw rate dynamics'}
+    #         }
+            
+    #         for component in ['T', 'R', 'P', 'Y']:
+    #             component_path = os.path.join(model_path, f'best_model_{component}.pth')
+    #             if os.path.exists(component_path):
+    #                 # Load the state dict
+    #                 state_dict = torch.load(component_path)
+                    
+    #                 # Get dimensions from training data
+    #                 input_dim = train_inputs.shape[1]  # Should be 17
+                    
+    #                 # Create likelihood
+    #                 likelihood = gpytorch.likelihoods.GaussianLikelihood(
+    #                     noise_constraint=gpytorch.constraints.GreaterThan(1e-6)
+    #                 ).double()
+                    
+    #                 # Create the GP model structure
+    #                 train_inputs_tensor = torch.from_numpy(train_inputs).double()
+    #                 train_targets_tensor = torch.from_numpy(train_targets[:, 0]).double()  # Use first output as placeholder
+                    
+    #                 model = ZeroMeanIndependentGPModel(
+    #                     train_inputs_tensor,
+    #                     train_targets_tensor,
+    #                     likelihood,
+    #                     input_mask=list(range(input_dim))
+    #                 )
+                    
+    #                 # Load the saved state dict
+    #                 model.load_state_dict(state_dict)
+    #                 model.eval()
+                    
+    #                 self.gp_model[component] = model
+    #                 print(colored(f'  ✓ Loaded {component} model ({component_info[component]["description"]})', 'green'))
+                    
+    #                 # Print model info
+    #                 if hasattr(model, 'train_inputs'):
+    #                     print(f"    - Training inputs shape: {model.train_inputs[0].shape}")
+    #                 if hasattr(model, 'train_targets'):
+    #                     print(f"    - Training targets shape: {model.train_targets.shape}")
+    #                 if hasattr(model, 'covar_module'):
+    #                     if hasattr(model.covar_module, 'base_kernel'):
+    #                         if hasattr(model.covar_module.base_kernel, 'lengthscale'):
+    #                             lengthscale = model.covar_module.base_kernel.lengthscale.detach().numpy()
+    #                             print(f"    - Lengthscale: {lengthscale.flatten()[:5]}...")  # Show first 5
+    #             else:
+    #                 print(colored(f'  ✗ Component file not found: {component_path}', 'yellow'))
+            
+    #         if len(self.gp_model) > 0:
+    #             self.use_gp_dynamics = True
+    #             print(colored(f'[SUCCESS] Loaded {len(self.gp_model)} GP component models', 'green'))
+                
+    #             # Store component mapping
+    #             self.gp_component_mapping = component_info
+    #         else:
+    #             print(colored('[ERROR] No GP models loaded', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+                
+    #     except Exception as e:
+    #         print(colored(f'[ERROR] Failed to load GP model: {e}', 'red'))
+    #         import traceback
+    #         traceback.print_exc()
+    #         self.gp_model = None
+    #         self.use_gp_dynamics = False
 
+    # def _get_gp_prediction(self, state, action):
+    #     """Get GP residual prediction from component models (T, R, P, Y).
+        
+    #     Each component predicts the residual for a specific state derivative:
+    #     - T: Thrust affects force/acceleration (index 12 - motor force dynamics)
+    #     - R: Roll affects roll rate (index 9 - phi_dot_dot)
+    #     - P: Pitch affects pitch rate (index 10 - theta_dot_dot)  
+    #     - Y: Yaw affects yaw rate (index 11 - psi_dot_dot)
+        
+    #     Args:
+    #         state (ndarray): Current state (13,) = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor]
+    #         action (ndarray): Current action (4,) = [T_c, R_c, P_c, Y_c]
+            
+    #     Returns:
+    #         gp_residual (ndarray): Predicted residual (13,)
+    #     """
+    #     # Debug counter
+    #     if not hasattr(self, '_gp_prediction_count'):
+    #         self._gp_prediction_count = 0
+        
+    #     if self.gp_model is None:
+    #         if self._gp_prediction_count == 0:
+    #             print(colored("[DEBUG] GP prediction called but GP model is None", "yellow"))
+    #         return np.zeros(13)
+        
+    #     # Validate input dimensions
+    #     if state.shape != (13,):
+    #         print(colored(f'[WARNING] State shape mismatch: expected (13,), got {state.shape}', 'yellow'))
+    #         return np.zeros(13)
+    #     if action.shape != (4,):
+    #         print(colored(f'[WARNING] Action shape mismatch: expected (4,), got {action.shape}', 'yellow'))
+    #         return np.zeros(13)
+        
+    #     # Construct GP input: [state (13), action (4)] = 17 dimensions
+    #     gp_input = np.concatenate([state, action]).reshape(1, -1)  # (1, 17)
+        
+    #     # Print first few predictions for debugging
+    #     if self._gp_prediction_count < 5:
+    #         print(f"\n[DEBUG] GP Prediction #{self._gp_prediction_count + 1}")
+    #         print(f"  State[:3]: {state[:3]}")
+    #         print(f"  State[6:9] (rpy): {state[6:9]}")
+    #         print(f"  State[9:12] (rpy_rates): {state[9:12]}")
+    #         print(f"  State[12] (force_motor): {state[12]}")
+    #         print(f"  Action (T,R,P,Y): {action}")
+    #         print(f"  GP input shape: {gp_input.shape}")
+        
+    #     try:
+    #         import torch
+    #         gp_residual = np.zeros(13)
+            
+    #         # Handle dictionary of T, R, P, Y component models
+    #         if isinstance(self.gp_model, dict):
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using {len(self.gp_model)} component models")
+                
+    #             gp_input_tensor = torch.from_numpy(gp_input).double()
+                
+    #             # Map each component to its corresponding state derivative index
+    #             component_to_index = {
+    #                 'T': 12,  # Motor force dynamics (df/dt)
+    #                 'R': 6,   # Roll acceleration (phi_dot_dot)
+    #                 'P': 7,  # Pitch acceleration (theta_dot_dot)
+    #                 'Y': 8   # Yaw acceleration (psi_dot_dot)
+    #             }
+                
+    #             for component, model in self.gp_model.items():
+    #                 with torch.no_grad():
+    #                     # Get prediction from this component's GP
+    #                     pred = model(gp_input_tensor)
+                        
+    #                     if hasattr(pred, 'mean'):
+    #                         mean = pred.mean.detach().numpy().flatten()[0]
+    #                     else:
+    #                         mean = pred.detach().numpy().flatten()[0]
+                        
+    #                     # Map to the correct state derivative index
+    #                     state_idx = component_to_index[component]
+    #                     gp_residual[state_idx] = mean
+                        
+    #                     if self._gp_prediction_count < 5:
+    #                         print(f"    {component} (affects index {state_idx}): {mean:.6f}")
+            
+    #         elif hasattr(self.gp_model, 'predict'):
+    #             # Fallback for non-component models
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using single GP model with predict() method")
+                
+    #             gp_residual_tensor, _ = self.gp_model.predict(
+    #                 torch.from_numpy(gp_input).double()
+    #             )
+    #             gp_residual = gp_residual_tensor.detach().numpy().flatten()
+            
+    #         elif hasattr(self.gp_model, 'gp_models'):
+    #             # Fallback for GaussianProcessCollection
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using GaussianProcessCollection with {len(self.gp_model.gp_models)} GPs")
+                
+    #             gp_input_tensor = torch.from_numpy(gp_input).double()
+                
+    #             for i in range(min(len(self.gp_model.gp_models), 13)):
+    #                 with torch.no_grad():
+    #                     pred = self.gp_model.gp_models[i](gp_input_tensor)
+    #                     mean = pred.mean.detach().numpy()
+    #                     gp_residual[i] = mean[0, 0] if mean.ndim > 1 else mean[0]
+            
+    #         else:
+    #             if self._gp_prediction_count < 5:
+    #                 print(colored('[WARNING] GP model has unknown interface', 'yellow'))
+            
+    #         # Validate output dimension
+    #         if gp_residual.shape[0] != 13:
+    #             print(colored(f'[WARNING] GP output dimension mismatch: expected 13, got {gp_residual.shape[0]}', 'yellow'))
+    #             if gp_residual.shape[0] < 13:
+    #                 gp_residual = np.pad(gp_residual, (0, 13 - gp_residual.shape[0]))
+    #             else:
+    #                 gp_residual = gp_residual[:13]
+            
+    #         if self._gp_prediction_count < 5:
+    #             print(f"  GP residual norm: {np.linalg.norm(gp_residual):.6f}")
+    #             print(f"  Non-zero residuals at indices: {np.nonzero(gp_residual)[0]}")
+    #             for idx in np.nonzero(gp_residual)[0]:
+    #                 print(f"    Index {idx}: {gp_residual[idx]:.6f}")
+            
+    #         self._gp_prediction_count += 1
+            
+    #         return gp_residual
+            
+    #     except Exception as e:
+    #         print(colored(f'[ERROR] GP prediction failed: {e}', 'red'))
+    #         if self._gp_prediction_count < 2:
+    #             import traceback
+    #             traceback.print_exc()
+    #         return np.zeros(13)
     def _set_action_space(self):
         """Sets the action space of the environment."""
         # Define action/input dimension, labels, and units.
