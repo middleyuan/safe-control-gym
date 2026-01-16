@@ -4,7 +4,7 @@ algo_config:
   activation: "relu"
 
   # loss args
-  gamma: 0.98
+  gamma: 0.95
   use_gae: True
   gae_lambda: 0.92
   clip_param: 0.2
@@ -21,7 +21,7 @@ algo_config:
   # runner args
   max_env_steps: 2640000
   # max_env_steps: 1320000
-  rollout_batch_size: 5
+  rollout_batch_size: 10
   rollout_steps: 660
   eval_batch_size: 10
 
