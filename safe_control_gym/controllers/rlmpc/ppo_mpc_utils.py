@@ -2,6 +2,7 @@
 
 from collections import defaultdict, deque
 from copy import deepcopy
+import time
 
 import casadi as cs
 import numpy as np
@@ -162,6 +163,7 @@ class PPO_MPC_Agent:
                     kl_epoch += approx_kl.item()
                     theta_loss_epoch += theta_loss.sum().item()
                     # ref_loss_epoch += ref_loss.sum().item()
+
                 # Critic update.
                 value_loss = self.compute_value_loss(batch_th)
                 self.critic_opt.zero_grad()
@@ -276,9 +278,11 @@ class MPCActor(nn.Module):
         self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
     def _init_param_val(self):
-        self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
-                           'b': np.array(self.back_off),
-                           'f': np.array(self.model_param)}
+        self.param_dict = {
+            'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
+            'b': np.array(self.back_off),
+            'f': np.array(self.model_param)
+        }
 
     def forward(self, obs, act=None, actor_info=None):
         theta = self.get_theta_param(obs)
@@ -302,7 +306,7 @@ class MPCActor(nn.Module):
     def forward_train(self, obs, act, info):
         theta = self.get_theta_param(obs)
         action, nabla_pi_ref, nabla_pi_theta, optimal_flag = self.mpc.select_action_batch_train(
-            obs, theta.detach().numpy(), self.traj_param.detach().numpy(), info
+            obs.numpy(), theta.detach().numpy(), self.traj_param.detach().numpy(), info
         )
         action_th = action
         action_th.requires_grad_()
@@ -365,17 +369,19 @@ class MPCActor(nn.Module):
 
 class MPCPolicyFunction:
     def __init__(
-            self,
-            env_fun,
-            gamma,
-            model,
-            horizon: int = 5,
-            warmstart: bool = True,
-            soft_constraints: bool = True,
-            constraint_tol: float = 1e-6,
-            additional_constraints: list = None,
-            n_parallel_solver: int = 1,
-            n_train_solver: int = 1,
+        self,
+        env_fun,
+        gamma,
+        model,
+        horizon: int = 5,
+        warmstart: bool = True,
+        soft_constraints: bool = True,
+        constraint_tol: float = 1e-6,
+        additional_constraints: list = None,
+        n_parallel_solver: int = 1,
+        n_train_solver: int = 1,
+        jit: bool = False,
+        jit_options: dict = None,
     ):
         self.env = env_fun
         self.model = model
@@ -388,6 +394,8 @@ class MPCPolicyFunction:
         self.warmstart = warmstart
         self.n_parallel_solver = n_parallel_solver
         self.n_train_solver = n_train_solver
+        self.jit = jit
+        self.jit_options = jit_options if jit_options is not None else {}
 
         # Constraint list
         if additional_constraints is not None:
@@ -429,10 +437,8 @@ class MPCPolicyFunction:
         self.setup_optimizer()
 
         # Parallel solvers
-        self.pi_solvers, self.rkkt_fns, _ = self.get_parallel_solver(self.n_parallel_solver)
-        self.pi_solvers_train, self.rkkt_fns_train, self.dpidp_fns_train = self.get_parallel_solver(
-            self.n_train_solver
-        )
+        self.pi_solvers, self.rkkt_norm_fns, _, _ = self.get_parallel_solver(self.n_parallel_solver)
+        self.pi_solvers_train, _, _, self.all_solvers_train = self.get_parallel_solver(self.n_train_solver)
 
     def reset(self, idx=None):
         # Previously solved states & inputs, useful for warm start.
@@ -446,8 +452,6 @@ class MPCPolicyFunction:
             self.infos[idx] = None
         else:
             self.infos = [None] * self.n_parallel_solver
-        # self.X_EQ = self.env.X_EQ
-        # self.U_EQ = self.env.U_EQ
 
         # Setup reference input.
         if self.env.TASK == Task.STABILIZATION:
@@ -500,6 +504,7 @@ class MPCPolicyFunction:
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
         etau = 1e-5  # barrier parameter for interior point method
+        start_time = time.time()
 
         # Optimization variable: [x0, u0, sigma0, x1, u1, ...]
         opt_vars = []
@@ -645,8 +650,6 @@ class MPCPolicyFunction:
         mult, lamb, mu = cs.vcat(mult), cs.vcat(lamb), cs.vcat(mu)
         con_lbg, con_ubg = cs.vcat(con_lbg), cs.vcat(con_ubg)
         lang_mult_fn = cs.Function('lang_mult_fn', [mult], [lamb, mu])
-        # lang_mult_fn_parallel = lang_mult_fn.map(self.n_parallel_solver, 'thread')
-        # lang_mult_fn_train = lang_mult_fn.map(self.n_train_solver, 'thread')
 
         # Create solver (IPOPT solver in this version)
         opts_setting = {
@@ -656,10 +659,10 @@ class MPCPolicyFunction:
             'equality': con_eq,
             'structure_detection': 'auto',
             'debug': False,
-            # 'jit': True,
-            # 'jit_temp_suffix': False,
-            # 'jit_options.flags': ['-03'],
-            # 'jit_options.compiler': 'ccache gcc',
+            "jit": self.jit,
+            "jit_cleanup": False,
+            "jit_temp_suffix": False,
+            "jit_options": self.jit_options,
             'fatrop.mu_init': etau,
             'fatrop.max_iter': 500,
             'fatrop.print_level': 0,
@@ -672,8 +675,8 @@ class MPCPolicyFunction:
             'g': con_list,
         }
         pisolver = cs.nlpsol('pisolver', 'fatrop', vnlp_prob, opts_setting)
-        # pisolver_parallel = pisolver.map(self.n_parallel_solver, 'thread')
-        # pisolver_parallel_train = pisolver.map(self.n_train_solver, 'thread')
+        print(f'[MPC Setup] NLP problem setup time: {time.time() - start_time:.3f} seconds.')
+        start_time = time.time()
 
         # Build Lagrangian
         lagrangian = (
@@ -694,22 +697,41 @@ class MPCPolicyFunction:
 
         # Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function('rkkt_fn', [z, fixed_param, ref_param, theta], [R_kkt])
-        # rkkt_fn_parallel = rkkt_fn.map(self.n_parallel_solver, 'thread')
-        # rkkt_fn_parallel_train = rkkt_fn.map(self.n_train_solver, 'thread')
+        rkkt_norm_fn = cs.Function('rkkt_norm_fn', [z, fixed_param, ref_param, theta], [cs.norm_2(R_kkt)])
         dR_sensfunc = rkkt_fn.factory('dR', ['i0', 'i1', 'i2', 'i3'], ['jac:o0:i0', 'jac:o0:i2', 'jac:o0:i3'])
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
         # dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
-        dRdP = cs.horzcat(dRdP_theta)
+        dRdP = cs.horzcat(dRdP_theta)  # only learnable param
+        print(f'[MPC Setup] KKT matrix setup time: {time.time() - start_time:.3f} seconds.')
+        start_time = time.time()
 
         # Generate sensitivity of the optimal solution
         # dzdP = -cs.inv(dRdz) @ dRdP
-        dzdP = -cs.solve(dRdz, dRdP)
-        dPi = dzdP[nx: nx + nu, :].T
+        # dzdP = -cs.solve(dRdz, dRdP)
+        # dPi = dzdP[nx: nx + nu, :].T
+        S = cs.DM.zeros(nu, dRdz.shape[0])
+        for i in range(nu):
+            S[i, nx + i] = 1.0
+        dPi_prime = cs.solve(dRdz.T, S.T).T
+        dPi = -(dPi_prime @ dRdP).T
         dPi_zeros = cs.MX.zeros(dPi.shape)
         f_true = cs.Function('f_true', [z, fixed_param, ref_param, theta], [dPi])
         f_false = cs.Function('f_false', [z, fixed_param, ref_param, theta], [dPi_zeros])
         dPi_fn = cs.Function.if_else('dPi_fn', f_true, f_false)
-        # dPi_train = dPi_fn.map(self.n_train_solver, 'thread')
+        # dPi_fn.save('dPi_fn.casadi')
+        print(f'[MPC Setup] Sensitivity setup time: {time.time() - start_time:.3f} seconds.')
+        start_time = time.time()
+
+        # R_kkt function with jit
+        jit_opts = {
+            "jit": self.jit,
+            "jit_cleanup": False,
+            "jit_temp_suffix": False,
+            "jit_options": self.jit_options
+        }
+        all_fn = cs.Function("all_fn", [z, fixed_param, ref_param, theta], [cs.norm_2(R_kkt), dPi], jit_opts)
+        # all_fn.save("all_fn.casadi")
+        print(f'[MPC Setup] JIT compilation time: {time.time() - start_time:.3f} seconds.')
 
         self.solver_dict = {
             'x_var': x_var,
@@ -725,7 +747,9 @@ class MPCPolicyFunction:
             'lang_mult_fn': lang_mult_fn,
             'solver': pisolver,
             'rkkt_fn': rkkt_fn,
-            'dpi_fn': dPi_fn
+            'rkkt_norm_fn': rkkt_norm_fn,
+            'dpi_fn': dPi_fn,
+            'all_fn': all_fn,
         }
 
     def get_references(self, traj_step=None, traj_ref=None):
@@ -822,7 +846,6 @@ class MPCPolicyFunction:
     def select_action_batch(self, obs_batch, theta, traj_ref, actor_info):
         if not obs_batch.ndim > 1:
             obs_batch = obs_batch[None, :]
-        # solver, rkkt_fn, _ = self.get_parallel_solver(obs_batch.shape[0])
         con_lbg = self.solver_dict['lower_bound']
         con_ubg = self.solver_dict['upper_bound']
         opt_vars_fn = self.solver_dict['opt_vars_fn']
@@ -840,7 +863,7 @@ class MPCPolicyFunction:
         for i, obs in enumerate(obs_batch):
             fixed_param = obs[:self.model.nx]
             ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
-            opt_vars_init = np.zeros((self.solver_dict['opt_vars'].shape[0], self.solver_dict['opt_vars'].shape[1]))
+            opt_vars_init = np.zeros(self.solver_dict['opt_vars'].shape)
             if self.infos[i] is not None:  # shift previous solutions by 1 step based on last soln
                 opt_vars_init = self.infos[i]['opt_var']
                 x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
@@ -858,8 +881,8 @@ class MPCPolicyFunction:
         # Forward pass through solver
         soln_batch = self.pi_solvers(x0=x0, p=p, lbg=lbg, ubg=ubg)
         z = cs.vertcat(soln_batch['x'], soln_batch['lam_g'])
-        rkkt_batch = self.rkkt_fns(z, fixed_p, ref_p, theta.T)
-        optimal_batch = np.linalg.norm(rkkt_batch.full(), axis=0) ** 2 <= 1e-5
+        rkkt_norm_batch = self.rkkt_norm_fns(z, fixed_p, ref_p, theta.T)
+        optimal_batch = rkkt_norm_batch.full() < 1e-3
 
         # Post-processing the solution
         action_batch, results_dict_batch, info_batch = [], [], []
@@ -885,7 +908,7 @@ class MPCPolicyFunction:
 
             # additional info
             info = {
-                'success': optimal_batch[i],
+                'success': optimal_batch[0, i],
                 'opt_var': opt_vars,
                 'fixed_param': deepcopy(fixed_p[:, i]),
                 'ref_param': deepcopy(ref_p[:, i]),
@@ -929,18 +952,22 @@ class MPCPolicyFunction:
         # Forward pass through solver
         soln_batch = self.pi_solvers_train(x0=x0, p=p, lbg=lbg, ubg=ubg)
         z = cs.vertcat(soln_batch['x'], soln_batch['lam_g'])
-        rkkt_batch = self.rkkt_fns_train(z, fixed_p, ref_p, theta.T)
-        optimal_batch = np.linalg.norm(rkkt_batch.full(), axis=0) ** 2 <= 1e-5
-        optimal_batch = np.array(optimal_batch)[None, :]
-
         action_batch = opt_act_fn(soln_batch['x']).full().T
-        dpi_cs = self.dpidp_fns_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
-        nabla_pi_ref_batch = []
-        nabla_pi_theta_batch = []
+
+        # Post-processing the solution
+        # rkkt_batch = self.rkkt_fns_train(z, fixed_p, ref_p, theta.T)
+        # optimal_batch = np.linalg.norm(rkkt_batch.full(), axis=0) ** 2 <= 1e-5
+        # optimal_batch = np.array(optimal_batch)[None, :]
+        # dpi_cs = self.dpidp_fns_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
+        rkkt_norm_batch, dpi_cs = self.all_solvers_train(z, fixed_p, ref_p, theta.T)
+        optimal_batch = rkkt_norm_batch.full() < 1e-3
+        nabla_pi_ref_batch, nabla_pi_theta_batch = [], []
         for i in range(obs_batch.shape[0]):
             # nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], 2 * i: 2 * (i + 1)].T)
             # nabla_pi_theta_batch.append(dpi_cs[ref_p.shape[0]:, 2 * i: 2 * (i + 1)].T)
-            nabla_pi_theta_batch.append(dpi_cs[:, self.model.nu * i: self.model.nu * (i + 1)].T)
+            nabla_pi_theta_batch.append(
+                int(optimal_batch[0, i]) * dpi_cs[:, self.model.nu * i: self.model.nu * (i + 1)].T
+            )
         action_batch = torch.FloatTensor(action_batch)
         nabla_pi_ref_batch = torch.FloatTensor(np.array(nabla_pi_ref_batch))
         nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
@@ -949,9 +976,10 @@ class MPCPolicyFunction:
 
     def get_parallel_solver(self, n_solvers):
         pi_solvers = self.solver_dict['solver'].map(n_solvers, 'thread')
-        rkkt_solvers = self.solver_dict['rkkt_fn'].map(n_solvers, 'thread')
+        rkkt_norm_solvers = self.solver_dict['rkkt_norm_fn'].map(n_solvers, 'thread')
         dpi_solvers = self.solver_dict['dpi_fn'].map(n_solvers, 'thread')
-        return pi_solvers, rkkt_solvers, dpi_solvers
+        all_solvers = self.solver_dict['all_fn'].map(n_solvers, 'thread')
+        return pi_solvers, rkkt_norm_solvers, dpi_solvers, all_solvers
 
 
 class PPOBuffer(object):
@@ -980,43 +1008,18 @@ class PPOBuffer(object):
         else:
             act_dim = act_space.n
         self.scheme = {
-            'obs': {
-                'vshape': (T, N, *obs_dim)
-            },
-            'act': {
-                'vshape': (T, N, act_dim)
-            },
-            'rew': {
-                'vshape': (T, N, 1)
-            },
-            'mask': {
-                'vshape': (T, N, 1),
-                'init': np.ones
-            },
-            'v': {
-                'vshape': (T, N, 1)
-            },
-            'logp': {
-                'vshape': (T, N, 1)
-            },
-            'ret': {
-                'vshape': (T, N, 1)
-            },
-            'adv': {
-                'vshape': (T, N, 1)
-            },
-            'terminal_v': {
-                'vshape': (T, N, 1)
-            },
-            'info': {
-                'vshape': T * N
-            },
-            'results_dict': {
-                'vshape': T * N
-            },
-            'optimal': {
-                'vshape': (T, N, 1)
-            },
+            'obs': {'vshape': (T, N, *obs_dim)},
+            'act': {'vshape': (T, N, act_dim)},
+            'rew': {'vshape': (T, N, 1)},
+            'mask': {'vshape': (T, N, 1), 'init': np.ones},
+            'v': {'vshape': (T, N, 1)},
+            'logp': {'vshape': (T, N, 1)},
+            'ret': {'vshape': (T, N, 1)},
+            'adv': {'vshape': (T, N, 1)},
+            'terminal_v': {'vshape': (T, N, 1)},
+            'info': {'vshape': (T, N), 'dtype': object, 'init': np.empty},
+            'results_dict': {'vshape': (T, N), 'dtype': object, 'init': np.empty},
+            'optimal': {'vshape': (T, N, 1)},
         }
         self.keys = list(self.scheme.keys())
         self.reset()
@@ -1024,14 +1027,10 @@ class PPOBuffer(object):
     def reset(self):
         '''Allocates space for containers.'''
         for k, info in self.scheme.items():
-            assert 'vshape' in info, f'Scheme must define vshape for {k}'
-            if k in ['info', 'results_dict']:
-                self.__dict__[k] = deque([], maxlen=info['vshape'])
-            else:
-                vshape = info['vshape']
-                dtype = info.get('dtype', np.float32)
-                init = info.get('init', np.zeros)
-                self.__dict__[k] = init(vshape, dtype=dtype)
+            vshape = info['vshape']
+            dtype = info.get('dtype', np.float32)
+            init = info.get('init', np.zeros)
+            self.__dict__[k] = init(vshape, dtype=dtype)
         self.t = 0
 
     def push(self, batch):
@@ -1039,21 +1038,28 @@ class PPOBuffer(object):
         for k, v in batch.items():
             assert k in self.keys
             if k in ['info', 'results_dict']:
-                self.__dict__[k].extend(v)
-            else:
-                shape = self.scheme[k]['vshape'][1:]
-                dtype = self.scheme[k].get('dtype', np.float32)
-                v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
-                self.__dict__[k][self.t] = v_
-        self.t = (self.t + 1) % self.max_length
+                # v should be list-like length N (one per env)
+                assert len(v) == self.batch_size
+                self.__dict__[k][self.t, :] = v
+                continue
+
+            shape = self.scheme[k]['vshape'][1:]
+            dtype = self.scheme[k].get('dtype', np.float32)
+            v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
+            self.__dict__[k][self.t] = v_
+        self.t += 1
+        assert self.t <= self.max_length, "PPOBuffer overflow: call reset() after get()/training"
+        # self.t = (self.t + 1) % self.max_length
 
     def get(self, device='cpu'):
-        '''Returns all data.'''
         batch = {}
         for k, info in self.scheme.items():
-            shape = info['vshape'][2:]
-            data = self.__dict__[k].reshape(-1, *shape)
-            batch[k] = torch.as_tensor(data, device=device)
+            if k in ['info', 'results_dict']:
+                batch[k] = self.__dict__[k].reshape(-1).tolist()
+            else:
+                shape = info['vshape'][2:]           # (...), after flattening T*N
+                data = self.__dict__[k].reshape(-1, *shape)
+                batch[k] = torch.as_tensor(data, device=device)
         return batch
 
     def sample(self, indices):
@@ -1061,7 +1067,8 @@ class PPOBuffer(object):
         batch = {}
         for k, info in self.scheme.items():
             if k in ['info', 'results_dict']:
-                batch[k] = [self.__dict__[k][i] for i in indices]
+                # batch[k] = [self.__dict__[k][i] for i in indices]
+                batch[k] = self.__dict__[k].reshape(-1)[indices].tolist()
             else:
                 shape = info['vshape'][2:]
                 batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]

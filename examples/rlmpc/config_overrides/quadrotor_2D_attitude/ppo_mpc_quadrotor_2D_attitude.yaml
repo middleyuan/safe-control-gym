@@ -9,31 +9,33 @@ algo_config:
     r_mpc: [0.5, 0.5]
     qt_mpc: [10., 0.1, 10., 0.1, 0.1, 0.001]
     back_off: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    # model_param: [0.8, 0.8, 0.8, 0.8, 0.8]
-    # model_param: [0.7, 0.5, 0.5, 0.5, 0.3]
     model_param: [0.6825742117895708, 0.4292449477599564, 0.4813652415802387, 0.4521088665975965, 0.30893385663149797]
     # model_param: [1., 1., 1., 1., 1.]
     mpc_config:
       horizon: 20
       warmstart: True
       n_parallel_solver: 10
-      n_train_solver: 8
+      n_train_solver: 16
+      jit: True
+      jit_options:
+        # compiler: "clang"  # gcc, ccache gcc, clang
+        flags: ["-O2"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
 
   # loss args
-  gamma: 0.98
+  gamma: 0.95
   use_gae: True
   gae_lambda: 0.95  # 95
   use_clipped_value: False  # or True
   clip_param: 0.2
-  target_kl: 0.01
+  target_kl: 0.005
   entropy_coef: 0.01
   exploration_init: -0.5
 
   # optim args
   opt_epochs: 10
-  mini_batch_size: 256
-  actor_lr: 0.003
-  critic_lr: 0.003
+  mini_batch_size: 128
+  actor_lr: 0.0003
+  critic_lr: 0.0003
 
   # runner args
   max_env_steps: 660000

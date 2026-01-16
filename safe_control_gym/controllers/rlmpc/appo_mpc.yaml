@@ -7,8 +7,7 @@ clip_obs: 10
 clip_reward: 10
 
 # actor config
-ac_config:
-  horizon: 10
+actor_config:
   q_mpc: [ 1.]
   r_mpc: [ 1.]
   qt_mpc: [ 1.]

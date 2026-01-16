@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from safe_control_gym.controllers.base_controller import BaseController
-from safe_control_gym.controllers.rlmpc.ppo_mpc_utils import (PPO_MPC_Agent, PPOBuffer,
+from safe_control_gym.controllers.rlmpc.appo_mpc_utils import (APPO_MPC_Agent, APPOBuffer,
                                                               compute_returns_and_advantages)
 from safe_control_gym.envs.env_wrappers.record_episode_statistics import (RecordEpisodeStatistics,
                                                                           VecRecordEpisodeStatistics)
@@ -21,7 +21,7 @@ from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_rando
 
 
 class APPO_MPC(BaseController):
-    """Approximate proximal policy optimization with MPC"""
+    """Proximal policy optimization with MPC"""
 
     def __init__(self,
                  env_func,
@@ -32,7 +32,6 @@ class APPO_MPC(BaseController):
                  seed=0,
                  **kwargs):
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
-        torch.manual_seed(seed=seed)
 
         # Task.
         self.env = env_func()
@@ -50,7 +49,7 @@ class APPO_MPC(BaseController):
 
         # Agent.
         model = self.get_prior(self.env)
-        self.agent = PPO_MPC_Agent(
+        self.agent = APPO_MPC_Agent(
             self.env,
             self.env.observation_space,
             self.env.action_space,
@@ -63,6 +62,7 @@ class APPO_MPC(BaseController):
             clip_param=self.clip_param,
             target_kl=self.target_kl,
             entropy_coef=self.entropy_coef,
+            exploration_init=self.exploration_init,
             actor_lr=self.actor_lr,
             critic_lr=self.critic_lr,
             opt_epochs=self.opt_epochs,
@@ -121,8 +121,8 @@ class APPO_MPC(BaseController):
     def close(self):
         """Shuts down and cleans up lingering resources."""
         self.env.close()
-        self.venv.close()
         if self.training:
+            self.venv.close()
             self.eval_venv.close()
         self.logger.close()
 
@@ -147,9 +147,9 @@ class APPO_MPC(BaseController):
 
     def load(self, path):
         """Restores model and experiment given checkpoint path."""
-        state = torch.load(path)
+        state = torch.load(path, weights_only=False)
         # Restore policy.
-        self.agent.load_state_dict(state['agent'])
+        self.agent.load_state_dict(state['agent'], strict=False)
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])
         self.reward_normalizer.load_state_dict(state['reward_normalizer'])
         # Restore experiment state.
@@ -162,7 +162,6 @@ class APPO_MPC(BaseController):
 
     def learn(self, env=None, **kwargs):
         """Performs learning (pre-training, training, fine-tuning, etc.)."""
-        start = time.time()
         # Initial Evaluation.
         if self.eval_interval:
             results = defaultdict(list)
@@ -178,14 +177,9 @@ class APPO_MPC(BaseController):
         if self.num_checkpoints > 0:
             step_interval = np.linspace(0, self.max_env_steps, self.num_checkpoints)
             interval_save = np.zeros_like(step_interval, dtype=bool)
-        print("eval time")
-        print(time.time()-start)
 
         while self.total_steps < self.max_env_steps:
-            print("next iter")
-            start = time.time()
             results = self.train_step()
-            print(time.time() - start)
 
             # Checkpoint.
             if (self.total_steps >= self.max_env_steps
@@ -222,7 +216,6 @@ class APPO_MPC(BaseController):
             # Logging.
             if self.log_interval and self.total_steps % self.log_interval == 0:
                 self.log_step(results)
-            print(time.time() - start)
 
     def select_action(self, obs, info=None):
         """Determine the action to take at the current timestep.
@@ -236,8 +229,8 @@ class APPO_MPC(BaseController):
         """
 
         with torch.no_grad():
-            # obs = torch.FloatTensor(obs).to(self.device)
-            action = self.agent.ac.act(obs)
+            obs = torch.FloatTensor(obs).to(self.device)
+            action = self.agent.ac.act(obs, info=info)
         return action
 
     def train_step(self):
@@ -245,20 +238,33 @@ class APPO_MPC(BaseController):
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(self.venv.observation_space, self.venv.action_space, self.rollout_steps,
-                             self.rollout_batch_size)
+        rollouts = APPOBuffer(
+            self.venv.observation_space,
+            self.venv.action_space,
+            self.agent.ac.actor.mpc_param.shape[0],
+            self.rollout_steps,
+            self.rollout_batch_size
+        )
         obs = self.obs
         start = time.time()
+        agent_info = []
+        for env in self.venv.envs:
+            agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                act, v, logp, agent_info, results_dict, optimal = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
+                act, v, logp, mpc_act, nabla_pi_theta, optimal = self.agent.ac.step(
+                    torch.FloatTensor(obs).to(self.device), info=agent_info)
             next_obs, rew, done, info = self.venv.step(act)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
+
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
+                agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
+                if done[idx]:
+                    self.agent.reset(idx)
                 if 'terminal_info' not in inf:
                     continue
                 inff = inf['terminal_info']
@@ -267,10 +273,9 @@ class APPO_MPC(BaseController):
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
                     terminal_v[idx] = terminal_val
-                    self.agent.reset()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
-                 'info': agent_info, 'results_dict': results_dict, 'optimal': optimal}
+                 'mpc_act': mpc_act, 'nabla_pi_theta': nabla_pi_theta, 'optimal': optimal}
             )
             obs = next_obs
         self.obs = obs
@@ -290,20 +295,13 @@ class APPO_MPC(BaseController):
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = defaultdict(list)
-        print("training rollouts done")
-        print(time.time() - start)
         results['train'] = self.agent.update(rollouts, self.device)
-        results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
-        print(time.time() - start)
-        print("training done")
+        results['step'] = self.total_steps
+        results['elapsed_time'] = time.time()-start
+        # results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
-    def run(self,
-            env=None,
-            render=False,
-            n_episodes=1,
-            verbose=False,
-            ):
+    def run(self, env=None, render=False, n_episodes=1, verbose=False):
         """Runs evaluation with current policy."""
         self.agent.reset()
         self.agent.eval()
@@ -319,13 +317,14 @@ class APPO_MPC(BaseController):
             #     env.add_tracker('mse', 0, mode='queue')
             pass
 
-        obs, info = env.reset()
+        obs, env_info = env.reset()
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
+        agent_info = [{'current_step': 0, 'x_ref': env.X_GOAL}]
         mse, ep_rmse = [], []
         while len(ep_returns) < n_episodes:
-            action = self.select_action(obs=obs, info=info)
+            action = self.select_action(obs=obs, info=agent_info)
             obs, _, done, info = env.step(action)
             mse.append(info['mse'])
             if render:
@@ -339,9 +338,11 @@ class APPO_MPC(BaseController):
                 mse = []
                 ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
-                obs, _ = env.reset()
+                obs, env_info = env.reset()
+                info['current_step'] = 0
                 self.agent.reset()
             obs = self.obs_normalizer(obs)
+            agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
         ep_returns = np.asarray(ep_returns)
@@ -356,9 +357,7 @@ class APPO_MPC(BaseController):
             eval_results.update(queued_stats)
         return eval_results
 
-    def log_step(self,
-                 results
-                 ):
+    def log_step(self, results):
         """Does logging after a training step."""
         step = results['step']
         # runner stats
@@ -375,7 +374,7 @@ class APPO_MPC(BaseController):
             self.logger.add_scalars(
                 {
                     k: results['train'][k]
-                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss']
+                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss', 'ref_loss']
                 },
                 step,
                 prefix='loss')
@@ -416,3 +415,7 @@ class APPO_MPC(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+        print('MPC params:')
+        print(self.agent.ac.actor.mpc_param.cpu().detach().numpy())
+        print('Policy logstd:')
+        print(self.agent.ac.actor.logstd.cpu().detach().numpy())

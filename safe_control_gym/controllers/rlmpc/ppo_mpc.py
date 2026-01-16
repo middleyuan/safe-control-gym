@@ -238,8 +238,12 @@ class PPO_MPC(BaseController):
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(self.venv.observation_space, self.venv.action_space, self.rollout_steps,
-                             self.rollout_batch_size)
+        rollouts = PPOBuffer(
+            self.venv.observation_space,
+            self.venv.action_space,
+            self.rollout_steps,
+            self.rollout_batch_size
+        )
         obs = self.obs
         start = time.time()
         agent_info = []
@@ -410,5 +414,7 @@ class PPO_MPC(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+        print('MPC params:')
         print(self.agent.ac.actor.mpc_param.detach().numpy())
+        print('Policy logstd:')
         print(self.agent.ac.actor.logstd.detach().numpy())
