@@ -29,6 +29,7 @@ class MPC_ACADOS(MPC):
             self,
             env_func,
             horizon: int = 5,
+            gamma: float = 1.0,
             q_mpc: list = [1],
             r_mpc: list = [1],
             qt_mpc: list = None,
@@ -97,6 +98,7 @@ class MPC_ACADOS(MPC):
         self.Q_T = self.Q
         if qt_mpc is not None:
             self.Q_T = get_cost_weight_matrix(qt_mpc, self.model.nx)
+        self.gamma = gamma
 
     def reset_before_run(self, obs=None, info=None, env=None):
         super().reset_before_run(obs, info, env)
@@ -172,9 +174,9 @@ class MPC_ACADOS(MPC):
         # set cost (NOTE: safe-control-gym uses quadratic cost)
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
-        # ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
+        ocp.cost.W = scipy.linalg.block_diag(self.Q / self.dt, self.R / self.dt)
         ocp.cost.W_e = self.Q_T  # NOTE: temporarily used for hardware setup
-        ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
+        # ocp.cost.W = scipy.linalg.block_diag(self.Q, self.R)
         # ocp.cost.W_e = self.Q if not self.use_lqr_gain_and_terminal_cost else self.P
         # ocp.cost.W_e = self.Q_T / self.dt
         ocp.cost.Vx = np.zeros((ny, nx))
@@ -225,7 +227,7 @@ class MPC_ACADOS(MPC):
             ocp.cost.zu_e = L1_pen * np.ones(he_expr.shape[0])
 
         # placeholder initial state constraint
-        x_init = np.zeros((nx))
+        x_init = np.zeros(nx)
         ocp.constraints.x0 = x_init
 
         # set up solver options
@@ -237,6 +239,7 @@ class MPC_ACADOS(MPC):
         # ocp.solver_options.globalization = 'FUNNEL_L1PEN_LINESEARCH' if not self.use_RTI else 'MERIT_BACKTRACKING'
         # ocp.solver_options.globalization = 'MERIT_BACKTRACKING'
         ocp.solver_options.tf = self.T * self.dt  # prediction horizon
+        ocp.solver_options.cost_scaling = np.array([self.gamma])**np.arange(0, self.T+1, 1)
 
         # c code generation
         # NOTE: when using GP-MPC, a separated directory is needed;
