@@ -35,12 +35,13 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path=None, model
     config = fac.merge()
     config.seed += 150
 
+    # Create directory if it doesn't exist
+    import os
+    # curr_path = curr_path or os.getcwd()
     if curr_path is None:
         algo_name = config.algo
         ep_len_sec = getattr(config.task_config, "episode_len_sec", "unknown")
-        curr_path = f'./experiment_results/{algo_name}/{ep_len_sec}'
-    # Create directory if it doesn't exist
-    import os
+        curr_path = f'./experiment_results/{algo_name}_ir/{ep_len_sec}'
     os.makedirs(curr_path, exist_ok=True)
     # --- Copy model_best.pt and config file if model_src_dir is provided ---
     if model_src_dir is None and 'pretrain_path' in config.keys():
@@ -174,6 +175,12 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path=None, model
             graph3_2 = 2
             graph3_3 = 4
         elif system == 'quadrotor_9D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
+        elif system == 'quadrotor_10D':
             graph1_1 = 4
             graph1_2 = 5
             graph3_1 = 0
