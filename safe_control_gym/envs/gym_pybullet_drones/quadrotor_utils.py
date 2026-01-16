@@ -17,7 +17,7 @@ class QuadType(IntEnum):
     TWO_D_ATTITUDE = 4  # Two-dimensional (in the x-z plane) movement with attitude control.
     TWO_D_ATTITUDE_5S = 5  # Two-dimensional (in the x-z plane) movement with attitude control with 5 states.
     THREE_D_ATTITUDE = 6  # Three-dimensional movement with attitude control with 12 states.
-    TWO_D_ATTITUDE_BODY= 7  # Two-dimensional (in the x-z plane) 
+    TWO_D_ATTITUDE_BODY = 7  # Two-dimensional (in the x-z plane)
                                  # movement with attitude control with extended state for residual.
     THREE_D_ATTITUDE_10 = 8
     THREE_D_ATTITUDE_DELAY = 9  # Three-dimensional movement with attitude control with delay.

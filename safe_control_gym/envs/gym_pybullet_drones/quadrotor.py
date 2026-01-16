@@ -1782,9 +1782,11 @@ class Quadrotor(BaseAviary):
 
             self.action_scale = (self.physical_action_bounds[1]-self.physical_action_bounds[0])/2
             self.action_bias = (self.physical_action_bounds[1]+self.physical_action_bounds[0])/2
-            self.action_space = spaces.Box(low=-np.ones(action_dim),
-                                           high=np.ones(action_dim),
-                                           dtype=np.float32)
+            self.action_space = spaces.Box(
+                low=-np.ones(action_dim, dtype=np.float32),
+                high=np.ones(action_dim, dtype=np.float32),
+                dtype=np.float32
+            )
         else:
             # Direct thrust control.
             self.action_space = spaces.Box(low=self.physical_action_bounds[0],
@@ -1935,6 +1937,8 @@ class Quadrotor(BaseAviary):
                                 'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s', 'N', 'N', 'rad', 'rad', 'rad']
 
         # Define the state space for the dynamics.
+        low = np.asarray(low, dtype=np.float32)
+        high = np.asarray(high, dtype=np.float32)
         self.state_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
         # Concatenate reference for RL.
@@ -1950,6 +1954,8 @@ class Quadrotor(BaseAviary):
 
         # Define obs space exposed to the controller.
         # Note how the obs space can differ from state space (i.e. augmented with the next reference states for RL)
+        low = np.asarray(low, dtype=np.float32)
+        high = np.asarray(high, dtype=np.float32)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
     def _setup_disturbances(self):
