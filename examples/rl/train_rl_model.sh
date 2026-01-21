@@ -56,7 +56,7 @@ for SEED in "${SEEDS[@]}"; do
         --task ${SYS_NAME} \
         --overrides \
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-            ./config_overrides/${SYS}/obstacle_course.yaml \
+            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./Results/${EXP_NAME} \
         --tag ${SYS}_${ALGO}_data_seed${SEED} \
         --seed ${SEED} \
