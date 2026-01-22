@@ -66,6 +66,7 @@ class SAC_MPC(BaseController):
             critic_lr=self.critic_lr,
             entropy_lr=self.entropy_lr,
             activation=self.activation,
+            update_freq=self.update_freq
         )
         self.agent.to(self.device)
 
@@ -253,7 +254,7 @@ class SAC_MPC(BaseController):
         obs = self.obs
         start = time.time()
         with torch.no_grad():
-            action, logp, soln_info, results_dict, optimal = self.agent.ac.step(
+            action, soln_info = self.agent.ac.step(
                 torch.FloatTensor(obs).to(self.device), info=self.agent_info
             )
         next_obs, rew, done, info = self.venv.step(action)
@@ -265,6 +266,8 @@ class SAC_MPC(BaseController):
         terminal_idx, terminal_obs = [], []
         for idx, inf in enumerate(info['n']):
             self.agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
+            if done[idx]:
+                    self.agent.reset(idx)
             if 'terminal_info' not in inf:
                 continue
             inff = inf['terminal_info']
@@ -287,7 +290,7 @@ class SAC_MPC(BaseController):
 
         self.buffer.push({
             'obs': obs, 'act': action, 'rew': rew, 'next_obs': true_next_obs,
-            'mask': true_mask, 'info': soln_info, 'results_dict': results_dict, 'optimal': optimal
+            'mask': true_mask, 'info': soln_info
         })
         obs = next_obs
 
@@ -296,6 +299,7 @@ class SAC_MPC(BaseController):
 
         # learn
         results = defaultdict(list)
+        train_results = defaultdict(list)
         if self.total_steps > self.warm_up_steps and not self.total_steps % self.train_interval:
             # Regardless of how long you wait between updates,
             # the ratio of env steps to gradient steps is locked to 1.
@@ -304,8 +308,10 @@ class SAC_MPC(BaseController):
                 batch, batch_th = self.buffer.sample(self.train_batch_size, self.device)
                 res = self.agent.update(batch, batch_th)
                 for k, v in res.items():
-                    results[k].append(v)
-        results = {k: sum(v) / len(v) for k, v in results.items()}
+                    train_results[k].append(v)
+            train_results = {k: sum(v) / len(v) for k, v in train_results.items()}
+            results['train'] = train_results
+        # results = {k: sum(v) / len(v) for k, v in results.items()}
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
@@ -381,7 +387,7 @@ class SAC_MPC(BaseController):
             self.logger.add_scalars(
                 {
                     k: results['train'][k]
-                    for k in ['policy_loss', 'value_loss', 'entropy_loss', 'approx_kl', 'theta_loss', 'ref_loss']
+                    for k in ['policy_loss', 'critic_loss', 'entropy_loss', 'alpha', 'exploration_std', 'theta_loss']
                 },
                 step,
                 prefix='loss')
@@ -422,5 +428,7 @@ class SAC_MPC(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+        print('MPC params:')
         print(self.agent.ac.actor.mpc_param.detach().numpy())
+        print('Policy logstd:')
         print(self.agent.ac.actor.logstd.detach().numpy())
