@@ -2010,7 +2010,7 @@ class Quadrotor(BaseAviary):
     def _setup_disturbances(self):
         """Sets up the disturbances."""
         # Custom disturbance info.
-        self.DISTURBANCE_MODES['observation']['dim'] = self.obs_dim
+        self.DISTURBANCE_MODES['observation']['dim'] = self.state_dim  # noise on all observed states
         self.DISTURBANCE_MODES['action']['dim'] = self.action_dim
         self.DISTURBANCE_MODES['dynamics']['dim'] = int(self.QUAD_TYPE)
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
@@ -2232,12 +2232,15 @@ class Quadrotor(BaseAviary):
             obs (ndarray): The state of the quadrotor, of size 2 or 6 depending on QUAD_TYPE.
         """
         _ = self._get_state()
+        obs = deepcopy(self.state)
+        # Apply observation disturbance.
+        if 'observation' in self.disturbances:
+            obs = self.disturbances['observation'].apply(obs, self)
 
         # Concatenate goal info (references state(s)) for RL.
         # Plus two because ctrl_step_counter has not incremented yet, and we want to return the obs (which would be
         # ctrl_step_counter + 1 as the action has already been applied), and the next state (+ 2) for the RL to see
         # the next state.
-        obs = deepcopy(self.state)
         if self.at_reset:
             self.obs = self.extend_obs(obs, 1)
         else:
@@ -2251,10 +2254,6 @@ class Quadrotor(BaseAviary):
                     self.observation_history.append(self.obs)
             self.observation_history.append(self.obs)
             self.obs = np.concatenate(list(self.observation_history))
-
-        # Apply observation disturbance.
-        if 'observation' in self.disturbances:
-            self.obs = self.disturbances['observation'].apply(self.obs, self)
         return self.obs
 
     def _get_reward(self):
