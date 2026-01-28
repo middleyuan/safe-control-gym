@@ -239,8 +239,8 @@ class PPO_MPC(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(
-            self.venv.observation_space,
-            self.venv.action_space,
+            self.venv.observation_space, 
+            self.venv.action_space, 
             self.rollout_steps,
             self.rollout_batch_size
         )
@@ -257,7 +257,7 @@ class PPO_MPC(BaseController):
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
-
+            
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
@@ -308,12 +308,6 @@ class PPO_MPC(BaseController):
         if env is None:
             env = self.venv
         else:
-            # if not is_wrapped(env, RecordEpisodeStatistics) or is_wrapped(env, VecRecordEpisodeStatistics):
-            #     env = RecordEpisodeStatistics(env, n_episodes)
-            #     # Add episodic stats to be tracked.
-            #     env.add_tracker('constraint_violation', 0, mode='queue')
-            #     env.add_tracker('constraint_values', 0, mode='queue')
-            #     env.add_tracker('mse', 0, mode='queue')
             pass
 
         obs, env_info = env.reset()

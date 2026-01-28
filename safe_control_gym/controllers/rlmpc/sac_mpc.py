@@ -387,7 +387,7 @@ class SAC_MPC(BaseController):
             self.logger.add_scalars(
                 {
                     k: results['train'][k]
-                    for k in ['policy_loss', 'critic_loss', 'entropy_loss', 'alpha', 'exploration_std', 'theta_loss']
+                    for k in ['policy_loss', 'critic_loss', 'entropy_loss', 'alpha', 'theta_loss']
                 },
                 step,
                 prefix='loss')
@@ -430,5 +430,5 @@ class SAC_MPC(BaseController):
         self.logger.dump_scalars()
         print('MPC params:')
         print(self.agent.ac.actor.mpc_param.detach().numpy())
-        print('Policy logstd:')
-        print(self.agent.ac.actor.logstd.detach().numpy())
+        # print('Policy logstd:')
+        # print(self.agent.ac.actor.logstd.detach().numpy())

@@ -239,8 +239,12 @@ class PPO_VMPC(BaseController):
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(self.venv.observation_space, self.venv.action_space, self.rollout_steps,
-                             self.rollout_batch_size)
+        rollouts = PPOBuffer(
+            self.venv.observation_space, 
+            self.venv.action_space, 
+            self.rollout_steps,
+            self.rollout_batch_size
+        )
         obs = self.obs
         start = time.time()
         agent_info = []
@@ -254,10 +258,13 @@ class PPO_VMPC(BaseController):
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
+
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
                 agent_info[idx] = {'current_step': inf['current_step'], 'x_ref': self.venv.envs[idx].X_GOAL}
+                if done[idx]:
+                    self.agent.reset(idx)
                 if 'terminal_info' not in inf:
                     continue
                 inff = inf['terminal_info']
@@ -265,9 +272,11 @@ class PPO_VMPC(BaseController):
                     # terminal_obs = inf['terminal_observation']
                     # terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     # terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_val = self.agent.ac.value(soln_info[idx])[:, None]  #.detach().cpu().numpy()[:, None]
-                    terminal_v[idx] = terminal_val
-                    # self.agent.reset()
+                    terminal_val = self.agent.ac.critic(
+                        torch.FloatTensor(soln_info[idx]["val"]), 
+                        torch.FloatTensor(soln_info[idx]["dvdp"])
+                    )
+                    terminal_v[idx] = terminal_val.detach().cpu().numpy()
             rollouts.push(
                 {'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v,
                  'info': soln_info, 'results_dict': results_dict, 'optimal': optimal}
@@ -277,7 +286,8 @@ class PPO_VMPC(BaseController):
 
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
-        last_val = self.agent.ac.value(soln_info)[:, None]  #.detach().cpu().numpy()[:, None]
+        with torch.no_grad():
+            _, last_val, _, _, _, _ = self.agent.ac.step(torch.FloatTensor(obs).to(self.device), info=agent_info)
         ret, adv = compute_returns_and_advantages(rollouts.rew,
                                                   rollouts.v,
                                                   rollouts.mask,
@@ -411,7 +421,9 @@ class PPO_VMPC(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+        print('MPC params:')
         print(self.agent.ac.actor.mpc_param.detach().numpy())
+        print('Policy logstd:')
         print(self.agent.ac.actor.logstd.detach().numpy())
-        # print(self.agent.ac.critic_param.detach().numpy())
-        print(self.agent.ac.critic_param.numpy())
+        print('Value params:')
+        print(self.agent.ac.critic.weights.numpy())

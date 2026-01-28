@@ -239,10 +239,10 @@ class APPO_MPC(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = APPOBuffer(
-            self.venv.observation_space,
-            self.venv.action_space,
+            self.venv.observation_space, 
+            self.venv.action_space, 
             self.agent.ac.actor.mpc_param.shape[0],
-            self.rollout_steps,
+            self.rollout_steps, 
             self.rollout_batch_size
         )
         obs = self.obs
@@ -258,7 +258,7 @@ class APPO_MPC(BaseController):
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
-
+            
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info['n']):
@@ -417,5 +417,5 @@ class APPO_MPC(BaseController):
         self.logger.dump_scalars()
         print('MPC params:')
         print(self.agent.ac.actor.mpc_param.cpu().detach().numpy())
-        print('Policy logstd:')
-        print(self.agent.ac.actor.logstd.cpu().detach().numpy())
+        # print('Policy logstd:')
+        # print(self.agent.ac.actor.log_std.cpu().detach().numpy())

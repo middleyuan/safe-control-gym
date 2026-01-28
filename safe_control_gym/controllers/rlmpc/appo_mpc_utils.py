@@ -266,8 +266,13 @@ class MPCActor(nn.Module):
         self.traj_param = torch.FloatTensor(self.mpc.traj)
 
         # Construct output action distribution.
-        self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
-        self.dist_fn = lambda x: Normal(x, self.logstd.exp())
+
+        self.net = MLP(obs_dim, hidden_dims[-1], hidden_dims[:-1], activation)
+        self.log_std_layer = nn.Linear(hidden_dims[-1], act_dim)
+        # self.log_std = nn.Parameter(exploration_init * torch.ones(act_dim))
+        self.dist_fn = lambda x, log_std: Normal(x, log_std.exp())
+        self.log_std_min = -20
+        self.log_std_max = 2
 
     def _init_param_val(self):
         self.param_dict = {'l': np.concatenate((self.q_mpc, self.r_mpc, self.qt_mpc)),
@@ -287,7 +292,10 @@ class MPCActor(nn.Module):
             )
             nabla_pi_theta = None
         action = torch.FloatTensor(np.array(mpc_act)).to(theta.device)
-        dist = self.dist_fn(action)
+        net_out = self.net(obs)
+        log_std = self.log_std_layer(net_out)
+        log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
+        dist = self.dist_fn(action, log_std)
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)
@@ -297,7 +305,10 @@ class MPCActor(nn.Module):
         theta = self.get_theta_param(obs)
         action = mpc_act.unsqueeze(2) + nabla_pi_theta @ (theta - theta_old.repeat(obs.shape[0], 1)).unsqueeze(2)
         action = action.squeeze(2)
-        dist = self.dist_fn(action)
+        net_out = self.net(obs)
+        log_std = self.log_std_layer(net_out)
+        log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
+        dist = self.dist_fn(action, log_std)
         logp_a = dist.log_prob(act)
         return action, dist, logp_a
 
@@ -424,7 +435,7 @@ class MPCPolicyFunction:
 
         # Parallel solvers
         self.pi_solvers, _, _, self.all_solvers = self.get_parallel_solver(self.n_parallel_solver)
-
+        
     def reset(self, idx=None):
         # Previously solved states & inputs, useful for warm start.
         self.u_prev = None
@@ -437,7 +448,7 @@ class MPCPolicyFunction:
             self.infos[idx] = None
         else:
             self.infos = [None] * self.n_parallel_solver
-
+        
         # Setup reference input.
         if self.env.TASK == Task.STABILIZATION:
             self.mode = 'stabilization'
@@ -808,9 +819,9 @@ class MPCPolicyFunction:
         self.u_prev = u_val.full()
         self.sigma_prev = sigma_val.full()
         results_dict = {
-            'horizon_states': deepcopy(self.x_prev),
+            'horizon_states': deepcopy(self.x_prev), 
             'horizon_inputs': deepcopy(self.u_prev),
-            'goal_states': deepcopy(ref_param),
+            'goal_states': deepcopy(ref_param), 
             't_wall': solver.stats()['t_wall_total']
         }
 
@@ -865,7 +876,7 @@ class MPCPolicyFunction:
             ref_p.append(ref_param)
         x0, fixed_p, ref_p = np.array(x0).T, np.array(fixed_p).T, np.array(ref_p).T
         p = np.concatenate((fixed_p, ref_p, theta.T), axis=0)
-
+        
         # Forward pass through solver
         soln_batch = self.pi_solvers(x0=x0, p=p, lbg=lbg, ubg=ubg)
         z = cs.vertcat(soln_batch['x'], soln_batch['lam_g'])
@@ -912,7 +923,7 @@ class MPCPolicyFunction:
             info_batch.append(info)
         self.infos = deepcopy(info_batch)
         return action_batch, nabla_pi_theta_batch, optimal_batch.T
-
+    
     def get_parallel_solver(self, n_solvers):
         pi_solvers = self.solver_dict['solver'].map(n_solvers, 'thread')
         rkkt_norm_solvers = self.solver_dict['rkkt_norm_fn'].map(n_solvers, 'thread')

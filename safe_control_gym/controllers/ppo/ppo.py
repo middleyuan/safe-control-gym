@@ -65,6 +65,7 @@ class PPO(BaseController):
                               clip_param=self.clip_param,
                               target_kl=self.target_kl,
                               entropy_coef=self.entropy_coef,
+                              exploration_init=self.exploration_init,
                               actor_lr=self.actor_lr,
                               critic_lr=self.critic_lr,
                               opt_epochs=self.opt_epochs,
