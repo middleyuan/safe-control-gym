@@ -488,10 +488,10 @@ class BenchmarkEnv(gym.Env, ABC):
                 for i in range(self.obs_goal_horizon)
             ]
             goal_state = self.X_GOAL[wp_idx].flatten()
-            shrunk_obs = obs[:goal_state.shape[0]]
+            shrunk_obs = obs[:-goal_state.shape[0]]
         elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
             goal_state = self.X_GOAL.flatten()
-            shrunk_obs = obs[:goal_state.shape[0]]
+            shrunk_obs = obs[:-goal_state.shape[0]]
         else:
             shrunk_obs = obs
 
