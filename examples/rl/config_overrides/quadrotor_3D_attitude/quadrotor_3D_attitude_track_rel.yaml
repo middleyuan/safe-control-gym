@@ -3,14 +3,14 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si_3d_delay
-  quad_type: 9
+  quad_type: 12
   # normalized_rl_action_space: False
   init_state:
-    init_x: 1.3
+    init_x: 0.0
     init_x_dot: 0
-    init_y: 0.5
+    init_y: 0.0
     init_y_dot: 0
-    init_z: 1.1
+    init_z: 1.0
     init_z_dot: 0
     init_tau: 0.36
   # obstacle course should be within
@@ -18,62 +18,18 @@ task_config:
   # y: [-2, 2]
   # z: [0, 2.5]
   randomized_init: True
-  randomized_inertial_prop: True
-
-  inertial_prop_randomization_info:
-    alpha_1: # Nominal: 0.041
-      distrib: 'normal'
-      scale: 0.001
-    alpha_2: # Nominal: 0.87
-      distrib: 'normal'
-      scale: 0.01
-    alpha_3: # Nominal: 0.105
-      distrib: 'normal'
-      scale: 0.002
-    alpha_4: # Nominal: -0.0171
-      distrib: 'normal'
-      scale: 0.0005
-    alpha_5: # Nominal: 0.000811
-      distrib: 'normal'
-      scale: 0.0001
-    beta_1: # Nominal: -238.1
-      distrib: 'normal'
-      scale: 0.2
-    beta_2: # Nominal: -21.35
-      distrib: 'normal'
-      scale: 0.02
-    beta_3: # Nominal: 179.65
-      distrib: 'normal'
-      scale: 0.2
-    beta_4: # Nominal: -170.4
-      distrib: 'normal'
-      scale: 0.2
-    beta_5: # Nominal: 22.22
-      distrib: 'normal'
-      scale: 0.02
-    beta_6: # Nominal: 280
-      distrib: 'normal'
-      scale: 0.2
+  randomized_inertial_prop: False
 
   init_state_randomization_info:
     init_x:
       distrib: 'normal'
       scale: 0.0011629923113331312
-    init_x_dot:
-      distrib: 'normal'
-      scale: 0.003635597781389117
     init_y:
       distrib: 'normal'
       scale: 0.001670549279531124
-    init_y_dot:
-      distrib: 'normal'
-      scale: 0.004965500657569368
     init_z:
       distrib: 'normal'
       scale: 0.0024990695232428458
-    init_z_dot:
-      distrib: 'normal'
-      scale: 0.010193088084183025
     init_phi:
       distrib: 'normal'
       scale: 0.0026984744060397532
@@ -83,45 +39,26 @@ task_config:
     init_psi:
       distrib: 'normal'
       scale: 0.0023822834889102923
-    init_p:
-      distrib: 'normal'
-      scale: 0.03452115832640752
-    init_q:
-      distrib: 'normal'
-      scale: 0.02387283406599296
-    init_r:
-      distrib: 'normal'
-      scale: 0.03123258323211547
   task: traj_tracking
   task_info:
-    trajectory_type: snap_custom
-    num_cycles: 1
+    trajectory_type: figure8
+    num_cycles: 2
     trajectory_plane: 'xy'
-    trajectory_position_offset: [0.0, 0.0, 0.0]
+    trajectory_position_offset: [0.0, 0.0, 1.0]
     trajectory_scale: 1.0
-    custom_snap_ref_traj: "/home/savvyfox/Projects/scg-exp/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v6_2.npy"
+    # custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
+    # custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_0_vf_ss.npy"
     # custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_12_5_ref_traj.npy"
   cost: rl_reward
-  obs_goal_horizon: 5
+  obs_goal_horizon: 1
 
-  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
+  # rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
+  rew_state_weight: [5.0, 5.0, 5.0, 0.1, 0.1, 0.1, 0.001]
   rew_act_weight: [0.1, 0.1, 0.1, 0.1]  # set to 1 if action noise is too large
-  # rew_act_weight: [1.00, 1.00, 1.00, 1.00]  # set to 1 if action noise is too large
   rew_exponential: True
-  episode_len_sec: 20.5
+  episode_len_sec: 15
   inertial_prop:
     M: 0.037
-    alpha_1: 0.13
-    alpha_2: 0.72
-    alpha_3: 0.08
-    alpha_4: -0.0171
-    alpha_5: 0.000811
-    beta_1: -238.1
-    beta_2: -21.35
-    beta_3: 179.65
-    beta_4: -170.4
-    beta_5: -22.22
-    beta_6: 280.0
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state
@@ -139,8 +76,8 @@ task_config:
         # std: [0.147, 0.546, 0.497, 0.448]  # 7 times
     observation:
       - disturbance_func: white_noise
-        #1 time
-        std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001]
+        # std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001]
+        std: [1.31e-05, 1.42e-05, 1.47e-05, 1.23e-03, 6.11e-04, 6.04e-04, 0.0001]
         #3 times
         # std: [3.93e-05, 1.527e-03, 4.26e-05, 1.569e-03, 4.41e-05, 1.773e-03, 3.69e-03, 1.833e-03, 1.812e-03, 1.575e-01, 7.86e-02, 7.59e-02, 0.0003]
         #5 times

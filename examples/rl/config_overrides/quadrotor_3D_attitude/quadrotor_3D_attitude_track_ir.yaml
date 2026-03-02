@@ -109,9 +109,18 @@ task_config:
   rew_state_weight: [1.0, 0.1, 1.0, 0.1, 1.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.01]
   rew_act_weight: [0.01, 0.01, 0.01, 0.01] #set to 1 if action noise is too large
   rew_exponential: True
-  episode_len_sec: 11
+  episode_len_sec: 15
   inertial_prop:
     M: 0.037
+    alpha_1: 0.041
+    alpha_2: 0.87
+    alpha_3: 0.105
+    beta_1: -238.1
+    beta_2: -21.35
+    beta_3: 179.65
+    beta_4: -170.4
+    beta_5: 22.22
+    beta_6: 280
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state
@@ -123,7 +132,6 @@ task_config:
   disturbances:
     action:
       - disturbance_func: white_noise
-        # std: [0.03116, 0.03450]
         std: [0.021, 0.078, 0.071, 0.064]  # 1 times (original)
         # std: [0.063, 0.234, 0.213, 0.192]  # 3 times
         # std: [0.105, 0.390, 0.355, 0.320]  # 5 times
@@ -131,7 +139,7 @@ task_config:
     observation:
       - disturbance_func: white_noise
         #1 time
-        std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001,]
+        std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001, 0.0, 0.0, 0.0, 0.0]
         #3 times
         # std: [3.93e-05, 1.527e-03, 4.26e-05, 1.569e-03, 4.41e-05, 1.773e-03, 3.69e-03, 1.833e-03, 1.812e-03, 1.575e-01, 7.86e-02, 7.59e-02, 0.0003]
         #5 times

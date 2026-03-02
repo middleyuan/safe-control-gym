@@ -3,7 +3,7 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si_3d_delay
-  quad_type: 11
+  quad_type: 9
   # normalized_rl_action_space: False
   init_state:
     init_x: 0.0
@@ -18,7 +18,36 @@ task_config:
   # y: [-2, 2]
   # z: [0, 2.5]
   randomized_init: True
-  randomized_inertial_prop: False
+  randomized_inertial_prop: True
+
+  inertial_prop_randomization_info:
+    alpha_1: # Nominal: 0.041
+      distrib: 'normal'
+      scale: 0.001
+    alpha_2: # Nominal: 0.87
+      distrib: 'normal'
+      scale: 0.01
+    alpha_3: # Nominal: 0.105
+      distrib: 'normal'
+      scale: 0.002
+    beta_1: # Nominal: -238.1
+      distrib: 'normal'
+      scale: 0.2
+    beta_2: # Nominal: -21.35
+      distrib: 'normal'
+      scale: 0.02
+    beta_3: # Nominal: 179.65
+      distrib: 'normal'
+      scale: 0.2
+    beta_4: # Nominal: -170.4
+      distrib: 'normal'
+      scale: 0.2
+    beta_5: # Nominal: 22.22
+      distrib: 'normal'
+      scale: 0.02
+    beta_6: # Nominal: 280
+      distrib: 'normal'
+      scale: 0.2
 
   init_state_randomization_info:
     init_x:
@@ -35,8 +64,8 @@ task_config:
       # scale: 0.18177988906945585   # 50 times
     init_y:
       distrib: 'normal'
-      # scale: 0.001670549279531124
-      scale: 0.00835274639765562   # 5 times
+      scale: 0.001670549279531124
+      # scale: 0.00835274639765562   # 5 times
       # scale: 0.01670549279531124   # 10 times
       # scale: 0.08352746397655620   # 50 times
     init_y_dot:
@@ -93,6 +122,7 @@ task_config:
       # scale: 0.15616291616057735   # 5 times
       # scale: 0.3123258323211547    # 10 times
       # scale: 1.5616291616057735    # 50 times
+  
   task: traj_tracking
   task_info:
     trajectory_type: figure8
@@ -112,6 +142,16 @@ task_config:
   episode_len_sec: 15
   inertial_prop:
     M: 0.037
+    alpha_1: 0.041
+    alpha_2: 0.87
+    alpha_3: 0.105
+    beta_1: -238.1
+    beta_2: -21.35
+    beta_3: 179.65
+    beta_4: -170.4
+    beta_5: 22.22
+    beta_6: 280
+
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state

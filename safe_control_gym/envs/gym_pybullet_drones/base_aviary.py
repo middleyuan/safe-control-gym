@@ -1244,10 +1244,8 @@ class BaseAviary(BenchmarkEnv):
         phi_dot = cs.MX.sym('phi_dot')  # Roll
         theta_dot = cs.MX.sym('theta_dot')  # Pitch
         psi_dot = cs.MX.sym('psi_dot')  # Yaw
-        forces_motor = cs.MX.sym('force_motor', 1)
-        
-        X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot,
-                       phi, theta, psi, phi_dot, theta_dot, psi_dot, forces_motor)
+        forces_motor = cs.MX.sym('force_motor', 1)        
+        X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, forces_motor)
 
         g = self.GRAVITY_ACC
         d = cs.MX.sym('d', 3, 1)  # disturbance force
@@ -1256,10 +1254,9 @@ class BaseAviary(BenchmarkEnv):
         R_c = cs.MX.sym('R')  # desired roll angle [rad]
         P_c = cs.MX.sym('P')  # desired pitch angle [rad]
         Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
-        U = cs.vertcat(T_c, R_c, P_c, Y_c)   
-        # model_choice = "quartic"  # options: linear, quadratic, quartic
-        # model_choice = "quadratic"  # options: linear, quadratic
-        model_choice = "linear"  # options: linear, quadratic
+        U = cs.vertcat(T_c, R_c, P_c, Y_c)
+        model_choice = "drag"  # options: linear, quadratic, quartic
+
         if model_choice == "quartic":
             # params_acc = [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086]
             # params_acc = [-0.00688355, 1.78338, -7.4426, 25.4651, -29.1181, 0.1086]
@@ -1326,10 +1323,16 @@ class BaseAviary(BenchmarkEnv):
             df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
 
             # params_acc = [0.09, 0.77, 0.0814]
-            params_acc = [0.041, 0.87, 0.105]
-            params_roll_rate = [-238.1, -21.35, 179.65]
-            params_pitch_rate = [-238.1, -21.35, 179.65]
-            params_yaw_rate = [-170.4, -22.22, 280]
+            if prop_values is None:
+                params_acc = [0.041, 0.87, 0.105]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+            else:
+                params_acc = [prop_values['alpha_1'], prop_values['alpha_2'], prop_values['alpha_3']]
+                params_roll_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
+                params_pitch_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
+                params_yaw_rate = [prop_values['beta_4'], prop_values['beta_5'], prop_values['beta_6']]
             
             # Delay dynamics parameters (from MATLAB sys_id results)
             # Based on estimated parameters: [bias, scale, tau]
@@ -1349,20 +1352,104 @@ class BaseAviary(BenchmarkEnv):
             # params_pitch_rate = [-2.52706637e+02, -2.78661952e+01,  1.44880083e+02]
             # params_yaw_rate = [-1.74858294e+02, -1.68371780e+01, 3.87810411e+02]
 
-            X_dot = cs.vertcat(x_dot, 
-                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
-                            y_dot,
-                            1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
-                            z_dot,
-                            1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
-                            phi_dot,
-                            theta_dot,
-                            psi_dot,
-                            params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                            params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                            params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                            (f_max - f_min)/2 * df_dot)
-            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+            X_dot = cs.vertcat(
+                x_dot, 
+                1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)) + d[0] / self.MASS,
+                y_dot,
+                1/overridden_mass *forces_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)) + d[1] / self.MASS,
+                z_dot,
+                1/overridden_mass *forces_motor * cs.cos(phi) * cs.cos(theta) - g + d[2] / self.MASS,
+                phi_dot,
+                theta_dot,
+                psi_dot,
+                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                (f_max - f_min)/2 * df_dot
+            )
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])            
+        elif model_choice == "drag":
+                # Transformation parameters from sys_id with mode 3 
+            cmd_min = -1
+            cmd_max = 1
+            f_min = -1
+            f_max = 1 
+            
+            # Transform input command T from raw to normalized space (mode 3)
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+            
+            # normalized forces_motor
+            df = 2 * (forces_motor - f_min) / (f_max - f_min) - 1
+
+            # Dynamics parameters
+            if prop_values is None:
+                params_acc = [0.13, 0.72, 0.08, -0.0171, 0.000811]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+            else:
+                params_acc = [prop_values['alpha_1'], prop_values['alpha_2'], prop_values['alpha_3'], prop_values['alpha_4'], prop_values['alpha_5']]
+                params_roll_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
+                params_pitch_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
+                params_yaw_rate = [prop_values['beta_4'], prop_values['beta_5'], prop_values['beta_6']]
+            # Drag coefficients
+            drag_coeff_x = params_acc[3]
+            drag_coeff_y = params_acc[3]
+            drag_coeff_z = params_acc[4]
+
+            #drag_coeff_x = 0.0
+            #drag_coeff_y = 0.0
+            #drag_coeff_z = 0.0
+            
+            # Store parameters
+            self.drag_coeffs = [drag_coeff_x, drag_coeff_y, drag_coeff_z]
+            self.params_roll_rate = params_roll_rate
+            self.params_pitch_rate = params_pitch_rate
+            self.params_yaw_rate = params_yaw_rate
+            self.params_acc = params_acc
+            
+            # Delay dynamics in normalized space
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+            
+            # Rotation matrices
+            Rob = csRotXYZ(phi, theta, psi)  # body to world
+            Rbo = Rob.T  # world to body
+            
+            # Velocity vector in world frame
+            vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+            
+            # Drag matrix (diagonal, in body frame) [1/s]
+            drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+            
+            # Compute drag force using the drag matrix approach:
+            vel_body = Rbo @ vel_world  # transform velocity to body frame
+            drag_body = drag_matrix @ vel_body  # apply drag in body frame
+            drag_world = Rob @ drag_body  # transform back to world frame
+            
+            # Thrust force in world frame (drone z-axis in world frame)
+            thrust_force_world = 1/overridden_mass * forces_motor * cs.vertcat(
+                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                cs.cos(phi) * cs.cos(theta)
+            )
+            
+            # Define dynamics equations with drag
+            X_dot = cs.vertcat(
+                x_dot,
+                thrust_force_world[0] + 1/overridden_mass * drag_world[0],
+                y_dot,
+                thrust_force_world[1] + 1/overridden_mass * drag_world[1],
+                z_dot,
+                thrust_force_world[2] + 1/overridden_mass * drag_world[2] - g,
+                phi_dot,
+                theta_dot,
+                psi_dot,
+                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                (f_max - f_min)/2 * df_dot
+            )
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])     
 
     def _show_drone_local_axes(self, nth_drone):
         '''Draws the local frame of the n-th drone in PyBullet's GUI.

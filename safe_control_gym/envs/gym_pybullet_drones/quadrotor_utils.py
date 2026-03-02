@@ -23,6 +23,9 @@ class QuadType(IntEnum):
     THREE_D_ATTITUDE_DELAY = 9  # Three-dimensional movement with attitude control with delay.
     THREE_D_ATTITUDE_DELAY_INPUT_RATE = 10  # Three-dimensional movement with attitude control with delay and input rate.
     THREE_D_ATTITUDE_DELAY_HIST = 11  # Three-dimensional movement with attitude control with delay and past observations.
+    THREE_D_ATTITUDE_DELAY_REL = 12  # Three-dimensional movement with attitude control with delay and relative future positions.
+    THREE_D_ATTITUDE_DELAY_REL_IR = 13  # Three-dimensional movement with attitude control with delay 
+                                        # relative future positions and input rate.
 
 def cmd2pwm(thrust, pwm2rpm_scale, pwm2rpm_const, ct, pwm_min, pwm_max):
     """Generic cmd to pwm function.
