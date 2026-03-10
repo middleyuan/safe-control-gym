@@ -3,7 +3,7 @@ task_config:
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si_3d_delay
-  quad_type: 10
+  quad_type: 13
   # normalized_rl_action_space: False
   init_state:
     init_x: 0.0
@@ -106,21 +106,24 @@ task_config:
   cost: rl_reward
   obs_goal_horizon: 1
 
-  rew_state_weight: [1.0, 0.1, 1.0, 0.1, 1.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.01]
-  rew_act_weight: [0.01, 0.01, 0.01, 0.01] #set to 1 if action noise is too large
+  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.01]
+  rew_act_weight: [0.1, 0.1, 0.1, 0.1]  # set to 1 if action noise is too large
   rew_exponential: True
   episode_len_sec: 15
   inertial_prop:
     M: 0.037
-    alpha_1: 0.041
-    alpha_2: 0.87
-    alpha_3: 0.105
+    alpha_1: 0.13
+    alpha_2: 0.72
+    alpha_3: 0.08
+    alpha_4: -0.0171
+    alpha_5: 0.000811
     beta_1: -238.1
     beta_2: -21.35
     beta_3: 179.65
     beta_4: -170.4
-    beta_5: 22.22
-    beta_6: 280
+    beta_5: -22.22
+    beta_6: 280.0
+  
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state

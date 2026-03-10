@@ -14,7 +14,7 @@ ALGO='ppo'
 # ALGO='dppo'
 # ALGO='safe_explorer_ppo'
 
-EXP_NAME='test2'
+EXP_NAME='test'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -24,10 +24,10 @@ fi
 
 # Train the unsafe controller/agent.
 SEEDS=(11)
+
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do
     echo "Running with SEED: $SEED"
-
     python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         --algo ${ALGO} \
         --task ${SYS_NAME} \

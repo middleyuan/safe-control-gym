@@ -6,7 +6,7 @@ task_config:
   quad_type: 9
   # normalized_rl_action_space: False
   init_state:
-    init_x: 1.3
+    init_x: 1.4
     init_x_dot: 0
     init_y: 0.5
     init_y_dot: 0
@@ -18,42 +18,7 @@ task_config:
   # y: [-2, 2]
   # z: [0, 2.5]
   randomized_init: True
-  randomized_inertial_prop: True
-
-  inertial_prop_randomization_info:
-    alpha_1: # Nominal: 0.041
-      distrib: 'normal'
-      scale: 0.001
-    alpha_2: # Nominal: 0.87
-      distrib: 'normal'
-      scale: 0.01
-    alpha_3: # Nominal: 0.105
-      distrib: 'normal'
-      scale: 0.002
-    alpha_4: # Nominal: -0.0171
-      distrib: 'normal'
-      scale: 0.0005
-    alpha_5: # Nominal: 0.000811
-      distrib: 'normal'
-      scale: 0.0001
-    beta_1: # Nominal: -238.1
-      distrib: 'normal'
-      scale: 0.2
-    beta_2: # Nominal: -21.35
-      distrib: 'normal'
-      scale: 0.02
-    beta_3: # Nominal: 179.65
-      distrib: 'normal'
-      scale: 0.2
-    beta_4: # Nominal: -170.4
-      distrib: 'normal'
-      scale: 0.2
-    beta_5: # Nominal: 22.22
-      distrib: 'normal'
-      scale: 0.02
-    beta_6: # Nominal: 280
-      distrib: 'normal'
-      scale: 0.2
+  randomized_inertial_prop: False
 
   init_state_randomization_info:
     init_x:
@@ -92,23 +57,7 @@ task_config:
     init_r:
       distrib: 'normal'
       scale: 0.03123258323211547
-  task: traj_tracking
-  task_info:
-    trajectory_type: snap_custom
-    num_cycles: 1
-    trajectory_plane: 'xy'
-    trajectory_position_offset: [0.0, 0.0, 0.0]
-    trajectory_scale: 1.0
-    custom_snap_ref_traj: "/home/savvyfox/Projects/scg-exp/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v6_2.npy"
-    # custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_12_5_ref_traj.npy"
-  cost: rl_reward
-  obs_goal_horizon: 5
 
-  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
-  rew_act_weight: [0.1, 0.1, 0.1, 0.1]  # set to 1 if action noise is too large
-  # rew_act_weight: [1.00, 1.00, 1.00, 1.00]  # set to 1 if action noise is too large
-  rew_exponential: True
-  episode_len_sec: 20.5
   inertial_prop:
     M: 0.037
     alpha_1: 0.13
@@ -122,6 +71,25 @@ task_config:
     beta_4: -170.4
     beta_5: -22.22
     beta_6: 280.0
+
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 1
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0.0, 0.0, 0.0]
+    trajectory_scale: 1.0
+    custom_snap_ref_traj: "/home/savvyfox/Projects/scg-exp/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v6_0.npy"
+    # custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_12_5_ref_traj.npy"
+  cost: rl_reward
+  obs_goal_horizon: 1
+
+  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
+  rew_act_weight: [0.5, 0.5, 0.5, 0.5] #set to 1 if action noise is too large
+  # rew_act_weight: [1.00, 1.00, 1.00, 1.00] #set to 1 if action noise is too large
+  rew_exponential: True
+  episode_len_sec: 13
+  
   constraints:
     - constraint_form: default_constraint
       constrained_variable: state
