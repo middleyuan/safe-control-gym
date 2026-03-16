@@ -210,6 +210,7 @@ class WhiteNoise(Disturbance):
             self.std = np.asarray(std)
         else:
             raise ValueError('[ERROR] WhiteNoise.__init__(): std must be specified as a float or list.')
+        # print(len(self.std), self.dim)
         assert self.dim == len(self.std), 'std shape should be the same as dim.'
 
     def apply(self,

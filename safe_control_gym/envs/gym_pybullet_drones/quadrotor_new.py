@@ -1,0 +1,3091 @@
+"""1D, 2D, and 3D quadrotor environment using PyBullet physics.
+
+Based on UTIAS Dynamic Systems Lab's gym-pybullet-drones:
+    * https://github.com/utiasDSL/gym-pybullet-drones
+"""
+
+import math
+import os
+from copy import deepcopy
+
+import casadi as cs
+import numpy as np
+import pybullet as p
+from gymnasium import spaces
+from termcolor import colored
+
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
+from safe_control_gym.envs.benchmark_env import Cost, Task
+from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS
+from safe_control_gym.envs.disturbances import Downwash
+from safe_control_gym.envs.gym_pybullet_drones.base_aviary import BaseAviary, Physics
+from safe_control_gym.envs.gym_pybullet_drones.quadrotor_utils import (AttitudeControl, QuadType, cmd2pwm,
+                                                                       pwm2rpm)
+from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import _plot_trajectory, _plot_xyz_kinematics
+from safe_control_gym.math_and_models.symbolic_systems import SymbolicModel
+from safe_control_gym.math_and_models.transformations import (csRotXYZ, get_quaternion_from_euler,
+                                                              transform_trajectory)
+
+script_dir = os.path.dirname(__file__)
+
+
+class Quadrotor(BaseAviary):
+    """1D, 2D, and 3D quadrotor environment task.
+
+    Including symbolic model, constraints, randomization, adversarial disturbances,
+    multiple cost functions, stabilization and trajectory tracking references.
+    """
+
+    NAME = 'quadrotor'
+    AVAILABLE_CONSTRAINTS = deepcopy(GENERAL_CONSTRAINTS)
+
+    DISTURBANCE_MODES = {  # Set at runtime by QUAD_TYPE
+        'observation': {
+            'dim': -1
+        },
+        'action': {
+            'dim': -1
+        },
+        'dynamics': {
+            'dim': -1
+        },
+        'downwash': {
+            'dim': -1
+        }
+    }
+
+    INERTIAL_PROP_RAND_INFO = {
+        'M': {  # Nominal: 0.027
+            'distrib': 'uniform',
+            'low': 0.022,
+            'high': 0.032
+        },
+        'Ixx': {  # Nominal: 1.4e-5
+            'distrib': 'uniform',
+            'low': 1.3e-5,
+            'high': 1.5e-5
+        },
+        'Iyy': {  # Nominal: 1.4e-5
+            'distrib': 'uniform',
+            'low': 1.3e-5,
+            'high': 1.5e-5
+        },
+        'Izz': {  # Nominal: 2.17e-5
+            'distrib': 'uniform',
+            'low': 2.07e-5,
+            'high': 2.27e-5
+        },
+        'beta_1': {  # Nominal: 18.11
+            'distrib': 'uniform',
+            'low': -4,
+            'high': 4
+        },
+        'beta_2': {  # Nominal: 3.68
+            'distrib': 'uniform',
+            'low': -0.7,
+            'high': 0.7
+        },
+        'alpha_1': {  # Nominal: -140.8
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 10
+        },
+        'alpha_2': {  # Nominal: -13.4
+            'distrib': 'uniform',
+            'low': -3,
+            'high': 3
+        },
+        'alpha_3': {  # Nominal: 124.8
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_4': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_5': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_6': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_7': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_8': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        },
+        'alpha_9': {  # Nominal: 0.0
+            'distrib': 'uniform',
+            'low': -5,
+            'high': 5
+        }
+    }
+
+    INIT_STATE_RAND_INFO = {
+        'init_x': {
+            'distrib': 'uniform',
+            'low': -0.5,
+            'high': 0.5
+        },
+        'init_x_dot': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_y': {
+            'distrib': 'uniform',
+            'low': -0.5,
+            'high': 0.5
+        },
+        'init_y_dot': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_z': {
+            'distrib': 'uniform',
+            'low': 0.1,
+            'high': 1.5
+        },
+        'init_z_dot': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_phi': {
+            'distrib': 'uniform',
+            'low': -0.3,
+            'high': 0.3
+        },
+        'init_theta': {
+            'distrib': 'uniform',
+            'low': -0.3,
+            'high': 0.3
+        },
+        'init_psi': {
+            'distrib': 'uniform',
+            'low': -0.3,
+            'high': 0.3
+        },
+        'init_p': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_theta_dot': {  # TODO: replace with q.
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_q': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_r': {
+            'distrib': 'uniform',
+            'low': -0.01,
+            'high': 0.01
+        },
+        'init_tau': {
+            'distrib': 'uniform',
+            'low': 0.033 * 9.81 - 0.01,
+            'high': 0.033 * 9.81 + 0.01
+        }
+    }
+
+    TASK_INFO = {
+        'stabilization_goal': [0, 1],
+        'stabilization_goal_tolerance': 0.05,
+        'trajectory_type': 'circle',
+        'num_cycles': 1,
+        'trajectory_plane': 'zx',
+        'trajectory_position_offset': [0.5, 0],
+        'trajectory_scale': -0.5,
+        'proj_point': [0, 0, 0.5],
+        'proj_normal': [0, 1, 1],
+    }
+
+    def __init__(self,
+                 init_state=None,
+                 inertial_prop=None,
+                 # custom args
+                 quad_type: QuadType = QuadType.TWO_D,
+                 norm_act_scale=0.1,
+                 obs_goal_horizon=0,
+                 rew_state_weight=1.0,
+                 rew_act_weight=0.0001,
+                 rew_exponential=True,
+                 done_on_out_of_bound=True,
+                 info_mse_metric_state_weight=None,
+                 obs_goal_append_positions_only=False,
+                 **kwargs
+                 ):
+        """Initialize a quadrotor environment.
+
+        Args:
+            init_state (ndarray, optional): The initial state of the environment, (z, z_dot) or (x, x_dot, z, z_dot theta, theta_dot).
+            inertial_prop (ndarray, optional): The inertial properties of the environment (M, Ixx, Iyy, Izz).
+            quad_type (QuadType, optional): The choice of motion type (1D along z, 2D in the x-z plane, or 3D).
+            norm_act_scale (float): Scaling the [-1,1] action space around hover thrust when `normalized_action_space` is True.
+            obs_goal_horizon (int): How many future goal states to append to observation.
+            rew_state_weight (list/ndarray): Quadratic weights for state in rl reward.
+            rew_act_weight (list/ndarray): Quadratic weights for action in rl reward.
+            rew_exponential (bool): If to exponential negative quadratic cost to positive, bounded [0,1] reward.
+            done_on_out_of_bound (bool): If to terminate when state is out of bound.
+            info_mse_metric_state_weight (list/ndarray): Quadratic weights for state in mse calculation for info dict.
+        """
+
+        self.QUAD_TYPE = QuadType(quad_type)
+        self.norm_act_scale = norm_act_scale
+        self.obs_goal_horizon = obs_goal_horizon
+        self.rew_state_weight = np.array(rew_state_weight, ndmin=1, dtype=float)
+        self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
+        self.rew_exponential = rew_exponential
+        self.done_on_out_of_bound = done_on_out_of_bound
+        if info_mse_metric_state_weight is None:
+            if self.QUAD_TYPE == QuadType.ONE_D:
+                self.info_mse_metric_state_weight = np.array([1, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.TWO_D:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 0, 0], ndmin=1, dtype=float)
+            # elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            elif self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_BODY]:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            else:
+                raise ValueError('[ERROR] in Quadrotor.__init__(), not implemented quad type.')
+        else:
+            if (self.QUAD_TYPE == QuadType.ONE_D and len(info_mse_metric_state_weight) == 2) or \
+                    (self.QUAD_TYPE == QuadType.TWO_D and len(info_mse_metric_state_weight) == 6) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D and len(info_mse_metric_state_weight) == 12) or \
+                    (self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE and len(info_mse_metric_state_weight) == 6) or \
+                    (self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY and len(info_mse_metric_state_weight) == 6) or \
+                    (self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S and len(info_mse_metric_state_weight) == 5) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE and len(info_mse_metric_state_weight) == 12) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 and len(info_mse_metric_state_weight) == 10) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY and len(info_mse_metric_state_weight) == 13) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE and len(info_mse_metric_state_weight) == 17) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF and len(info_mse_metric_state_weight) == 13) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE and len(info_mse_metric_state_weight) == 17):
+                self.info_mse_metric_state_weight = np.array(info_mse_metric_state_weight, ndmin=1, dtype=float)
+            else:
+                raise ValueError('[ERROR] in Quadrotor.__init__(), wrong info_mse_metric_state_weight argument size.')
+        self.obs_goal_append_positions_only = obs_goal_append_positions_only
+        # BaseAviary constructor, called after defining the custom args,
+        # since some BenchmarkEnv init setup can be task(custom args)-dependent.
+        super().__init__(init_state=init_state, obs_goal_append_positions_only=obs_goal_append_positions_only, inertial_prop=inertial_prop, **kwargs)
+
+        # Store initial state info.
+        self.INIT_STATE_LABELS = {
+            QuadType.ONE_D: ['init_x', 'init_x_dot'],
+            QuadType.TWO_D: ['init_x', 'init_x_dot', 'init_z', 'init_z_dot', 'init_theta', 'init_theta_dot'],
+            QuadType.TWO_D_ATTITUDE: ['init_x', 'init_x_dot', 'init_z', 'init_z_dot', 'init_theta', 'init_theta_dot'],
+            QuadType.TWO_D_ATTITUDE_BODY: ['init_x', 'init_x_dot', 'init_z', 'init_z_dot', 'init_theta', 'init_theta_dot'],
+            QuadType.TWO_D_ATTITUDE_5S: ['init_x', 'init_x_dot', 'init_z', 'init_z_dot', 'init_theta'],
+            QuadType.THREE_D: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                               'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r'],
+            QuadType.THREE_D_ATTITUDE: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                        'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r'],
+            QuadType.THREE_D_ATTITUDE_10: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                             'init_phi', 'init_theta', 'init_p', 'init_q'],
+            QuadType.THREE_D_ATTITUDE_DELAY: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau'],
+            QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau',
+                                              'init_thrust', 'init_roll', 'init_pitch', 'init_yaw'],
+            QuadType.THREE_D_ATTITUDE_DELAY_DIFF: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau'],
+            QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau',
+                                                              'init_thrust', 'init_roll', 'init_pitch', 'init_yaw'],
+        }
+        if init_state is None:
+            for init_name in self.INIT_STATE_RAND_INFO:  # Default zero state.
+                self.__dict__[init_name.upper()] = 0.
+        else:
+            if isinstance(init_state, np.ndarray):  # Full state as numpy array .
+                for i, init_name in enumerate(self.INIT_STATE_LABELS[self.QUAD_TYPE]):
+                    self.__dict__[init_name.upper()] = init_state[i]
+            elif isinstance(init_state, dict):  # Partial state as dictionary.
+                for init_name in self.INIT_STATE_LABELS[self.QUAD_TYPE]:
+                    self.__dict__[init_name.upper()] = init_state.get(init_name, 0.)
+            else:
+                raise ValueError('[ERROR] in Quadrotor.__init__(), init_state incorrect format.')
+
+        # Remove randomization info of initial state components inconsistent with quad type.
+        for init_name in list(self.INIT_STATE_RAND_INFO.keys()):
+            if init_name not in self.INIT_STATE_LABELS[self.QUAD_TYPE]:
+                self.INIT_STATE_RAND_INFO.pop(init_name, None)
+        # Remove randomization info of inertial components inconsistent with quad type.
+        if self.QUAD_TYPE == QuadType.ONE_D:
+            # Do NOT randomize J for the 1D quadrotor.
+            self.INERTIAL_PROP_RAND_INFO.pop('Ixx', None)
+            self.INERTIAL_PROP_RAND_INFO.pop('Iyy', None)
+            self.INERTIAL_PROP_RAND_INFO.pop('Izz', None)
+        elif self.QUAD_TYPE == QuadType.TWO_D or \
+                self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or \
+                self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S or \
+                self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+            # Only randomize Iyy for the 2D quadrotor.
+            self.INERTIAL_PROP_RAND_INFO.pop('Ixx', None)
+            self.INERTIAL_PROP_RAND_INFO.pop('Izz', None)
+
+        # Override inertial properties of passed as arguments.
+        if inertial_prop is None:
+            pass
+        elif self.QUAD_TYPE == QuadType.ONE_D and np.array(inertial_prop).shape == (1,):
+            self.MASS = inertial_prop[0]
+        elif self.QUAD_TYPE == QuadType.TWO_D and np.array(inertial_prop).shape == (2,):
+            self.MASS, self.J[1, 1] = inertial_prop
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE and np.array(inertial_prop).shape == (2,):
+            self.MASS, self.J[1, 1] = inertial_prop
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S and np.array(inertial_prop).shape == (2,):
+            self.MASS, self.J[1, 1] = inertial_prop
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY and np.array(inertial_prop).shape == (2,):
+            self.MASS, self.J[1, 1] = inertial_prop
+        elif self.QUAD_TYPE == QuadType.THREE_D and np.array(inertial_prop).shape == (4,):
+            self.MASS, self.J[0, 0], self.J[1, 1], self.J[2, 2] = inertial_prop
+        elif isinstance(inertial_prop, dict):
+            self.MASS = inertial_prop.get('M', self.MASS)
+            self.J[0, 0] = inertial_prop.get('Ixx', self.J[0, 0])
+            self.J[1, 1] = inertial_prop.get('Iyy', self.J[1, 1])
+            self.J[2, 2] = inertial_prop.get('Izz', self.J[2, 2])
+        else:
+            raise ValueError('[ERROR] in Quadrotor.__init__(), inertial_prop incorrect format.')
+
+        # Set goals for current task
+        self.set_goals()
+
+        # Set attitude controller if quadtype is QuadType.TWO_D_ATTITUDE
+        # if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.THREE_D_ATTITUDE]:
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY,
+                              QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+            self.attitude_control = AttitudeControl(self.CTRL_TIMESTEP, self.PYB_TIMESTEP)
+
+        # Set prior/symbolic info.
+        if inertial_prop is None:
+            self._setup_symbolic()
+        else:
+            self._setup_symbolic(inertial_prop)
+
+        # Set previous physical action (for input rate quadrotor)
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            self.prev_physical_action = np.zeros(self.action_dim)
+            self.current_physical_action = np.zeros(self.action_dim)
+
+        # initialize disturbance model
+        if 'downwash' in self.disturbances:
+            if self.DISTURBANCES['downwash'][0]['mode'] == 'fix':
+                self.dw_model = Downwash(
+                    init_pos=self.DISTURBANCES['downwash'][0]['pos'],
+                    low=self.DISTURBANCES['downwash'][0]['low'],
+                    high=self.DISTURBANCES['downwash'][0]['high']
+                )
+                # pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                # self.dw_model.update_pos(pos)
+                randomize_flag = self.DISTURBANCES['downwash'][0]['randomize'] if 'randomize' in \
+                                                                                  self.DISTURBANCES['downwash'][
+                                                                                      0] else False
+                if self.DISTURBANCES['downwash'][0]['mode'] == 'fix' and randomize_flag:
+                    pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                    self.dw_model.update_pos(pos)
+                    self.dw_model.reset()
+                else:
+                    pass  # randomization only implemented for fixed downwash
+            elif self.DISTURBANCES['downwash'][0]['mode'] == 'track':
+                self.dw_model = Downwash()  # update the position later
+
+        # store the last prop values (only for logging)
+        self.last_prop_values = None
+
+    def set_goals(self):
+        # Create X_GOAL and U_GOAL references for the assigned task.
+        # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+        use_ilqr_ref = getattr(self, 'TASK_INFO', {}).get('ilqr_ref', False)
+        use_pitch_ref = getattr(self, 'TASK_INFO', {}).get('pitch_ref', False)
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE,
+                              QuadType.TWO_D_ATTITUDE_5S,
+                              QuadType.TWO_D_ATTITUDE_BODY,]:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0])
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0])
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            self.U_GOAL = np.array([0.0, 0.0, 0.0, 0.0])
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
+        else:
+            self.U_GOAL = np.ones(self.action_dim) * self.MASS * self.GRAVITY_ACC / self.action_dim
+        if self.TASK == Task.STABILIZATION:
+            if self.QUAD_TYPE == QuadType.ONE_D:
+                self.X_GOAL = np.hstack(
+                    [self.TASK_INFO['stabilization_goal'][1],
+                     0.0])  # x = {z, z_dot}.
+            elif self.QUAD_TYPE == QuadType.TWO_D:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0, 0.0, 0.0
+                ])  # x = {x, x_dot, z, z_dot, theta, theta_dot}.
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0, 0.0, 0.0
+                ])  # x = {x, x_dot, z, z_dot, theta, theta_dot}.
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0, 0.0, 0.0
+                ])
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0, 0.0
+                ])  # x = {x, x_dot, z, z_dot, theta}.
+            elif self.QUAD_TYPE == QuadType.THREE_D:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0,
+                    self.TASK_INFO['stabilization_goal'][2], 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                ])  # x = {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0,
+                    self.TASK_INFO['stabilization_goal'][2], 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                ])
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+                self.X_GOAL = np.hstack([
+                    self.TASK_INFO['stabilization_goal'][0], 0.0,
+                    self.TASK_INFO['stabilization_goal'][1], 0.0,
+                    self.TASK_INFO['stabilization_goal'][2], 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.MASS * self.GRAVITY_ACC])
+
+        elif self.TASK == Task.TRAJ_TRACKING:
+            if isinstance(self.EPISODE_LEN_SEC, list):
+                self.episode_len = self.np_random.choice(self.EPISODE_LEN_SEC)
+            else:
+                self.episode_len = self.EPISODE_LEN_SEC
+            if use_ilqr_ref:
+                assert self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE,
+                                          QuadType.THREE_D_ATTITUDE], \
+                    '[ERROR] in Quadrotor.set_goals(), iLQR reference only available for attitude control interface.'
+                # if using iLQR or trajectory data generated by other controllers
+                # NOTE: the reference is assumed to have the same sampling frequency
+                # TODO: add support for different sampling frequency
+                # traj_overhead_steps = 60
+                if hasattr(self.TASK_INFO, 'ilqr_traj_data'):
+                    traj_data = np.load(self.TASK_INFO['ilqr_traj_data'], allow_pickle=True).item()
+                else:
+                    traj_tag = '2D_attitude' if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE else '3D_attitude'
+                    traj_data = np.load(os.path.join(script_dir, \
+                                                     '../../../benchmarking_sim/quadrotor/data', \
+                                                     f'ilqr_quadrotor_{traj_tag}_{self.episode_len}_ref_traj.npy'),\
+                                        allow_pickle=True).item()
+                # max_ref_steps = self.PYB_FREQ * self.episode_len
+                # ref_traj_steps = traj_data['obs'][0].shape[0]
+                # if ref_traj_steps >= max_ref_steps + traj_overhead_steps:
+                    # traj_data['obs'][0] = traj_data['obs'][0][:max_ref_steps+traj_overhead_steps]
+                # if
+                POS_REF = np.array(
+                    [traj_data['obs'][:, 0], 0 * traj_data['obs'][:, 0], traj_data['obs'][:, 2]]).T
+                VEL_REF = np.array(
+                    [traj_data['obs'][:, 1], 0 * traj_data['obs'][:, 1], traj_data['obs'][:, 3]]).T
+                PITCH_REF = np.array([traj_data['obs'][:, 4], traj_data['obs'][:, 5]]).T
+            else:
+                if hasattr(self.TASK_INFO, 'custom_snap_ref_traj'):
+                    traj_data = np.load(self.TASK_INFO['custom_snap_ref_traj'], allow_pickle=True).item()
+                    POS_REF = traj_data['POS_REF']
+                    VEL_REF = traj_data['VEL_REF']
+                elif hasattr(self.TASK_INFO, 'custom_snap_ref_traj_obs'):
+                    traj_data = np.load(self.TASK_INFO['custom_snap_ref_traj_obs'], allow_pickle=True).item()
+                    POS_REF = traj_data['obs'][:, [0, 2, 4]]
+                    VEL_REF = traj_data['obs'][:, [1, 3, 5]]
+                else:
+                    strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
+                    waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
+                    POS_REF, VEL_REF, ACC_REF, JRK_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                                                                    traj_length=self.episode_len,
+                                                                    num_cycles=self.TASK_INFO['num_cycles'],
+                                                                    traj_plane=self.TASK_INFO['trajectory_plane'],
+                                                                    position_offset=self.TASK_INFO[
+                                                                        'trajectory_position_offset'],
+                                                                    scaling=self.TASK_INFO['trajectory_scale'],
+                                                                    sample_time=self.CTRL_TIMESTEP,
+                                                                    string_list=strings,
+                                                                    waypoint_list=waypoints
+                                                                    )
+                    # CUSTOM_REF_TRAJ = {}
+                    # CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
+                    # CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
+                    # CUSTOM_REF_TRAJ['ACC_REF'] = ACC_REF
+                    # CUSTOM_REF_TRAJ['JRK_REF'] = JRK_REF
+                    # np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    # # add attribute to self.TASK_INFO
+                    # self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                    #                      'custom_snap_ref_traj.npy')
+                    # _plot_trajectory(POS_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                    # _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
+                    #                  waypoints=waypoints,
+                    #                  strings=strings,
+                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
+            if self.QUAD_TYPE == QuadType.ONE_D:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2]  # z_dot
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.TWO_D:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(VEL_REF.shape[0])
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+                if use_ilqr_ref and use_pitch_ref:
+                    self.X_GOAL = np.vstack([
+                        POS_REF[:, 0],  # x
+                        VEL_REF[:, 0],  # x_dot
+                        POS_REF[:, 2],  # z
+                        VEL_REF[:, 2],  # z_dot
+                        PITCH_REF[:, 0],  # theta
+                        PITCH_REF[:, 1],  # theta_dot
+                    ]).transpose()
+                else:
+                    self.X_GOAL = np.vstack([
+                        POS_REF[:, 0],  # x
+                        VEL_REF[:, 0],  # x_dot
+                        POS_REF[:, 2],  # z
+                        VEL_REF[:, 2],  # z_dot
+                        np.zeros(POS_REF.shape[0]),  # zeros
+                        np.zeros(VEL_REF.shape[0])
+                    ]).transpose()
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(VEL_REF.shape[0])
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.THREE_D:
+                # Additional transformation of the originally planar trajectory.
+                POS_REF_TRANS, VEL_REF_TRANS = transform_trajectory(
+                    POS_REF, VEL_REF, trans_info={
+                        'point': self.TASK_INFO['proj_point'],
+                        'normal': self.TASK_INFO['proj_normal'],
+                    })
+                self.X_GOAL = np.vstack([
+                    POS_REF_TRANS[:, 0],  # x
+                    VEL_REF_TRANS[:, 0],  # x_dot
+                    POS_REF_TRANS[:, 1],  # y
+                    VEL_REF_TRANS[:, 1],  # y_dot
+                    POS_REF_TRANS[:, 2],  # z
+                    VEL_REF_TRANS[:, 2],  # z_dot
+                    np.zeros(POS_REF_TRANS.shape[0]),  # zeros
+                    np.zeros(POS_REF_TRANS.shape[0]),
+                    np.zeros(POS_REF_TRANS.shape[0]),
+                    np.zeros(VEL_REF_TRANS.shape[0]),
+                    np.zeros(VEL_REF_TRANS.shape[0]),
+                    np.zeros(VEL_REF_TRANS.shape[0])
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 1],  # y
+                    VEL_REF[:, 1],  # y_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0])
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 1],  # y
+                    VEL_REF[:, 1],  # y_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0])
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 1],  # y
+                    VEL_REF[:, 1],  # y_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.ones(VEL_REF.shape[0]) * self.MASS * self.GRAVITY_ACC,
+                ]).transpose()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.X_GOAL = np.vstack([
+                    POS_REF[:, 0],  # x
+                    VEL_REF[:, 0],  # x_dot
+                    POS_REF[:, 1],  # y
+                    VEL_REF[:, 1],  # y_dot
+                    POS_REF[:, 2],  # z
+                    VEL_REF[:, 2],  # z_dot
+                    np.zeros(POS_REF.shape[0]),  # zeros
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(POS_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.ones(VEL_REF.shape[0]) * self.MASS * self.GRAVITY_ACC,
+                    np.ones(VEL_REF.shape[0]) * self.MASS * self.GRAVITY_ACC,
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                    np.zeros(VEL_REF.shape[0]),
+                ]).transpose()
+
+    def reset(self, seed=None):
+        """(Re-)initializes the environment to start an episode.
+
+        Mandatory to call at least once after __init__().
+
+        Args:
+            seed (int): An optional seed to reseed the environment.
+
+        Returns:
+            obs (ndarray): The initial state of the environment.
+            info (dict): A dictionary with information about the dynamics and constraints symbolic models.
+        """
+        super().before_reset(seed=seed)
+        # PyBullet simulation reset.
+        super()._reset_simulation()
+
+        # Choose randomized or deterministic inertial properties.
+        prop_values = {
+            'M': self.MASS,
+            'Ixx': self.J[0, 0],
+            'Iyy': self.J[1, 1],
+            'Izz': self.J[2, 2]
+        }
+        if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            prop_values['beta_1'] = self.beta_1
+            prop_values['beta_2'] = self.beta_2
+            prop_values['alpha_1'] = self.alpha_1
+            prop_values['alpha_2'] = self.alpha_2
+            prop_values['alpha_3'] = self.alpha_3
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            prop_values['beta_1'] = self.beta_1
+            prop_values['beta_2'] = self.beta_2
+            prop_values['alpha_1'] = self.alpha_1
+            prop_values['alpha_2'] = self.alpha_2
+            prop_values['alpha_3'] = self.alpha_3
+            prop_values['alpha_4'] = self.alpha_4
+            prop_values['alpha_5'] = self.alpha_5
+            prop_values['alpha_6'] = self.alpha_6
+            prop_values['alpha_7'] = self.alpha_7
+            prop_values['alpha_8'] = self.alpha_8
+            prop_values['alpha_9'] = self.alpha_9
+        if self.RANDOMIZED_INERTIAL_PROP:
+            prop_values = self._randomize_values_by_info(prop_values, self.INERTIAL_PROP_RAND_INFO)
+            if any(phy_quantity < 0 for phy_quantity in prop_values.values()):
+                if self.QUAD_TYPE != QuadType.TWO_D_ATTITUDE and self.QUAD_TYPE != QuadType.THREE_D_ATTITUDE:
+                    raise ValueError('[ERROR] in Quadrotor.reset(), negative randomized inertial properties.')
+        self.OVERRIDDEN_QUAD_MASS = prop_values['M']
+        self.OVERRIDDEN_QUAD_INERTIA = [prop_values['Ixx'], prop_values['Iyy'], prop_values['Izz']]
+        if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            self.beta_1 = prop_values['beta_1']
+            self.beta_2 = prop_values['beta_2']
+            self.alpha_1 = prop_values['alpha_1']
+            self.alpha_2 = prop_values['alpha_2']
+            self.alpha_3 = prop_values['alpha_3']
+            self._setup_symbolic(prop_values)
+            self.setup_dynamics_si_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            if self.PHYSICS == Physics.DYN_SI_3D:
+                self.beta_1 = prop_values['beta_1']
+                self.beta_2 = prop_values['beta_2']
+                self.alpha_1 = prop_values['alpha_1']
+                self.alpha_2 = prop_values['alpha_2']
+                self.alpha_3 = prop_values['alpha_3']
+                self.alpha_4 = prop_values['alpha_4']
+                self.alpha_5 = prop_values['alpha_5']
+                self.alpha_6 = prop_values['alpha_6']
+                self.alpha_7 = prop_values['alpha_7']
+                self.alpha_8 = prop_values['alpha_8']
+                self.alpha_9 = prop_values['alpha_9']
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            if self.PHYSICS == Physics.DYN_SI_3D_DELAY:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                prop_values['params_acc'] = getattr(self, 'params_acc', [0.13, 0.72, 0.08, -0.0171, 0.000811])
+                prop_values['params_roll_rate'] = getattr(self, 'params_roll_rate', [-238.1, -21.35, 179.65])
+                prop_values['params_pitch_rate'] = getattr(self, 'params_pitch_rate', [-238.1, -21.35, 179.65])
+                prop_values['params_yaw_rate'] = getattr(self, 'params_yaw_rate', [-170.4, -22.22, 280])
+                # print(self.RANDOMIZED_INERTIAL_PROP)
+                # print("old prop_values:", prop_values)
+                if self.RANDOMIZED_INERTIAL_PROP:
+                    prop_values = self._randomize_values_by_info(prop_values, self.INERTIAL_PROP_RAND_INFO)
+                # print("new prop_values:", prop_values)
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_delay_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            if self.PHYSICS == Physics.DYN_SI_3D_10:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_10_expression(prop_values)
+        self.last_prop_values = prop_values
+
+        # Override inertial properties.
+        p.changeDynamics(
+            self.DRONE_IDS[0],
+            linkIndex=-1,  # Base link.
+            mass=self.OVERRIDDEN_QUAD_MASS,
+            localInertiaDiagonal=self.OVERRIDDEN_QUAD_INERTIA,
+            physicsClientId=self.PYB_CLIENT)
+
+        # Randomize initial state.
+        init_values = {init_name: self.__dict__[init_name.upper()]
+                       for init_name in self.INIT_STATE_LABELS[self.QUAD_TYPE]}
+        if self.RANDOMIZED_INIT:
+            init_values = self._randomize_values_by_info(init_values, self.INIT_STATE_RAND_INFO)
+        INIT_XYZ = [init_values.get('init_' + k, 0.) for k in ['x', 'y', 'z']]
+        INIT_VEL = [init_values.get('init_' + k + '_dot', 0.) for k in ['x', 'y', 'z']]
+        INIT_RPY = [init_values.get('init_' + k, 0.) for k in ['phi', 'theta', 'psi']]
+        if self.QUAD_TYPE == QuadType.TWO_D:
+            INIT_ANG_VEL = [0, init_values.get('init_theta_dot', 0.), 0]
+        # elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+        elif self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            INIT_ANG_VEL = [0, init_values.get('init_theta_dot', 0.), 0]
+            self.attitude_control.reset()
+        else:
+            INIT_ANG_VEL = [init_values.get('init_' + k, 0.) for k in ['p', 'q', 'r']]  # TODO: transform from body rates.
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            INIT_TAU = init_values.get('init_tau', self.MASS * self.GRAVITY_ACC)
+            self.init_tau = INIT_TAU
+            self.motor_forces = INIT_TAU * np.ones((self.NUM_DRONES, 1))
+        p.resetBasePositionAndOrientation(self.DRONE_IDS[0], INIT_XYZ,
+                                          p.getQuaternionFromEuler(INIT_RPY),
+                                          physicsClientId=self.PYB_CLIENT)
+        p.resetBaseVelocity(self.DRONE_IDS[0], INIT_VEL, INIT_ANG_VEL,
+                            physicsClientId=self.PYB_CLIENT)
+
+        # Randomize disturbances.
+        # disturbance_rand_dict = {}
+        if self.RANDOMIZED_DISTURBANCE and self.DISTURBABCE_RAND_INFO is not None:
+            # first reset the disturbances
+            for keys, values in self.DISTURBANCES.items():
+                if keys in self.disturbances:
+                    if keys == 'downwash':
+                        self.dw_model.update_pos(self.DISTURBANCES['downwash'][0]['pos'])
+                    else:
+                        # process and observation disturbances
+                        self.disturbances[keys].disturbances[0].std = values[0]['std']
+
+            # then randomize the disturbances #TODO: need a more elegant way to do this
+            self.disturbance_before_rand = self.disturbances.copy()
+            for keys, values in self.DISTURBABCE_RAND_INFO.items():
+                if keys in self.disturbances:
+                    if keys == 'downwash':
+                        self.dw_model.update_pos(np.random.choice(values[0]['scale']))
+                    else:
+                        # process and observation disturbances
+                        if isinstance(self.disturbances[keys].disturbances[0].std, list):
+                            self.disturbances[keys].disturbances[0].std =\
+                                list(np.array(self.disturbances[keys].disturbances[0].std) * np.random.choice(values[0]['scale']))
+                        elif isinstance(self.disturbances[keys].disturbances[0].std, float):
+                            self.disturbances[keys].disturbances[0].std =\
+                                self.disturbances[keys].disturbances[0].std * np.random.choice(values[0]['scale'])
+
+        # Update task goals
+        # NOTE: Task info will be randomized when set_goals() is called.
+        self.set_goals()
+
+        # Reset previous action.
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            self.prev_physical_action = np.zeros(self.action_dim)
+            self.current_physical_action = np.zeros(self.action_dim)
+
+        # Update BaseAviary internal variables before calling self._get_observation().
+        self._update_and_store_kinematic_information()
+        obs, info = self._get_observation(), self._get_reset_info()
+        obs, info = super().after_reset(obs, info)
+
+        # reset disturbance model
+        if 'downwash' in self.disturbances:
+            randomize_flag = self.DISTURBANCES['downwash'][0]['randomize'] if 'randomize' in self.DISTURBANCES['downwash'][0] else False
+            if self.DISTURBANCES['downwash'][0]['mode'] == 'fix' and randomize_flag:
+                pos = self.np_random.uniform(self.dw_model.low, self.dw_model.high)
+                self.dw_model.update_pos(pos)
+                self.dw_model.reset()
+            else:
+                pass  # randomization only implemented for fixed downwash
+
+        # Return either an observation and dictionary or just the observation.
+        if self.INFO_IN_RESET:
+            return obs, info
+        else:
+            return obs
+
+    def step(self, action):
+        """Advances the environment by one control step.
+
+        Pass the commanded RPMs and the adversarial force to the superclass .step().
+        The PyBullet simulation is stepped PYB_FREQ/CTRL_FREQ times in BaseAviary.
+
+        Args:
+            action (ndarray): The action applied to the environment for the step.
+
+        Returns:
+            obs (ndarray): The state of the environment after the step.
+            reward (float): The scalar reward/cost of the step.
+            done (bool): Whether the conditions for the end of an episode are met in the step.
+            info (dict): A dictionary with information about the constraints evaluations and violations.
+        """
+
+        # Get the preprocessed rpm for each motor
+        action = super().before_step(action)
+        action[-1] = 0.0
+        # Determine disturbance force.
+        disturb_force = None
+        passive_disturb = 'dynamics' in self.disturbances
+        adv_disturb = self.adversary_disturbance == 'dynamics'
+        if 'downwash' in self.disturbances:
+            disturb_force = np.zeros(self.DISTURBANCE_MODES['dynamics']['dim'])
+        if passive_disturb or adv_disturb:
+            disturb_force = np.zeros(self.DISTURBANCE_MODES['dynamics']['dim'])
+        if passive_disturb:
+            disturb_force = self.disturbances['dynamics'].apply(
+                disturb_force, self)
+        if adv_disturb and self.adv_action is not None:
+            disturb_force = disturb_force + self.adv_action
+            # Clear the adversary action, wait for the next one.
+            self.adv_action = None
+        # Construct full (3D) disturbance force.
+        if disturb_force is not None:
+            if self.QUAD_TYPE == QuadType.ONE_D:
+                # Only disturb on z direction.
+                disturb_force = [0, 0, float(disturb_force)]
+            elif self.QUAD_TYPE == QuadType.TWO_D:
+                # Only disturb on x-z plane.
+                disturb_force = [float(disturb_force[0]), 0, float(disturb_force[1])]
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+                # Only disturb on x-z plane.
+                disturb_force = [float(disturb_force[0]), 0, float(disturb_force[1])]
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+                # Only disturb on x-z plane.
+                disturb_force = [float(disturb_force[0]), 0, float(disturb_force[1])]
+            elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+                # Only disturb on x-z plane.
+                disturb_force = [float(disturb_force[0]), 0, float(disturb_force[1])]
+            elif self.QUAD_TYPE == QuadType.THREE_D:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                disturb_force = np.asarray(disturb_force).flatten()
+
+        # handle downwash force
+        if 'downwash' in self.disturbances:
+            assert self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY\
+                            , QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF], '[ERROR] in Quadrotor.step(), downwash model is only available for identified model.'
+            # get the current observation
+            # obs = self._get_observation()
+            state = self.state
+            # print(f'state: {state}')
+            # print(f'get state: {self._get_state()}')
+            # if self.DISTURBANCES['downwash'][0]['mode'] == 'track':
+            #     # update the position of the downwash model
+            #     self.dw_model.update_pos(pos=np.array([obs[0], 0, obs[2]]))
+            # get the downwash force
+            if self.QUAD_TYPE not in [QuadType.TWO_D_ATTITUDE]:
+                raise ValueError('[ERROR] in Quadrotor.step(), downwash force is only available for 2D attitude model.')
+            if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_BODY, QuadType.TWO_D_ATTITUDE_5S]:
+                pos = np.array([state[0], 0, state[2]])
+            elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+                pos = np.array([state[0], state[2], state[4]])
+
+            if self.DISTURBANCES['downwash'][0]['mode'] == 'track':
+                # update the position of the downwash model
+                self.dw_model.update_pos(pos=pos+self.DISTURBANCES['downwash'][0]['pos'])
+            dw_force_mag = self.dw_model.get_dw_force_mag(target_pos=pos, mode='absolute')
+            # print(f'dw_force_mag: {dw_force_mag:2f} [N]')
+
+            # print(f'dw_force_mag: {dw_force_mag:2f} [N]')
+            disturb_force[-1] += -dw_force_mag
+
+        # Advance the simulation.
+        super()._advance_simulation(action, disturb_force)
+        # Standard Gym return.
+        obs = self._get_observation()
+        rew = self._get_reward()
+        done = self._get_done()
+        info = self._get_info()
+        obs, rew, done, info = super().after_step(obs, rew, done, info)
+        return obs, rew, done, info
+
+    def render(self, mode='human', close=False):
+        '''Retrieves a frame from PyBullet rendering.
+
+        Args:
+            mode (str): Unused.
+            close (bool): Unused
+
+        Returns:
+            frame (ndarray): A multidimensional array with the RGB frame captured by PyBullet's camera.
+        '''
+
+        [w, h, rgb, _, _] = p.getCameraImage(width=self.RENDER_WIDTH,
+                                             height=self.RENDER_HEIGHT,
+                                             shadow=1,
+                                             viewMatrix=self.CAM_VIEW,
+                                             projectionMatrix=self.CAM_PRO,
+                                             renderer=p.ER_TINY_RENDERER,
+                                             flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+                                             physicsClientId=self.PYB_CLIENT)
+        # Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA').show()
+        return np.reshape(rgb, (h, w, 4))
+
+    def _setup_symbolic(self, prior_prop={}, **kwargs):
+        '''Creates symbolic (CasADi) models for dynamics, observation, and cost.
+
+        Args:
+            prior_prop (dict): specify the prior inertial prop to use in the symbolic model.
+        '''
+        m = prior_prop.get('M', self.MASS)
+        Iyy = prior_prop.get('Iyy', self.J[1, 1])
+        
+        g, length = self.GRAVITY_ACC, self.L
+        dt = self.CTRL_TIMESTEP
+        # Define states.
+        z = cs.MX.sym('z')
+        z_dot = cs.MX.sym('z_dot')
+        u_eq = m * g
+        X_dot, parameterized_X_dot, Y = None, None, None
+        lr_param = None  # external model parameters
+        self.gp_model = None
+        self.use_gp_dynamics = False
+        if self.QUAD_TYPE == QuadType.ONE_D:
+            nx, nu = 2, 1
+            # Define states.
+            X = cs.vertcat(z, z_dot)
+            # Define input thrust.
+            T = cs.MX.sym('T')
+            U = cs.vertcat(T)
+            # Define dynamics equations.
+            X_dot = cs.vertcat(z_dot, T / m - g)
+            # Define observation equation.
+            Y = cs.vertcat(z, z_dot)
+        elif self.QUAD_TYPE == QuadType.TWO_D:
+            nx, nu = 6, 2
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            theta = cs.MX.sym('theta')
+            theta_dot = cs.MX.sym('theta_dot')
+            X = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+            # Define input thrusts.
+            T1 = cs.MX.sym('T1')
+            T2 = cs.MX.sym('T2')
+            U = cs.vertcat(T1, T2)
+            # Define dynamics equations.
+            X_dot = cs.vertcat(x_dot,
+                               cs.sin(theta) * (T1 + T2) / m,
+                               z_dot,
+                               cs.cos(theta) * (T1 + T2) / m - g,
+                               theta_dot,
+                               length * (T2 - T1) / Iyy / np.sqrt(2))
+            # Define observation.
+            Y = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            # identified parameters for the 2D attitude interface
+            # NOTE: these parameters are not set in the prior_prop dict
+            # since they are specific to the 2D attitude model
+            self.beta_1 = prior_prop.get('beta_1', 17.7903)
+            self.beta_2 = prior_prop.get('beta_2', 4.2209)
+            self.beta_3 = prior_prop.get('beta_3', 0.0)
+            self.alpha_1 = prior_prop.get('alpha_1', -149.740766)
+            self.alpha_2 = prior_prop.get('alpha_2', -16.755920)
+            self.alpha_3 = prior_prop.get('alpha_3', 129.041538)
+            self.pitch_bias = prior_prop.get('pitch_bias', 0.0)
+
+            nx, nu = 6, 2
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            X = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+            # Define input collective thrust and theta.
+            T = cs.MX.sym('T_c')  # normalized thrust [N]
+            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            U = cs.vertcat(T, P)
+            # The thrust in PWM is converted from the normalized thrust.
+            # With the formulat F_desired = b_F * T + a_F
+
+            # Define dynamics equations.
+            # TODO: create a parameter for the new quad model
+            # X_dot = cs.vertcat(x_dot,
+            #                    (18.112984649321753 * T + 3.7613154938448576) * cs.sin(theta),
+            #                    z_dot,
+            #                    (18.112984649321753 * T + 3.7613154938448576) * cs.cos(theta) - g,
+            #                    theta_dot,
+            #                    # 60 * (60 * (P - theta) - theta_dot)
+            #                    -143.9 * theta - 13.02 * theta_dot + 122.5 * P
+            #                    )
+            X_dot = cs.vertcat(x_dot,
+                               (self.beta_1 * T + self.beta_2) * cs.sin(theta + self.pitch_bias) + self.beta_3,
+                               z_dot,
+                               (self.beta_1 * T + self.beta_2) * cs.cos(theta + self.pitch_bias) - g,
+                               theta_dot,
+                               self.alpha_1 * (theta + self.pitch_bias) + self.alpha_2 * theta_dot + self.alpha_3 * P)
+            # Define observation.
+            Y = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+
+            T_mapping = self.beta_1 * T + self.beta_2
+            P_mapping = self.alpha_1 * (theta + self.pitch_bias) + self.alpha_2 * theta_dot + self.alpha_3 * P
+            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
+
+            # mp = [18.112984649321753, 3.6800, 0.0, 140.8, 13.4, 124.8, 0.0]
+            lr_param = cs.MX.sym('learnable_param', 5)
+            parameterized_X_dot = cs.vertcat(
+                x_dot,
+                (lr_param[0] * self.beta_1 * T + lr_param[1] * self.beta_2) * cs.sin(theta),
+                z_dot,
+                (lr_param[0] * self.beta_1 * T + lr_param[1] * self.beta_2) * cs.cos(theta) - g,
+                theta_dot,
+                lr_param[2] * self.alpha_1 * theta + lr_param[3] * self.alpha_2 * theta_dot + lr_param[4] * self.alpha_3 * P
+            )
+
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+            nx, nu = 6, 2
+            # Define states.
+            x = cs.MX.sym('x')
+            vx = cs.MX.sym('vx')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            z = cs.MX.sym('z')
+            vz = cs.MX.sym('vz')
+            X = cs.vertcat(x, vx, z, vz, theta, theta_dot)
+            # Define input collective thrust and theta.
+            T = cs.MX.sym('T_c')  # normalized thrust [N]
+            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            U = cs.vertcat(T, P)
+            # The thrust in PWM is converted from the normalized thrust.
+            # With the formulat F_desired = b_F * T + a_F
+
+            # Define dynamics equations.
+            X_dot = cs.vertcat(vx * cs.cos(theta) - vz * cs.sin(theta),
+                               vz * theta_dot - g * cs.sin(theta),
+                               vx * cs.sin(theta) + vz * cs.cos(theta),
+                               -vx * theta_dot - g * cs.cos(theta) + (self.beta_1 * T + self.beta_2),
+                               -theta_dot,
+                               self.alpha_1 * (-theta + self.pitch_bias) + self.alpha_2 * -theta_dot + self.alpha_3 * P)
+            # Define observation.
+            x_dot = vx * cs.cos(theta) + vz * cs.sin(theta)
+            z_dot = -vx * cs.sin(theta) + vz * cs.cos(theta)
+            # Y = cs.vertcat(x, x_dot, z, z_dot, theta, theta_dot)
+            Y = cs.vertcat(x, vx, z, vz, theta, theta_dot)
+            T_mapping = self.beta_1 * T + self.beta_2
+            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
+
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            nx, nu = 5, 2
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            X = cs.vertcat(x, x_dot, z, z_dot, theta)
+            # Define input collective thrust and theta.
+            T = cs.MX.sym('T_c')  # normalized thrust [N]
+            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            U = cs.vertcat(T, P)
+            # The thrust in PWM is converted from the normalized thrust.
+            # With the formulat F_desired = b_F * T + a_F
+
+            # Define dynamics equations.
+            # TODO: create a parameter for the new quad model
+            X_dot = cs.vertcat(x_dot,
+                               (18.112984649321753 * T + 3.7613154938448576) * cs.sin(theta),
+                               z_dot,
+                               (18.112984649321753 * T + 3.7613154938448576) * cs.cos(theta) - g,
+                               -60.00143727772195 * theta + 60.00143727772195 * P)
+            # Define observation.
+            Y = cs.vertcat(x, x_dot, z, z_dot, theta)
+        elif self.QUAD_TYPE == QuadType.THREE_D:
+            nx, nu = 12, 4
+            Ixx = prior_prop.get('Ixx', self.J[0, 0])
+            Izz = prior_prop.get('Izz', self.J[2, 2])
+            J = cs.blockcat([[Ixx, 0.0, 0.0],
+                             [0.0, Iyy, 0.0],
+                             [0.0, 0.0, Izz]])
+            Jinv = cs.blockcat([[1.0 / Ixx, 0.0, 0.0],
+                                [0.0, 1.0 / Iyy, 0.0],
+                                [0.0, 0.0, 1.0 / Izz]])
+            gamma = self.KM / self.KF
+            x = cs.MX.sym('x')
+            y = cs.MX.sym('y')
+            phi = cs.MX.sym('phi')  # Roll
+            theta = cs.MX.sym('theta')  # Pitch
+            psi = cs.MX.sym('psi')  # Yaw
+            x_dot = cs.MX.sym('x_dot')
+            y_dot = cs.MX.sym('y_dot')
+            p_body = cs.MX.sym('p')  # Body frame roll rate
+            q_body = cs.MX.sym('q')  # body frame pith rate
+            r_body = cs.MX.sym('r')  # body frame yaw rate
+            # PyBullet Euler angles use the SDFormat for rotation matrices.
+            Rob = csRotXYZ(phi, theta, psi)  # rotation matrix transforming a vector in the body frame to the world frame.
+
+            # Define state variables.
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body)
+
+            # Define inputs.
+            f1 = cs.MX.sym('f1')
+            f2 = cs.MX.sym('f2')
+            f3 = cs.MX.sym('f3')
+            f4 = cs.MX.sym('f4')
+            U = cs.vertcat(f1, f2, f3, f4)
+
+            # From Ch. 2 of Luis, Carlos, and Jérôme Le Ny. 'Design of a trajectory tracking controller for a
+            # nanoquadcopter.' arXiv preprint arXiv:1608.05786 (2016).
+
+            # Defining the dynamics function.
+            # We are using the velocity of the base wrt to the world frame expressed in the world frame.
+            # Note that the reference expresses this in the body frame.
+            oVdot_cg_o = Rob @ cs.vertcat(0, 0, f1 + f2 + f3 + f4) / m - cs.vertcat(0, 0, g)
+            pos_ddot = oVdot_cg_o
+            pos_dot = cs.vertcat(x_dot, y_dot, z_dot)
+            Mb = cs.vertcat(length / cs.sqrt(2.0) * (f1 + f2 - f3 - f4),
+                            length / cs.sqrt(2.0) * (-f1 + f2 + f3 - f4),
+                            gamma * (-f1 + f2 - f3 + f4))
+            rate_dot = Jinv @ (Mb - (cs.skew(cs.vertcat(p_body, q_body, r_body)) @ J @ cs.vertcat(p_body, q_body, r_body)))
+            ang_dot = cs.blockcat([[1, cs.sin(phi) * cs.tan(theta), cs.cos(phi) * cs.tan(theta)],
+                                   [0, cs.cos(phi), -cs.sin(phi)],
+                                   [0, cs.sin(phi) / cs.cos(theta), cs.cos(phi) / cs.cos(theta)]]) @ cs.vertcat(p_body, q_body, r_body)
+            X_dot = cs.vertcat(pos_dot[0], pos_ddot[0], pos_dot[1], pos_ddot[1], pos_dot[2], pos_ddot[2], ang_dot, rate_dot)
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            nx, nu = 12, 4
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            y = cs.MX.sym('y')
+            y_dot = cs.MX.sym('y_dot')
+            phi = cs.MX.sym('phi')  # roll angle [rad]
+            phi_dot = cs.MX.sym('phi_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            psi = cs.MX.sym('psi')  # yaw angle [rad]
+            psi_dot = cs.MX.sym('psi_dot')
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
+            # Define input collective thrust and theta.
+            T_c = cs.MX.sym('T_c')  # normalized thrust [N]
+            R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
+            U = cs.vertcat(T_c, R_c, P_c, Y_c)
+            # The thrust in PWM is converted from the normalized thrust.
+            # With the formulat F_desired = b_F * T + a_F
+            # Haocheng's model
+            # params_acc = [20.907574256269616, 3.653687545690674]
+            # params_roll_rate = [-130.3, -16.33, 119.3]
+            # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # params_yaw_rate = [0., 0., 0.]
+            # Marcel's model
+            # params_acc = [32.221212, 0.]
+            # params_roll_rate = [-286.2, -23.03, 225.6]
+            # params_pitch_rate = [-286.2, -23.03, 225.6]
+            # params_yaw_rate = [-192.9, -22.22, 323.5]
+
+            self.beta_1 = prior_prop.get('beta_1', 32.221212)
+            self.beta_2 = prior_prop.get('beta_2', 0.)
+            self.alpha_1 = prior_prop.get('alpha_1', -286.2)
+            self.alpha_2 = prior_prop.get('alpha_2', -23.03)
+            self.alpha_3 = prior_prop.get('alpha_3', 225.6)
+            self.alpha_4 = prior_prop.get('alpha_4', -286.2)
+            self.alpha_5 = prior_prop.get('alpha_5', -23.03)
+            self.alpha_6 = prior_prop.get('alpha_6', 225.6)
+            self.alpha_7 = prior_prop.get('alpha_7', -192.9)
+            self.alpha_8 = prior_prop.get('alpha_8', -22.22)
+            self.alpha_9 = prior_prop.get('alpha_9', 323.5)
+
+            # Define dynamics equations.
+            # TODO: create a parameter for the new quad model
+            X_dot = cs.vertcat(x_dot,
+                               (self.beta_1 * T_c + self.beta_2) * (
+                                   cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                               y_dot,
+                               (self.beta_1 * T_c + self.beta_2) * (
+                                   cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                               z_dot,
+                               (self.beta_1 * T_c + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
+                               phi_dot,
+                               theta_dot,
+                               psi_dot,
+                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R_c,
+                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P_c,
+                               self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y_c)
+            # Define observation.
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
+
+            T_mapping = self.beta_1 * T_c + self.beta_2
+            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P_c
+            R_mapping = self.alpha_4 * phi  + self.alpha_5 * phi_dot + self.alpha_6 * R_c
+            Y_mapping = self.alpha_7 * psi  + self.alpha_8 * psi_dot + self.alpha_9 * Y_c
+            self.T_mapping_func = cs.Function('T_mapping', [T_c], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P_c], [P_mapping])
+            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R_c], [R_mapping])
+            self.Y_mapping_func = cs.Function('Y_mapping', [psi, psi_dot, Y_c], [Y_mapping])
+
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            nx, nu = 10, 3
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            y = cs.MX.sym('y')
+            y_dot = cs.MX.sym('y_dot')
+            phi = cs.MX.sym('phi')  # roll angle [rad]
+            phi_dot = cs.MX.sym('phi_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, phi_dot, theta_dot)
+            # Define input collective thrust and theta.
+            T = cs.MX.sym('T_c')  # normalized thrust [N]
+            R = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            U = cs.vertcat(T, R, P)
+            # The thrust in PWM is converted from the normalized thrust.
+            # With the formulat F_desired = b_F * T + a_F
+            # params_acc = [20.907574256269616, 3.653687545690674]
+            # params_roll_rate = [-130.3, -16.33, 119.3]
+            # params_pitch_rate = [-99.94, -13.3, 84.73]
+            # Old parameters for lighter quad
+            # self.a = prior_prop.get('a', 20.907574256269616)
+            # self.b = prior_prop.get('b', 3.653687545690674)
+            # self.c = prior_prop.get('c', -130.3)
+            # self.d = prior_prop.get('d', -16.33)
+            # self.e = prior_prop.get('e', 119.3)
+            # self.f = prior_prop.get('f', -99.94)
+            # self.h = prior_prop.get('h', -13.3)
+            # self.l = prior_prop.get('l', 84.73)
+            psi = 0
+            # for large battery with LED deck
+            a_value = 0.5846 / self.MASS
+            b_value = 0.1537 / self.MASS
+            # a_value = 0.6921 / self.MASS
+            # b_value = 0.1205 / self.MASS
+            params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+            params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+            self.a = prior_prop.get('a', a_value)
+            self.b = prior_prop.get('b', b_value)
+            self.c = prior_prop.get('c', params_roll_rate[0])
+            self.d = prior_prop.get('d', params_roll_rate[1])
+            self.e = prior_prop.get('e', params_roll_rate[2])
+            self.f = prior_prop.get('f', params_pitch_rate[0])
+            self.h = prior_prop.get('h', params_pitch_rate[1])
+            self.l = prior_prop.get('l', params_pitch_rate[2])
+
+            # Define dynamics equations.
+            # TODO: create a parameter for the new quad model
+            X_dot = cs.vertcat(x_dot,
+                               (self.a * T + self.b) * (
+                                           cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                               y_dot,
+                               (self.a * T + self.b) * (
+                                           cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                               z_dot,
+                               (self.a * T + self.b) * cs.cos(phi) * cs.cos(theta) - g,
+                               phi_dot,
+                               theta_dot,
+                               self.c * phi + self.d * phi_dot + self.e * R,
+                               self.f * theta + self.h * theta_dot + self.l * P,
+                                 )
+            # Define observation.
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, phi_dot, theta_dot)
+
+            T_mapping = self.a * T + self.b
+            R_mapping = self.c * phi + self.d * phi_dot + self.e * R
+            P_mapping = self.f * theta + self.h * theta_dot + self.l * P
+            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
+            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R], [R_mapping])
+
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            nx, nu = 13, 4
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            y = cs.MX.sym('y')
+            y_dot = cs.MX.sym('y_dot')
+            phi = cs.MX.sym('phi')  # roll angle [rad]
+            phi_dot = cs.MX.sym('phi_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            psi = cs.MX.sym('psi')  # yaw angle [rad]
+            psi_dot = cs.MX.sym('psi_dot')
+            force_motor = cs.MX.sym('force_motor')  # force from the motor
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            T_c = cs.MX.sym('T_c')  # normalized thrust [N]
+            R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
+            U = cs.vertcat(T_c, R_c, P_c, Y_c)
+            # model_choice = "quartic" # options: linear, quadratic, quartic
+            # model_choice = "quadratic"  # options: linear, quadratic
+            # model_choice = "linear"
+            model_choice = "drag"
+            
+            if model_choice == "drag":
+                 # Transformation parameters from sys_id with mode 3 
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                
+                # Transform input command T from raw to normalized space (mode 3)
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                
+                # normalized forces_motor
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+
+                # Dynamics parameters
+                params_acc = [0.13, 0.72, 0.08, -0.0171, 0.000811]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+                # Drag coefficients
+                drag_coeff_x = params_acc[3]
+                drag_coeff_y = params_acc[3]
+                drag_coeff_z = params_acc[4]
+
+                #drag_coeff_x = 0.0
+                #drag_coeff_y = 0.0
+                #drag_coeff_z = 0.0
+                
+                # Store parameters
+                self.drag_coeffs = [drag_coeff_x, drag_coeff_y, drag_coeff_z]
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                
+                # Delay dynamics in normalized space
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                
+                # Rotation matrices
+                Rob = csRotXYZ(phi, theta, psi)  # body to world
+                Rbo = Rob.T  # world to body
+                
+                # Velocity vector in world frame
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                
+                # Drag matrix (diagonal, in body frame) [1/s]
+                drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+                
+                # Compute drag force using the drag matrix approach:
+                vel_body = Rbo @ vel_world  # transform velocity to body frame
+                drag_body = drag_matrix @ vel_body  # apply drag in body frame
+                drag_world = Rob @ drag_body  # transform back to world frame
+                
+                # Thrust force in world frame (drone z-axis in world frame)
+                thrust_force_world = 1/m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                # Define dynamics equations with drag
+                X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world[0] + 1/m * drag_world[0],
+                    y_dot,
+                    thrust_force_world[1] + 1/m * drag_world[1],
+                    z_dot,
+                    thrust_force_world[2] + 1/m * drag_world[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    (f_max - f_min)/2 * df_dot
+                )
+                
+                # Define observation
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+                
+                # Learnable parameters for domain randomization/adaptation
+                lr_param = cs.MX.sym('learnable_param', 15)  # 12 for attitude/thrust + 3 for drag
+                
+                vel_body_param = Rbo @ cs.vertcat(x_dot, y_dot, z_dot)
+                drag_force_body_param = cs.vertcat(
+                    -lr_param[12] * drag_coeff_x * vel_body_param[0],
+                    -lr_param[13] * drag_coeff_y * vel_body_param[1],
+                    -lr_param[14] * drag_coeff_z * vel_body_param[2]
+                )
+                drag_force_world_param = Rob @ drag_force_body_param
+                
+                df_dot_param = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                
+                thrust_force_world_param = 1 / m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world_param[0] + 1/m * drag_force_world_param[0],
+                    y_dot,
+                    thrust_force_world_param[1] + 1/m * drag_force_world_param[1],
+                    z_dot,
+                    thrust_force_world_param[2] + 1/m * drag_force_world_param[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot + lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] * params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot_param
+                )
+            elif model_choice == "linear":
+                # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
+                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+                params_acc = [0.059, 0.85, 0.12]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+                params_acc = prior_prop.get('param_acc', params_acc)
+                params_roll_rate = prior_prop.get('params_roll_rate', params_roll_rate)
+                params_pitch_rate = prior_prop.get('params_pitch_rate', params_pitch_rate)
+                params_yaw_rate = prior_prop.get('params_yaw_rate', params_yaw_rate)
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                # Define dynamics equations.
+                X_dot = cs.vertcat(x_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                (f_max - f_min)/2 * df_dot)
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
+                lr_param = cs.MX.sym('learnable_param', 12)
+                df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[
+                        2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot +
+                    lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] *
+                    params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot
+                )
+            elif model_choice == "quartic":
+                #Quartic Model
+                # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
+                # params_acc = prior_prop.get('param_acc', [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086])
+                # params_acc = prior_prop.get('param_acc', [-0.00688355, 1.78338, -7.4426, 25.4651, -29.1181, 0.1086])
+                params_acc = prior_prop.get('param_acc',  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[5] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1 / self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2 + params_acc[3]*thrust**3 + params_acc[4]*thrust**4)  # [N]
+                X_dot = cs.vertcat(x_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot)
+                # Define observation.
+                
+                # Delay dynamics in normalized space
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                
+                # Rotation matrices
+                Rob = csRotXYZ(phi, theta, psi)  # body to world
+                Rbo = Rob.T  # world to body
+                
+                # Velocity vector in world frame
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                
+                # Drag matrix (diagonal, in body frame) [1/s]
+                drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+                
+                # Compute drag force using the drag matrix approach:
+                vel_body = Rbo @ vel_world  # transform velocity to body frame
+                drag_body = drag_matrix @ vel_body  # apply drag in body frame
+                drag_world = Rob @ drag_body  # transform back to world frame
+                
+                # Thrust force in world frame (drone z-axis in world frame)
+                thrust_force_world = 1/m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                # Define dynamics equations with drag
+                X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world[0] + 1/m * drag_world[0],
+                    y_dot,
+                    thrust_force_world[1] + 1/m * drag_world[1],
+                    z_dot,
+                    thrust_force_world[2] + 1/m * drag_world[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    (f_max - f_min)/2 * df_dot
+                )
+                
+                # Define observation
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            elif model_choice == "quadratic":
+                #Quadratic Model
+                # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
+                params_acc = prior_prop.get('param_acc', [-0.593776, 4.59805, -5.27109, 0.08])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[3] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2)  # [N]
+                X_dot = cs.vertcat(x_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot)
+                # Define observation.
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+                
+                # Learnable parameters for domain randomization/adaptation
+                lr_param = cs.MX.sym('learnable_param', 15)  # 12 for attitude/thrust + 3 for drag
+                
+                vel_body_param = Rbo @ cs.vertcat(x_dot, y_dot, z_dot)
+                drag_force_body_param = cs.vertcat(
+                    -lr_param[12] * drag_coeff_x * vel_body_param[0],
+                    -lr_param[13] * drag_coeff_y * vel_body_param[1],
+                    -lr_param[14] * drag_coeff_z * vel_body_param[2]
+                )
+                drag_force_world_param = Rob @ drag_force_body_param
+                
+                df_dot_param = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                
+                thrust_force_world_param = 1 / m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world_param[0] + 1/m * drag_force_world_param[0],
+                    y_dot,
+                    thrust_force_world_param[1] + 1/m * drag_force_world_param[1],
+                    z_dot,
+                    thrust_force_world_param[2] + 1/m * drag_force_world_param[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot + lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] * params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot_param
+                )
+            elif model_choice == "linear":
+                # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
+                # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+                params_acc = [0.059, 0.85, 0.12]
+                params_pitch_rate = [-238.1, -21.35, 179.65]
+                params_roll_rate = [-238.1, -21.35, 179.65]
+                params_yaw_rate = [-170.4, -22.22, 280]
+                params_acc = prior_prop.get('param_acc', params_acc)
+                params_roll_rate = prior_prop.get('params_roll_rate', params_roll_rate)
+                params_pitch_rate = prior_prop.get('params_pitch_rate', params_pitch_rate)
+                params_yaw_rate = prior_prop.get('params_yaw_rate', params_yaw_rate)
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                # Define dynamics equations.
+                X_dot = cs.vertcat(x_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                (f_max - f_min)/2 * df_dot)
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
+                lr_param = cs.MX.sym('learnable_param', 12)
+                df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (
+                            lr_param[11] * params_acc[2])
+                parameterized_X_dot = cs.vertcat(
+                    x_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    1 / self.MASS * force_motor * (
+                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    lr_param[0] * params_roll_rate[0] * phi + lr_param[1] * params_roll_rate[1] * phi_dot + lr_param[
+                        2] * params_roll_rate[2] * R_c,
+                    lr_param[3] * params_pitch_rate[0] * theta + lr_param[4] * params_pitch_rate[1] * theta_dot +
+                    lr_param[5] * params_pitch_rate[2] * P_c,
+                    lr_param[6] * params_yaw_rate[0] * psi + lr_param[7] * params_yaw_rate[1] * psi_dot + lr_param[8] *
+                    params_yaw_rate[2] * Y_c,
+                    (f_max - f_min) / 2 * df_dot
+                )
+            elif model_choice == "quartic":
+                #Quartic Model
+                # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
+                # params_acc = prior_prop.get('param_acc', [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086])
+                # params_acc = prior_prop.get('param_acc', [-0.00688355, 1.78338, -7.4426, 25.4651, -29.1181, 0.1086])
+                params_acc = prior_prop.get('param_acc',  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[5] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1 / self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2 + params_acc[3]*thrust**3 + params_acc[4]*thrust**4)  # [N]
+                X_dot = cs.vertcat(x_dot, 
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot)
+                # Define observation.
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            elif model_choice == "quadratic":
+                #Quadratic Model
+                # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
+                params_acc = prior_prop.get('param_acc', [-0.593776, 4.59805, -5.27109, 0.08])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[3] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2)  # [N]
+                X_dot = cs.vertcat(x_dot, 
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot)
+                # Define observation.
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            
+
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            nx, nu = 17, 4
+            # Define states.
+            x = cs.MX.sym('x')
+            x_dot = cs.MX.sym('x_dot')
+            y = cs.MX.sym('y')
+            y_dot = cs.MX.sym('y_dot')
+            phi = cs.MX.sym('phi')  # roll angle [rad]
+            phi_dot = cs.MX.sym('phi_dot')
+            theta = cs.MX.sym('theta')  # pitch angle [rad]
+            theta_dot = cs.MX.sym('theta_dot')
+            psi = cs.MX.sym('psi')  # yaw angle [rad]
+            psi_dot = cs.MX.sym('psi_dot')
+            force_motor = cs.MX.sym('force_motor')  # force from the motor
+            prev_thrust = cs.MX.sym('prev_thrust')  # previous thrust command
+            prev_roll_cmd = cs.MX.sym('prev_roll_cmd')  # previous roll command
+            prev_pitch_cmd = cs.MX.sym('prev_pitch_cmd')  # previous pitch command
+            prev_yaw_cmd = cs.MX.sym('prev_yaw_cmd')  # previous yaw command
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+            T_c = cs.MX.sym('T_c')  # normalized thrust [N]
+            R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
+            U = cs.vertcat(T_c, R_c, P_c, Y_c)
+
+            model_choice = "linear"
+            model_choice = "drag"
+            
+            if model_choice == "drag":
+                 # Transformation parameters from sys_id with mode 3 
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                
+                # Transform input command T from raw to normalized space (mode 3)
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                
+                # normalized forces_motor
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+
+                # Dynamics parameters
+                params_acc =  prior_prop.get('params_acc', [0.13, 0.72, 0.08, -0.0171, 0.000811])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                # print("Using drag model with params_acc:", params_acc)
+                # print("Using drag model with params_roll_rate:", params_roll_rate)
+                # print("Using drag model with params_pitch_rate:", params_pitch_rate)
+                # print("Using drag model with params_yaw_rate:", params_yaw_rate)
+                # Drag coefficients
+                drag_coeff_x = params_acc[3]
+                drag_coeff_y = params_acc[3]
+                drag_coeff_z = params_acc[4]
+
+                #drag_coeff_x = 0.0
+                #drag_coeff_y = 0.0
+                #drag_coeff_z = 0.0
+                
+                # Store parameters
+                self.drag_coeffs = [drag_coeff_x, drag_coeff_y, drag_coeff_z]
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                
+                # Delay dynamics in normalized space
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                
+                # Rotation matrices
+                Rob = csRotXYZ(phi, theta, psi)  # body to world
+                Rbo = Rob.T  # world to body
+                
+                # Velocity vector in world frame
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                
+                # Drag matrix (diagonal, in body frame) [1/s]
+                drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+                
+                # Compute drag force using the drag matrix approach:
+                vel_body = Rbo @ vel_world  # transform velocity to body frame
+                drag_body = drag_matrix @ vel_body  # apply drag in body frame
+                drag_world = Rob @ drag_body  # transform back to world frame
+                
+                # Thrust force in world frame (drone z-axis in world frame)
+                thrust_force_world = 1/m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                # Define dynamics equations with drag
+                X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world[0] + 1/m * drag_world[0],
+                    y_dot,
+                    thrust_force_world[1] + 1/m * drag_world[1],
+                    z_dot,
+                    thrust_force_world[2] + 1/m * drag_world[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    (f_max - f_min)/2 * df_dot,
+                    T_c,
+                    R_c,
+                    P_c,
+                    Y_c
+                )
+                
+                # Define observation
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+        
+            elif model_choice == "linear":
+                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                # Define dynamics equations.
+                X_dot = cs.vertcat(x_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                (f_max - f_min)/2 * df_dot,
+                                T_c,
+                                R_c,
+                                P_c,
+                                Y_c)
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+        
+            if model_choice == "quartic":
+                params_acc = prior_prop.get('param_acc',  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[5] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1 / self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2 + params_acc[3]*thrust**3 + params_acc[4]*thrust**4)  # [N]
+                X_dot = cs.vertcat(x_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot,
+                                T_c,
+                                R_c,
+                                P_c,
+                                Y_c)
+                # Define observation.
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+            elif model_choice == "quadratic":
+                #Quadratic Model
+                # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
+                params_acc = prior_prop.get('param_acc', [-0.593776, 4.59805, -5.27109, 0.08])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                force_motor_dot = 1 / params_acc[3] * (T_c - force_motor)
+                thrust = force_motor
+                forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2)  # [N]
+                X_dot = cs.vertcat(x_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                force_motor_dot,
+                                T_c,
+                                R_c,
+                                P_c,
+                                Y_c)
+                # Define observation.
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+        # Expand Q and R to be full matrices.
+        self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
+        self.R = get_cost_weight_matrix(self.rew_act_weight, nu)
+
+        # Set the equilibrium values for linearizations.
+        X_EQ = np.zeros(self.state_dim)
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+            X_EQ[-1] = self.MASS * self.GRAVITY_ACC  # thrust equilibrium
+
+        # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S]:
+            U_EQ = np.array([u_eq, 0])
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE]:
+            U_EQ = np.array([u_eq, 0, 0, 0])
+        elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+            U_EQ = np.array([u_eq/params_acc[1]-params_acc[0], 0, 0, 0])
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_10]:
+            U_EQ = np.array([(u_eq - self.b) / self.a, 0, 0])
+        else:
+            U_EQ = np.ones(self.action_dim) * u_eq / self.action_dim
+        # Define cost (quadratic form).
+        Q = cs.MX.sym('Q', nx, nx)
+        R = cs.MX.sym('R', nu, nu)
+        Xr = cs.MX.sym('Xr', nx, 1)
+        Ur = cs.MX.sym('Ur', nu, 1)
+        cost_func = 0.5 * (X - Xr).T @ Q @ (X - Xr) + 0.5 * (U - Ur).T @ R @ (U - Ur)
+        # Define dynamics and cost dictionaries.
+        dynamics = {
+            'dyn_eqn': X_dot,
+            'param_dyn_eqn': parameterized_X_dot,
+            'obs_eqn': Y,
+            'vars': {'X': X, 'U': U, 'P': lr_param}
+        }
+        cost = {
+            'cost_func': cost_func,
+            'vars': {
+                'X': X,
+                'U': U,
+                'Xr': Xr,
+                'Ur': Ur,
+                'Q': Q,
+                'R': R
+            }
+        }
+        # Additional params to cache
+        params = {
+            # prior inertial properties
+            'quad_mass': m,
+            'quad_Iyy': Iyy,
+            'quad_Ixx': Ixx if 'Ixx' in locals() else None,
+            'quad_Izz': Izz if 'Izz' in locals() else None,
+            # equilibrium point for linearization
+            'X_EQ': X_EQ,
+            'U_EQ': U_EQ,
+        }
+        # Setup symbolic model.
+        self.symbolic = SymbolicModel(dynamics=dynamics, cost=cost, dt=dt, params=params)
+    # def _load_gp_model(self, model_path):
+    #     """Load trained GP model from disk (component-based: T, R, P, Y)."""
+    #     import torch
+    #     import os
+        
+    #     print(f"\n[DEBUG] _load_gp_model called with path: {model_path}")
+    #     print(f"[DEBUG] Path exists: {os.path.exists(model_path)}")
+        
+    #     try:
+    #         if not os.path.isdir(model_path):
+    #             print(colored(f'[ERROR] Model path must be a directory: {model_path}', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+    #             return
+                
+    #         print(colored(f'[INFO] Loading GP component models from: {model_path}', 'cyan'))
+            
+    #         # Load training data to get dimensions
+    #         data_path = os.path.join(model_path, 'data.npz')
+    #         if not os.path.exists(data_path):
+    #             print(colored(f'[ERROR] data.npz not found in {model_path}', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+    #             return
+            
+    #         data = np.load(data_path)
+    #         train_inputs = data['data_inputs']
+    #         train_targets = data['data_targets']
+    #         print(f"  Training data shapes: inputs {train_inputs.shape}, targets {train_targets.shape}")
+            
+    #         # Import GP utilities
+    #         from safe_control_gym.controllers.mpc.gp_utils import ZeroMeanIndependentGPModel
+    #         import gpytorch
+            
+    #         # Load the component models (T, R, P, Y)
+    #         self.gp_model = {}
+    #         component_info = {
+    #             'T': {'index': 12, 'description': 'Thrust/Force dynamics'},
+    #             'R': {'index': 6, 'description': 'Roll rate dynamics'},
+    #             'P': {'index': 7, 'description': 'Pitch rate dynamics'},
+    #             'Y': {'index': 8, 'description': 'Yaw rate dynamics'}
+    #         }
+            
+    #         for component in ['T', 'R', 'P', 'Y']:
+    #             component_path = os.path.join(model_path, f'best_model_{component}.pth')
+    #             if os.path.exists(component_path):
+    #                 # Load the state dict
+    #                 state_dict = torch.load(component_path)
+                    
+    #                 # Get dimensions from training data
+    #                 input_dim = train_inputs.shape[1]  # Should be 17
+                    
+    #                 # Create likelihood
+    #                 likelihood = gpytorch.likelihoods.GaussianLikelihood(
+    #                     noise_constraint=gpytorch.constraints.GreaterThan(1e-6)
+    #                 ).double()
+                    
+    #                 # Create the GP model structure
+    #                 train_inputs_tensor = torch.from_numpy(train_inputs).double()
+    #                 train_targets_tensor = torch.from_numpy(train_targets[:, 0]).double()  # Use first output as placeholder
+                    
+    #                 model = ZeroMeanIndependentGPModel(
+    #                     train_inputs_tensor,
+    #                     train_targets_tensor,
+    #                     likelihood,
+    #                     input_mask=list(range(input_dim))
+    #                 )
+                    
+    #                 # Load the saved state dict
+    #                 model.load_state_dict(state_dict)
+    #                 model.eval()
+                    
+    #                 self.gp_model[component] = model
+    #                 print(colored(f'  ✓ Loaded {component} model ({component_info[component]["description"]})', 'green'))
+                    
+    #                 # Print model info
+    #                 if hasattr(model, 'train_inputs'):
+    #                     print(f"    - Training inputs shape: {model.train_inputs[0].shape}")
+    #                 if hasattr(model, 'train_targets'):
+    #                     print(f"    - Training targets shape: {model.train_targets.shape}")
+    #                 if hasattr(model, 'covar_module'):
+    #                     if hasattr(model.covar_module, 'base_kernel'):
+    #                         if hasattr(model.covar_module.base_kernel, 'lengthscale'):
+    #                             lengthscale = model.covar_module.base_kernel.lengthscale.detach().numpy()
+    #                             print(f"    - Lengthscale: {lengthscale.flatten()[:5]}...")  # Show first 5
+    #             else:
+    #                 print(colored(f'  ✗ Component file not found: {component_path}', 'yellow'))
+            
+    #         if len(self.gp_model) > 0:
+    #             self.use_gp_dynamics = True
+    #             print(colored(f'[SUCCESS] Loaded {len(self.gp_model)} GP component models', 'green'))
+                
+    #             # Store component mapping
+    #             self.gp_component_mapping = component_info
+    #         else:
+    #             print(colored('[ERROR] No GP models loaded', 'red'))
+    #             self.gp_model = None
+    #             self.use_gp_dynamics = False
+                
+    #     except Exception as e:
+    #         print(colored(f'[ERROR] Failed to load GP model: {e}', 'red'))
+    #         import traceback
+    #         traceback.print_exc()
+    #         self.gp_model = None
+    #         self.use_gp_dynamics = False
+
+    # def _get_gp_prediction(self, state, action):
+    #     """Get GP residual prediction from component models (T, R, P, Y).
+        
+    #     Each component predicts the residual for a specific state derivative:
+    #     - T: Thrust affects force/acceleration (index 12 - motor force dynamics)
+    #     - R: Roll affects roll rate (index 9 - phi_dot_dot)
+    #     - P: Pitch affects pitch rate (index 10 - theta_dot_dot)  
+    #     - Y: Yaw affects yaw rate (index 11 - psi_dot_dot)
+        
+    #     Args:
+    #         state (ndarray): Current state (13,) = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor]
+    #         action (ndarray): Current action (4,) = [T_c, R_c, P_c, Y_c]
+            
+    #     Returns:
+    #         gp_residual (ndarray): Predicted residual (13,)
+    #     """
+    #     # Debug counter
+    #     if not hasattr(self, '_gp_prediction_count'):
+    #         self._gp_prediction_count = 0
+        
+    #     if self.gp_model is None:
+    #         if self._gp_prediction_count == 0:
+    #             print(colored("[DEBUG] GP prediction called but GP model is None", "yellow"))
+    #         return np.zeros(13)
+        
+    #     # Validate input dimensions
+    #     if state.shape != (13,):
+    #         print(colored(f'[WARNING] State shape mismatch: expected (13,), got {state.shape}', 'yellow'))
+    #         return np.zeros(13)
+    #     if action.shape != (4,):
+    #         print(colored(f'[WARNING] Action shape mismatch: expected (4,), got {action.shape}', 'yellow'))
+    #         return np.zeros(13)
+        
+    #     # Construct GP input: [state (13), action (4)] = 17 dimensions
+    #     gp_input = np.concatenate([state, action]).reshape(1, -1)  # (1, 17)
+        
+    #     # Print first few predictions for debugging
+    #     if self._gp_prediction_count < 5:
+    #         print(f"\n[DEBUG] GP Prediction #{self._gp_prediction_count + 1}")
+    #         print(f"  State[:3]: {state[:3]}")
+    #         print(f"  State[6:9] (rpy): {state[6:9]}")
+    #         print(f"  State[9:12] (rpy_rates): {state[9:12]}")
+    #         print(f"  State[12] (force_motor): {state[12]}")
+    #         print(f"  Action (T,R,P,Y): {action}")
+    #         print(f"  GP input shape: {gp_input.shape}")
+        
+    #     try:
+    #         import torch
+    #         gp_residual = np.zeros(13)
+            
+    #         # Handle dictionary of T, R, P, Y component models
+    #         if isinstance(self.gp_model, dict):
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using {len(self.gp_model)} component models")
+                
+    #             gp_input_tensor = torch.from_numpy(gp_input).double()
+                
+    #             # Map each component to its corresponding state derivative index
+    #             component_to_index = {
+    #                 'T': 12,  # Motor force dynamics (df/dt)
+    #                 'R': 6,   # Roll acceleration (phi_dot_dot)
+    #                 'P': 7,  # Pitch acceleration (theta_dot_dot)
+    #                 'Y': 8   # Yaw acceleration (psi_dot_dot)
+    #             }
+                
+    #             for component, model in self.gp_model.items():
+    #                 with torch.no_grad():
+    #                     # Get prediction from this component's GP
+    #                     pred = model(gp_input_tensor)
+                        
+    #                     if hasattr(pred, 'mean'):
+    #                         mean = pred.mean.detach().numpy().flatten()[0]
+    #                     else:
+    #                         mean = pred.detach().numpy().flatten()[0]
+                        
+    #                     # Map to the correct state derivative index
+    #                     state_idx = component_to_index[component]
+    #                     gp_residual[state_idx] = mean
+                        
+    #                     if self._gp_prediction_count < 5:
+    #                         print(f"    {component} (affects index {state_idx}): {mean:.6f}")
+            
+    #         elif hasattr(self.gp_model, 'predict'):
+    #             # Fallback for non-component models
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using single GP model with predict() method")
+                
+    #             gp_residual_tensor, _ = self.gp_model.predict(
+    #                 torch.from_numpy(gp_input).double()
+    #             )
+    #             gp_residual = gp_residual_tensor.detach().numpy().flatten()
+            
+    #         elif hasattr(self.gp_model, 'gp_models'):
+    #             # Fallback for GaussianProcessCollection
+    #             if self._gp_prediction_count < 5:
+    #                 print(f"  Using GaussianProcessCollection with {len(self.gp_model.gp_models)} GPs")
+                
+    #             gp_input_tensor = torch.from_numpy(gp_input).double()
+                
+    #             for i in range(min(len(self.gp_model.gp_models), 13)):
+    #                 with torch.no_grad():
+    #                     pred = self.gp_model.gp_models[i](gp_input_tensor)
+    #                     mean = pred.mean.detach().numpy()
+    #                     gp_residual[i] = mean[0, 0] if mean.ndim > 1 else mean[0]
+            
+    #         else:
+    #             if self._gp_prediction_count < 5:
+    #                 print(colored('[WARNING] GP model has unknown interface', 'yellow'))
+            
+    #         # Validate output dimension
+    #         if gp_residual.shape[0] != 13:
+    #             print(colored(f'[WARNING] GP output dimension mismatch: expected 13, got {gp_residual.shape[0]}', 'yellow'))
+    #             if gp_residual.shape[0] < 13:
+    #                 gp_residual = np.pad(gp_residual, (0, 13 - gp_residual.shape[0]))
+    #             else:
+    #                 gp_residual = gp_residual[:13]
+            
+    #         if self._gp_prediction_count < 5:
+    #             print(f"  GP residual norm: {np.linalg.norm(gp_residual):.6f}")
+    #             print(f"  Non-zero residuals at indices: {np.nonzero(gp_residual)[0]}")
+    #             for idx in np.nonzero(gp_residual)[0]:
+    #                 print(f"    Index {idx}: {gp_residual[idx]:.6f}")
+            
+    #         self._gp_prediction_count += 1
+            
+    #         return gp_residual
+            
+    #     except Exception as e:
+    #         print(colored(f'[ERROR] GP prediction failed: {e}', 'red'))
+    #         if self._gp_prediction_count < 2:
+    #             import traceback
+    #             traceback.print_exc()
+    #         return np.zeros(13)
+    def _set_action_space(self):
+        """Sets the action space of the environment."""
+        # Define action/input dimension, labels, and units.
+        if self.QUAD_TYPE == QuadType.ONE_D:
+            action_dim = 1
+            self.ACTION_LABELS = ['T']
+            self.ACTION_UNITS = ['N'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-']
+        elif self.QUAD_TYPE == QuadType.TWO_D:
+            action_dim = 2
+            self.ACTION_LABELS = ['T1', 'T2']
+            self.ACTION_UNITS = ['N', 'N'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-']
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            action_dim = 2
+            self.ACTION_LABELS = ['T_c', 'P_c']
+            self.ACTION_UNITS = ['N', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-']
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            action_dim = 2
+            self.ACTION_LABELS = ['T_c', 'P_c']
+            self.ACTION_UNITS = ['N', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-']
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+            action_dim = 2
+            self.ACTION_LABELS = ['T_c', 'P_c']
+            self.ACTION_UNITS = ['N', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-']
+        elif self.QUAD_TYPE == QuadType.THREE_D:
+            action_dim = 4
+            self.ACTION_LABELS = ['T1', 'T2', 'T3', 'T4']
+            self.ACTION_UNITS = ['N', 'N', 'N', 'N'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, 
+                                QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
+            action_dim = 4
+            self.ACTION_LABELS = ['T_c', 'R_c', 'P_c', 'Y_c']
+            self.ACTION_UNITS = ['N', 'rad', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            action_dim = 3
+            self.ACTION_LABELS = ['T_c', 'R_c', 'P_c']
+            self.ACTION_UNITS = ['N', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-']
+
+        # Defining physical bounds for actions
+        max_roll_deg = 25
+        max_pitch_deg = 25
+        max_yaw_deg = 25
+        max_roll_rad = max_roll_deg * math.pi / 180
+        max_pitch_rad = max_pitch_deg * math.pi / 180
+        max_yaw_rad = max_yaw_deg * math.pi / 180
+        # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            n_mot = 4  # due to collective thrust
+            a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
+            a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32), np.full(1, -max_pitch_rad, np.float32)]).flatten(),
+                                           np.array([np.full(1, a_high, np.float32), np.full(1, max_pitch_rad, np.float32)]).flatten())
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
+            n_mot = 4  # due to collective thrust
+            # a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
+            # a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            a_low = 0.08  # [N] measured from hardware data
+            a_high = 0.45  # [N]
+            max_roll_deg = 60
+            max_pitch_deg = 60
+            max_yaw_deg = 25
+            max_roll_rad = max_roll_deg * math.pi / 180
+            max_pitch_rad = max_pitch_deg * math.pi / 180
+            max_yaw_rad = max_yaw_deg * math.pi / 180
+            self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
+                                                     np.full(1, -max_roll_rad, np.float32),
+                                                     np.full(1, -max_pitch_rad, np.float32),
+                                                     np.full(1, -max_yaw_rad, np.float32)]).flatten(),
+                                           np.array([np.full(1, a_high, np.float32),
+                                                     np.full(1, max_roll_rad, np.float32),
+                                                     np.full(1, max_pitch_rad, np.float32),
+                                                     np.full(1, max_yaw_rad, np.float32)]).flatten())
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            a_low = 0.08 # [N] measured from hardware data
+            a_high = 0.45 # [N]
+            max_roll_deg = 60
+            max_pitch_deg = 60
+            max_roll_rad = max_roll_deg * math.pi / 180
+            max_pitch_rad = max_pitch_deg * math.pi / 180
+            self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
+                                                     np.full(1, -max_roll_rad, np.float32),
+                                                     np.full(1, -max_pitch_rad, np.float32)]).flatten(),
+                                           np.array([np.full(1, a_high, np.float32),
+                                                     np.full(1, max_roll_rad, np.float32),
+                                                     np.full(1, max_pitch_rad, np.float32)]).flatten())
+        else:
+            n_mot = 4 / action_dim
+            a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
+            a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
+            self.physical_action_bounds = (np.full(action_dim, a_low, np.float32),
+                                           np.full(action_dim, a_high, np.float32))
+
+        if self.NORMALIZED_RL_ACTION_SPACE:
+            # Normalized thrust (around hover thrust).
+            # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
+                self.hover_thrust = self.GRAVITY_ACC * self.MASS
+            else:
+                self.hover_thrust = self.GRAVITY_ACC * self.MASS / action_dim
+
+            self.action_scale = (self.physical_action_bounds[1]-self.physical_action_bounds[0])/2
+            self.action_bias = (self.physical_action_bounds[1]+self.physical_action_bounds[0])/2
+            self.action_space = spaces.Box(low=-np.ones(action_dim),
+                                           high=np.ones(action_dim),
+                                           dtype=np.float32)
+        else:
+            # Direct thrust control.
+            self.action_space = spaces.Box(low=self.physical_action_bounds[0],
+                                           high=self.physical_action_bounds[1],
+                                           dtype=np.float32)
+
+    def _set_observation_space(self):
+        """Sets the observation space of the environment."""
+        self.x_threshold = 4
+        self.y_threshold = 3
+        self.z_threshold = 2.5
+        self.phi_threshold_radians = 85 * math.pi / 180
+        self.theta_threshold_radians = 85 * math.pi / 180
+        self.psi_threshold_radians = 180 * math.pi / 180  # Do not bound yaw.
+        self.x_dot_threshold = 15
+        self.y_dot_threshold = 15
+        self.z_dot_threshold = 15
+        self.phi_dot_threshold_radians = 500 * math.pi / 180
+        self.theta_dot_threshold_radians = 500 * math.pi / 180
+        self.psi_dot_threshold_radians = 500 * math.pi / 180
+        self.force_motor_low = 0.08  # [N] measured from hardware data
+        self.force_motor_high = 0.45  # [N] measured from hardware data
+
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
+            # space for obstacle course
+            self.x_threshold = 4
+            self.y_threshold = 3
+            self.z_threshold = 2.5
+
+        # Define obs/state bounds, labels and units.
+        if self.QUAD_TYPE == QuadType.ONE_D:
+            # obs/state = {z, z_dot}.
+            low = np.array([self.GROUND_PLANE_Z, -self.z_dot_threshold])
+            high = np.array([self.z_threshold, self.z_dot_threshold])
+            self.STATE_LABELS = ['z', 'z_dot']
+            self.STATE_UNITS = ['m', 'm/s']
+        # elif self.QUAD_TYPE == QuadType.TWO_D or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+        elif self.QUAD_TYPE in [QuadType.TWO_D, QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_BODY]:
+            # obs/state = {x, x_dot, z, z_dot, theta, theta_dot}.
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.theta_threshold_radians, -self.theta_dot_threshold_radians
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.theta_threshold_radians, self.theta_dot_threshold_radians
+            ])
+            self.STATE_LABELS = ['x', 'x_dot', 'z', 'z_dot', 'theta', 'theta_dot']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'rad', 'rad/s']
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            # obs/state = {x, x_dot, z, z_dot, theta, theta_dot}.
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.theta_threshold_radians
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.theta_threshold_radians
+            ])
+            self.STATE_LABELS = ['x', 'x_dot', 'z', 'z_dot', 'theta']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'rad']
+        elif self.QUAD_TYPE == QuadType.THREE_D or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            # obs/state = {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                -self.y_threshold, -self.y_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.phi_threshold_radians, -self.theta_threshold_radians, -self.psi_threshold_radians,
+                -self.phi_dot_threshold_radians, -self.theta_dot_threshold_radians, -self.psi_dot_threshold_radians
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.y_threshold, self.y_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.phi_threshold_radians, self.theta_threshold_radians, self.psi_threshold_radians,
+                self.phi_dot_threshold_radians, self.theta_dot_threshold_radians, self.psi_dot_threshold_radians
+            ])
+            self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
+                                 'phi', 'theta', 'psi', 'p', 'q', 'r']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
+                                'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s']
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                -self.y_threshold, -self.y_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.phi_threshold_radians, -self.theta_threshold_radians,
+                -self.phi_dot_threshold_radians, -self.theta_dot_threshold_radians
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.y_threshold, self.y_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.phi_threshold_radians, self.theta_threshold_radians,
+                self.phi_dot_threshold_radians, self.theta_dot_threshold_radians
+            ])
+            self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
+                                 'phi', 'theta', 'phi_dot', 'theta_dot']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
+                                'rad', 'rad', 'rad/s', 'rad/s']
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                -self.y_threshold, -self.y_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.phi_threshold_radians, -self.theta_threshold_radians, -self.psi_threshold_radians,
+                -self.phi_dot_threshold_radians, -self.theta_dot_threshold_radians, -self.psi_dot_threshold_radians,
+                self.force_motor_low
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.y_threshold, self.y_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.phi_threshold_radians, self.theta_threshold_radians, self.psi_threshold_radians,
+                self.phi_dot_threshold_radians, self.theta_dot_threshold_radians, self.psi_dot_threshold_radians,
+                self.force_motor_high
+            ])
+            self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
+                                 'phi', 'theta', 'psi', 'p', 'q', 'r', 'force_motor']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
+                                'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s', 'N']
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            low = np.array([
+                -self.x_threshold, -self.x_dot_threshold,
+                -self.y_threshold, -self.y_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.phi_threshold_radians, -self.theta_threshold_radians, -self.psi_threshold_radians,
+                -self.phi_dot_threshold_radians, -self.theta_dot_threshold_radians, -self.psi_dot_threshold_radians,
+                self.force_motor_low
+            ])
+            high = np.array([
+                self.x_threshold, self.x_dot_threshold,
+                self.y_threshold, self.y_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.phi_threshold_radians, self.theta_threshold_radians, self.psi_threshold_radians,
+                self.phi_dot_threshold_radians, self.theta_dot_threshold_radians, self.psi_dot_threshold_radians,
+                self.force_motor_high
+            ])
+            low = np.concatenate([low, self.physical_action_bounds[0]])
+            high = np.concatenate([high, self.physical_action_bounds[1]])
+            self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
+                                 'phi', 'theta', 'psi', 'p', 'q', 'r', 'force_motor', 'T_c', 'R_c', 'P_c', 'Y_c']
+            self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
+                                'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s', 'N', 'N', 'rad', 'rad', 'rad']
+
+        # Define the state space for the dynamics.
+        self.state_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
+        if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+            # print(getattr(self, "obs_goal_append_positions_only", False))
+            if getattr(self, "obs_goal_append_positions_only", False):
+                # Only append positions (indices 0, 2, 4 for x, y, z) for each future goal
+                pos_dim = 3  # x, y, z
+                obs_dim = low.shape[0] + self.obs_goal_horizon * pos_dim
+                low_ext = np.concatenate([low, np.full(self.obs_goal_horizon * pos_dim, -np.inf)])
+                high_ext = np.concatenate([high, np.full(self.obs_goal_horizon * pos_dim, np.inf)])
+                self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
+            else:
+                # Default: append full state for each future goal
+                mul = 1 + self.obs_goal_horizon
+                low_ext = np.concatenate([low] * mul)
+                high_ext = np.concatenate([high] * mul)
+                self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
+        elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+            low_ext = np.concatenate([low] * 2)
+            high_ext = np.concatenate([high] * 2)
+            self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
+        else:
+            self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+        # # Concatenate reference for RL.
+        # if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+        #     # Include future goal state(s).
+        #     # e.g. horizon=1, obs = {state, state_target}
+        #     mul = 1 + self.obs_goal_horizon
+        #     low = np.concatenate([low] * mul)
+        #     high = np.concatenate([high] * mul)
+        # elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+        #     low = np.concatenate([low] * 2)
+        #     high = np.concatenate([high] * 2)
+
+        # # Define obs space exposed to the controller.
+        # # Note how the obs space can differ from state space (i.e. augmented with the next reference states for RL)
+        # self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
+    def _setup_disturbances(self):
+        """Sets up the disturbances."""
+        # Custom disturbance info.
+        self.DISTURBANCE_MODES['observation']['dim'] = self.obs_dim
+        self.DISTURBANCE_MODES['action']['dim'] = self.action_dim
+        self.DISTURBANCE_MODES['dynamics']['dim'] = int(self.QUAD_TYPE)
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            self.DISTURBANCE_MODES['dynamics']['dim'] = 2
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE]:
+            self.DISTURBANCE_MODES['dynamics']['dim'] = 3
+        self.DISTURBANCE_MODES['downwash']['dim'] = 3
+        super()._setup_disturbances()
+
+    # noinspection PyUnreachableCode
+    def _preprocess_control(self, action):
+        """Converts the action passed to .step() into motors' RPMs (ndarray of shape (4,)).
+
+        Args:
+            action (ndarray): The raw action input, of size 1 or 2 depending on QUAD_TYPE.
+
+        Returns:
+            action (ndarray): The motors RPMs to apply to the quadrotor.
+        """
+        action = self.denormalize_action(action)
+        # self.current_physical_action = self.normalize_action(action)
+        self.current_physical_action = action
+        # if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        #     # self.current_physical_action += self.prev_physical_action.copy()
+        #     self.prev_physical_action = self.current_physical_action.copy()
+
+        # Apply disturbances.
+        if 'action' in self.disturbances:
+            self.current_physical_action = self.disturbances['action'].apply(self.current_physical_action, self)
+        if self.adversary_disturbance == 'action':
+            self.current_physical_action = self.current_physical_action + self.adv_action
+        self.current_noisy_physical_action = self.current_physical_action
+
+        # Identified dynamics model works with collective thrust and pitch directly
+        # No need to compute RPMs, (save compute)
+        self.current_clipped_action = np.clip(self.current_noisy_physical_action,
+                                              self.action_space.low,
+                                              self.action_space.high)
+        # self.current_clipped_action = self.current_noisy_physical_action
+        # TODO: double check why a mixture of PHYSICS and QUAD_TYPE is used here
+        if self.PHYSICS in [Physics.DYN_SI, Physics.DYN_SI_3D, Physics.DYN_SI_3D_10, Physics.DYN_SI_3D_DELAY]:
+            return self.current_clipped_action
+
+        # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+        if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            collective_thrust, pitch = self.current_clipped_action
+
+            if self.PHYSICS == Physics.DYN_2D:
+                quat = get_quaternion_from_euler(self.rpy[0, :])
+            else:
+                _, quat = p.getBasePositionAndOrientation(self.DRONE_IDS[0], physicsClientId=self.PYB_CLIENT)
+            thrust_action = self.attitude_control._dslPIDAttitudeControl(collective_thrust / 4,
+                                                                         quat, np.array([0, pitch, 0]))
+            # input thrust is in Newton
+            thrust = np.array([thrust_action[0] + thrust_action[3], thrust_action[1] + thrust_action[2]])
+            thrust = np.clip(thrust, np.full(2, self.physical_action_bounds[0][0] / 2),
+                             np.full(2, self.physical_action_bounds[1][0] / 2))
+            pitch = np.clip(pitch, self.physical_action_bounds[0][1], self.physical_action_bounds[1][1])
+            self.current_clipped_action = np.array([sum(thrust), pitch])
+        else:
+            thrust = np.clip(action, self.physical_action_bounds[0], self.physical_action_bounds[1])
+            self.current_clipped_action = thrust
+        # convert to quad motor rpm commands
+        pwm = cmd2pwm(thrust, self.PWM2RPM_SCALE, self.PWM2RPM_CONST, self.KF, self.MIN_PWM, self.MAX_PWM)
+        rpm = pwm2rpm(pwm, self.PWM2RPM_SCALE, self.PWM2RPM_CONST)
+        return rpm
+
+    def normalize_action(self, action):
+        """Converts a physical action into a normalized action if necessary.
+
+        Args:
+            action (ndarray): The action to be converted.
+
+        Returns:
+            normalized_action (ndarray): The action in the correct action space.
+        """
+        if self.NORMALIZED_RL_ACTION_SPACE:
+            # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            # if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            #     action = np.array([(action[0] / self.hover_thrust - 1) / self.norm_act_scale, action[1]])
+            # else:
+            #     action = (action / self.hover_thrust - 1) / self.norm_act_scale
+
+            action = (action - self.action_bias)/self.action_scale
+
+        return action
+
+    def denormalize_action(self, action):
+        """Converts a normalized action into a physical action if necessary.
+
+        Args:
+            action (ndarray): The action to be converted.
+
+        Returns:
+            physical_action (ndarray): The physical action.
+        """
+        if self.NORMALIZED_RL_ACTION_SPACE:
+            # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            # if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+            #     # # divided by 4 as action[0] is a collective thrust
+            #     # thrust = action[0] / 4
+            #     # hover_pwm = (self.HOVER_RPM - self.PWM2RPM_CONST) / self.PWM2RPM_SCALE
+            #     # thrust = np.where(thrust <= 0, self.MIN_PWM + (thrust + 1) * (hover_pwm - self.MIN_PWM),
+            #     #                    hover_pwm + (self.MAX_PWM - hover_pwm) * thrust)
+            #
+            #     thrust = (1 + self.norm_act_scale * action[0]) * self.hover_thrust
+            #     # thrust = self.attitude_control.thrust2pwm(thrust)
+            #     # thrust = self.HOVER_RPM * (1+0.05*action[0])
+            #
+            #     action = np.array([thrust, action[1]])
+            # else:
+            #     action = (1 + self.norm_act_scale * action) * self.hover_thrust
+
+            action = action*self.action_scale + self.action_bias
+            # action = np.clip(action, self.action_space.low, self.action_space.high)
+
+        return action
+
+    def _get_state(self):
+        """Returns the current state of the environment.
+
+        Returns:
+            obs (ndarray): The state of the quadrotor, of size 2 or 6 depending on QUAD_TYPE.
+        """
+        full_state = self._get_drone_state_vector(0)
+        pos, _, rpy, vel, ang_v, rpy_rate, _ = np.split(full_state, [3, 7, 10, 13, 16, 19])
+        if self.QUAD_TYPE == QuadType.ONE_D:
+            # {z, z_dot}.
+            self.state = np.hstack([pos[2], vel[2]]).reshape((2,))
+        elif self.QUAD_TYPE == QuadType.TWO_D:
+            # {x, x_dot, z, z_dot, theta, theta_dot}.
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[2], vel[2], rpy[1], ang_v[1]]
+            ).reshape((6,))
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            # {x, x_dot, z, z_dot, theta, theta_dot}.
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
+            ).reshape((6,))
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_BODY:
+            # perform transformation to body frame translational velocities
+            pitch = -rpy[1]
+            vx = vel[0] * np.cos(pitch) - vel[2] * np.sin(pitch)
+            vz = vel[0] * np.sin(pitch) + vel[2] * np.cos(pitch)
+            # {x, vx, z, vz, theta, theta_dot}.
+            self.state = np.hstack(
+                [pos[0], vx, pos[2], vz, pitch, rpy_rate[1]]
+            ).reshape((6,))
+            world_state = np.hstack(
+                [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
+            ).reshape((6,))
+
+        elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+            # {x, x_dot, z, z_dot, theta, theta_dot}.
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[2], vel[2], rpy[1]]
+            ).reshape((5,))
+        elif self.QUAD_TYPE == QuadType.THREE_D:
+            Rob = np.array(p.getMatrixFromQuaternion(self.quat[0])).reshape((3, 3))
+            Rbo = Rob.T
+            ang_v_body_frame = Rbo @ ang_v
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            self.state = np.hstack(
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]  # Note: world ang_v != body frame pqr
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v_body_frame]
+            ).reshape((12,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            self.state = np.hstack(
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, ang_v]
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate]
+            ).reshape((12,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, p_body, q_body}.
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy[0], rpy[1], ang_v[0], ang_v[1]]
+            ).reshape((10,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+            ).reshape((13,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+            ).reshape((13,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor, self.current_physical_action]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+            ).reshape((17,))
+        # if not np.array_equal(self.state,
+        #                       np.clip(self.state, self.observation_space.low, self.observation_space.high)):
+        #     if self.GUI and self.VERBOSE:
+        #         print(
+        #             '[WARNING]: observation was clipped in Quadrotor._get_observation().'
+        #         )
+        return self.state
+
+    def _get_observation(self):
+        """Returns the current observation (state) of the environment.
+
+        Returns:
+            obs (ndarray): The state of the quadrotor, of size 2 or 6 depending on QUAD_TYPE.
+        """
+        _ = self._get_state()
+
+        # Concatenate goal info (references state(s)) for RL.
+        # Plus two because ctrl_step_counter has not incremented yet, and we want to return the obs (which would be
+        # ctrl_step_counter + 1 as the action has already been applied), and the next state (+ 2) for the RL to see
+        # the next state.
+        # print(self.QUAD_TYPE)
+        # print(self.obs_goal_append_positions_only)
+        obs = deepcopy(self.state)
+        if getattr(self, "obs_goal_append_positions_only", False):
+            pos_only = self.obs_goal_append_positions_only
+        else:
+            pos_only = False
+        # print(pos_only)
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+            obs = obs - self.X_GOAL[wp_idx]
+            # self.obs = obs - self.X_GOAL
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+            obs[:-4] = obs[:-4] - self.X_GOAL[wp_idx][:-4]
+            # self.obs = obs - self.X_GOAL
+        if self.at_reset:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.obs = self.extend_obs(obs, 1, pos_only=pos_only, pos_diff=True)
+            else:
+                self.obs = self.extend_obs(obs, 1)
+        else:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2, pos_only=pos_only, pos_diff=True)
+            else:
+                self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2, pos_only=pos_only)
+        # print(self.obs)
+        # Apply observation disturbance.
+        if 'observation' in self.disturbances:
+            self.obs = self.disturbances['observation'].apply(self.obs, self)
+        return self.obs
+
+    def _get_reward(self):
+        """Computes the current step's reward value.
+
+        Returns:
+            reward (float): The evaluated reward/cost.
+        """
+        if getattr(self, "obs_goal_append_positions_only", False):
+            pos_only = self.obs_goal_append_positions_only
+        else:
+            pos_only = False
+        obs = self.shrink_obs(self.obs, self.ctrl_step_counter + 2, pos_only=pos_only)
+        # obs = self.state
+        # RL cost.
+        if self.COST == Cost.RL_REWARD:
+            act = np.asarray(self.current_noisy_physical_action)
+            act_error = act - self.U_GOAL
+            # if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+            #     act_error -= self.prev_physical_action
+            #     self.prev_physical_action = self.current_physical_action.copy()
+
+            # Quadratic costs w.r.t state and action
+            # TODO: consider using multiple future goal states for cost in tracking
+            if self.TASK == Task.STABILIZATION:
+                state_error = obs - self.X_GOAL
+                if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                    state_error = obs
+                dist = np.sum(self.rew_state_weight * state_error * state_error)
+                dist += np.sum(self.rew_act_weight * act_error * act_error)
+            if self.TASK == Task.TRAJ_TRACKING:
+                wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+                state_error = obs - self.X_GOAL[wp_idx]
+                if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                    wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                            0] - 1)  # +1 because state has already advanced but counter not incremented.
+                    state_error = self.state - self.X_GOAL[wp_idx]
+                    # print(obs)
+                    # print(self.state)
+                    # print(obs)
+                dist = np.sum(self.rew_state_weight * state_error * state_error)
+                dist += np.sum(self.rew_act_weight * act_error * act_error)
+            rew = -dist
+            # Convert rew to be positive and bounded [0,1].
+            if self.rew_exponential:
+                rew = np.exp(rew)
+            return rew
+
+        # Control cost.
+        if self.COST == Cost.QUADRATIC:
+            if self.TASK == Task.STABILIZATION:
+                return float(-1 * self.symbolic.loss(x=obs,
+                                                     Xr=self.X_GOAL,
+                                                     u=self.current_clipped_action,
+                                                     Ur=self.U_GOAL,
+                                                     Q=self.Q,
+                                                     R=self.R)['l'])
+            if self.TASK == Task.TRAJ_TRACKING:
+                return float(-1 * self.symbolic.loss(x=obs,
+                                                     Xr=self.X_GOAL[self.ctrl_step_counter + 1, :],
+                                                     # +1 because state has already advanced but counter not incremented.
+                                                     u=self.current_clipped_action,
+                                                     Ur=self.U_GOAL,
+                                                     Q=self.Q,
+                                                     R=self.R)['l'])
+        return None
+
+    def _get_done(self):
+        """Computes the conditions for termination of an episode.
+
+        Returns:
+            done (bool): Whether an episode is over.
+        """
+        # Done if goal reached for stabilization task with quadratic cost.
+        if self.TASK == Task.STABILIZATION:
+            self.goal_reached = bool(
+                np.linalg.norm(self.state - self.X_GOAL) < self.TASK_INFO['stabilization_goal_tolerance'])
+            if self.goal_reached:
+                return True
+
+        # Done if state is out-of-bounds.
+        if self.done_on_out_of_bound:
+            if self.QUAD_TYPE == QuadType.ONE_D:
+                mask = np.array([1, 0])
+            if self.QUAD_TYPE == QuadType.TWO_D:
+                mask = np.array([1, 0, 1, 0, 1, 0])
+            # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
+                mask = np.array([1, 0, 1, 0, 1, 0])
+            if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
+                mask = np.array([1, 0, 1, 0, 1])
+            if self.QUAD_TYPE == QuadType.THREE_D:
+                mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0])
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+                mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0])
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
+                mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 0, 0])
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0])
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0])
+            # Element-wise or to check out-of-bound conditions.
+            self.out_of_bounds = np.logical_or(self.state < self.state_space.low,
+                                               self.state > self.state_space.high)
+            # Mask out un-included dimensions (i.e. velocities)
+            self.out_of_bounds = np.any(self.out_of_bounds * mask)
+            # Early terminate if needed.
+            if self.out_of_bounds:
+                return True
+        self.out_of_bounds = False
+
+        return False
+
+    def _get_info(self):
+        """Generates the info dictionary returned by every call to .step().
+
+        Returns:
+            info (dict): A dictionary with information about the constraints evaluations and violations.
+        """
+        info = {}
+        if self.TASK == Task.STABILIZATION and self.COST == Cost.QUADRATIC:
+            info['goal_reached'] = self.goal_reached  # Add boolean flag for the goal being reached.
+        if self.done_on_out_of_bound:
+            info['out_of_bounds'] = self.out_of_bounds
+        # Add MSE.
+        state = deepcopy(self.state)
+        if self.TASK == Task.STABILIZATION:
+            state_error = state - self.X_GOAL
+        elif self.TASK == Task.TRAJ_TRACKING:
+            # TODO: should use angle wrapping
+            # state[4] = normalize_angle(state[4])
+            wp_idx = min(self.ctrl_step_counter + 1,
+                         self.X_GOAL.shape[0] - 1)  # +1 so that state is being compared with proper reference state.
+            state_error = state - self.X_GOAL[wp_idx]
+        # Filter only relevant dimensions.
+        state_error = state_error * self.info_mse_metric_state_weight
+        info['mse'] = np.sum(state_error ** 2)
+        if self.constraints is not None:
+            info['constraint_values'] = self.constraints.get_values(self)
+            info['constraint_violations'] = self.constraints.get_violations(self)
+        return info
+
+    def _get_reset_info(self):
+        """Generates the info dictionary returned by every call to .reset().
+
+        Returns:
+            info (dict): A dictionary with information about the dynamics and constraints symbolic models.
+        """
+        info = {'symbolic_model': self.symbolic, 'physical_parameters': {
+            'quadrotor_mass': self.OVERRIDDEN_QUAD_MASS,
+            'quadrotor_inertia': self.OVERRIDDEN_QUAD_INERTIA,
+        }, 'x_reference': self.X_GOAL, 'u_reference': self.U_GOAL}
+        if self.constraints is not None:
+            info['symbolic_constraints'] = self.constraints.get_all_symbolic_models()
+        return info

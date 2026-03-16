@@ -1,0 +1,147 @@
+task_config:
+  info_in_reset: True
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 12
+  # normalized_rl_action_space: False
+  init_state:
+    init_x: 1.4
+    init_x_dot: 0
+    init_y: 0.5
+    init_y_dot: 0
+    init_z: 1.1
+    init_z_dot: 0
+    init_tau: 0.36
+  # obstacle course should be within
+  # x: [-3, 3]
+  # y: [-2, 2]
+  # z: [0, 2.5]
+  randomized_init: True
+  randomized_inertial_prop: False
+
+  init_state_randomization_info:
+    init_x:
+      distrib: 'normal'
+      scale: 0.0011629923113331312
+      # scale: 0.005814961556665656  # 5 times
+      # scale: 0.011629923113331312  # 10 times
+      # scale: 0.058149615566656560  # 50 times
+    init_x_dot:
+      distrib: 'normal'
+      scale: 0.003635597781389117
+      # scale: 0.018177988906945585  # 5 times
+      # scale: 0.03635597781389117   # 10 times
+      # scale: 0.18177988906945585   # 50 times
+    init_y:
+      distrib: 'normal'
+      scale: 0.001670549279531124
+      # scale: 0.00835274639765562   # 5 times
+      # scale: 0.01670549279531124   # 10 times
+      # scale: 0.08352746397655620   # 50 times
+    init_y_dot:
+      distrib: 'normal'
+      scale: 0.004965500657569368
+      # scale: 0.02482750328784684   # 5 times
+      # scale: 0.04965500657569368   # 10 times
+      # scale: 0.24827503287846840   # 50 times
+    init_z:
+      distrib: 'normal'
+      scale: 0.0024990695232428458
+      # scale: 0.012495347616214229  # 5 times
+      # scale: 0.024990695232428458  # 10 times
+      # scale: 0.124953476162142290  # 50 times
+    init_z_dot:
+      distrib: 'normal'
+      scale: 0.010193088084183025
+      # scale: 0.050965440420915125  # 5 times
+      # scale: 0.10193088084183025   # 10 times
+      # scale: 0.50965440420915125   # 50 times
+    init_phi:
+      distrib: 'normal'
+      scale: 0.0026984744060397532
+      # scale: 0.013492372030198766  # 5 times
+      # scale: 0.026984744060397532  # 10 times
+      # scale: 0.134923720301987660  # 50 times
+    init_theta:
+      distrib: 'normal'
+      scale: 0.0024088251667187467
+      # scale: 0.012044125833593734  # 5 times
+      # scale: 0.024088251667187467  # 10 times
+      # scale: 0.120441258335937335  # 50 times
+    init_psi:
+      distrib: 'normal'
+      scale: 0.0023822834889102923
+      # scale: 0.011911417444551462  # 5 times
+      # scale: 0.023822834889102923  # 10 times
+      # scale: 0.119114174445514615  # 50 times
+    init_p:
+      distrib: 'normal'
+      scale: 0.03452115832640752
+      # scale: 0.1726057916320376    # 5 times
+      # scale: 0.3452115832640752    # 10 times
+      # scale: 1.726057916320376     # 50 times
+    init_q:
+      distrib: 'normal'
+      scale: 0.02387283406599296
+      # scale: 0.1193641703299648    # 5 times
+      # scale: 0.2387283406599296    # 10 times
+      # scale: 1.193641703299648     # 50 times
+    init_r:
+      distrib: 'normal'
+      scale: 0.03123258323211547
+      # scale: 0.15616291616057735   # 5 times
+      # scale: 0.3123258323211547    # 10 times
+      # scale: 1.5616291616057735    # 50 times
+  task: traj_tracking
+  task_info:
+    trajectory_type: figure8
+    num_cycles: 2
+    trajectory_plane: 'xy'
+    trajectory_position_offset: [0.0, 0.0, 1.0]
+    trajectory_scale: 1.0
+    custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v6_2.npy"
+    # custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_0_vf_ss.npy"
+    # custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_12_5_ref_traj.npy"
+  cost: rl_reward
+  obs_goal_horizon: 1
+
+  rew_state_weight: [5.0, 0.1, 5.0, 0.1, 5.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.01]
+  rew_act_weight: [0.01, 0.01, 0.01, 0.01] #set to 1 if action noise is too large
+  rew_exponential: True
+  episode_len_sec: 20.5
+  inertial_prop:
+    M: 0.037
+  constraints:
+    - constraint_form: default_constraint
+      constrained_variable: state
+    - constraint_form: default_constraint
+      constrained_variable: input
+
+  done_on_out_of_bound: True
+  done_on_violation: False
+  disturbances:
+    action:
+      - disturbance_func: white_noise
+        # std: [0.03116, 0.03450]
+        std: [0.021, 0.078, 0.071, 0.064]  # 1 times (original)
+        # std: [0.063, 0.234, 0.213, 0.192]  # 3 times
+        # std: [0.105, 0.390, 0.355, 0.320]  # 5 times
+        # std: [0.147, 0.546, 0.497, 0.448]  # 7 times
+    observation:
+      - disturbance_func: white_noise
+        #1 time
+        std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001,
+              0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              # 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+              ]
+        #3 times
+        # std: [3.93e-05, 1.527e-03, 4.26e-05, 1.569e-03, 4.41e-05, 1.773e-03, 3.69e-03, 1.833e-03, 1.812e-03, 1.575e-01, 7.86e-02, 7.59e-02, 0.0003, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        #5 times
+        # std: [6.55e-05, 2.545e-03, 7.10e-05, 2.615e-03, 7.35e-05, 2.955e-03, 6.15e-03, 3.055e-03, 3.020e-03, 2.625e-01, 1.31e-01, 1.265e-01, 0.0005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        #7 times
+        # std: [9.17e-05, 3.563e-03, 9.94e-05, 3.661e-03, 1.029e-04, 4.137e-03, 8.61e-03, 4.277e-03, 4.228e-03, 3.675e-01, 1.834e-01, 1.771e-01, 0.0007, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

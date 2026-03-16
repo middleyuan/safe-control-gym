@@ -4,7 +4,7 @@ algo_config:
   activation: "relu"
 
   # loss args
-  gamma: 0.98
+  gamma: 0.95
   use_gae: True
   gae_lambda: 0.92
   clip_param: 0.2
@@ -22,7 +22,7 @@ algo_config:
   max_env_steps: 3960000
   # max_env_steps: 1320000
   rollout_batch_size: 10
-  rollout_steps: 450
+  rollout_steps: 660
   eval_batch_size: 10
 
   # misc
@@ -32,4 +32,4 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True

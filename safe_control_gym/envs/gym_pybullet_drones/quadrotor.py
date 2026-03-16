@@ -229,6 +229,7 @@ class Quadrotor(BaseAviary):
                  rew_exponential=True,
                  done_on_out_of_bound=True,
                  info_mse_metric_state_weight=None,
+                 obs_goal_append_positions_only=False,
                  **kwargs
                  ):
         """Initialize a quadrotor environment.
@@ -273,6 +274,10 @@ class Quadrotor(BaseAviary):
                 self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
             elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
                 self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.info_mse_metric_state_weight = np.array([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], ndmin=1, dtype=float)
             else:
                 raise ValueError('[ERROR] in Quadrotor.__init__(), not implemented quad type.')
         else:
@@ -285,15 +290,16 @@ class Quadrotor(BaseAviary):
                     (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE and len(info_mse_metric_state_weight) == 12) or \
                     (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10 and len(info_mse_metric_state_weight) == 10) or \
                     (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY and len(info_mse_metric_state_weight) == 13) or \
-                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE and len(info_mse_metric_state_weight) == 17):
-
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE and len(info_mse_metric_state_weight) == 17) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF and len(info_mse_metric_state_weight) == 13) or \
+                    (self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE and len(info_mse_metric_state_weight) == 17):
                 self.info_mse_metric_state_weight = np.array(info_mse_metric_state_weight, ndmin=1, dtype=float)
             else:
                 raise ValueError('[ERROR] in Quadrotor.__init__(), wrong info_mse_metric_state_weight argument size.')
-
+        self.obs_goal_append_positions_only = obs_goal_append_positions_only
         # BaseAviary constructor, called after defining the custom args,
         # since some BenchmarkEnv init setup can be task(custom args)-dependent.
-        super().__init__(init_state=init_state, inertial_prop=inertial_prop, **kwargs)
+        super().__init__(init_state=init_state, obs_goal_append_positions_only=obs_goal_append_positions_only, inertial_prop=inertial_prop, **kwargs)
 
         # Store initial state info.
         self.INIT_STATE_LABELS = {
@@ -312,7 +318,12 @@ class Quadrotor(BaseAviary):
                                               'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau'],
             QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
                                               'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau',
-                                              'init_thrust', 'init_roll', 'init_pitch', 'init_yaw']
+                                              'init_thrust', 'init_roll', 'init_pitch', 'init_yaw'],
+            QuadType.THREE_D_ATTITUDE_DELAY_DIFF: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau'],
+            QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
+                                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau',
+                                                              'init_thrust', 'init_roll', 'init_pitch', 'init_yaw'],
         }
         if init_state is None:
             for init_name in self.INIT_STATE_RAND_INFO:  # Default zero state.
@@ -374,7 +385,7 @@ class Quadrotor(BaseAviary):
         # Set attitude controller if quadtype is QuadType.TWO_D_ATTITUDE
         # if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.THREE_D_ATTITUDE]:
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY,
-                              QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
+                              QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
             self.attitude_control = AttitudeControl(self.CTRL_TIMESTEP, self.PYB_TIMESTEP)
 
         # Set prior/symbolic info.
@@ -384,7 +395,7 @@ class Quadrotor(BaseAviary):
             self._setup_symbolic(inertial_prop)
 
         # Set previous physical action (for input rate quadrotor)
-        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             self.prev_physical_action = np.zeros(self.action_dim)
             self.current_physical_action = np.zeros(self.action_dim)
 
@@ -424,10 +435,12 @@ class Quadrotor(BaseAviary):
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0])
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0])
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             self.U_GOAL = np.array([0.0, 0.0, 0.0, 0.0])
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
         else:
             self.U_GOAL = np.ones(self.action_dim) * self.MASS * self.GRAVITY_ACC / self.action_dim
         if self.TASK == Task.STABILIZATION:
@@ -519,7 +532,7 @@ class Quadrotor(BaseAviary):
                 else:
                     strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
                     waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
-                    POS_REF, VEL_REF, ACC_REF, JRK_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
+                    POS_REF, VEL_REF, ACC_REF, JRK_REF, SPD_REF = self._generate_trajectory(traj_type=self.TASK_INFO['trajectory_type'],
                                                                     traj_length=self.episode_len,
                                                                     num_cycles=self.TASK_INFO['num_cycles'],
                                                                     traj_plane=self.TASK_INFO['trajectory_plane'],
@@ -530,20 +543,21 @@ class Quadrotor(BaseAviary):
                                                                     string_list=strings,
                                                                     waypoint_list=waypoints
                                                                     )
-                    # CUSTOM_REF_TRAJ = {}
-                    # CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
-                    # CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
-                    # CUSTOM_REF_TRAJ['ACC_REF'] = ACC_REF
-                    # CUSTOM_REF_TRAJ['JRK_REF'] = JRK_REF
-                    # np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                    #                      'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
+                    CUSTOM_REF_TRAJ = {}
+                    CUSTOM_REF_TRAJ['POS_REF'] = POS_REF
+                    CUSTOM_REF_TRAJ['VEL_REF'] = VEL_REF
+                    CUSTOM_REF_TRAJ['ACC_REF'] = ACC_REF
+                    CUSTOM_REF_TRAJ['JRK_REF'] = JRK_REF
+                    CUSTOM_REF_TRAJ['SPD_REF'] = SPD_REF
+                    np.save(os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                                         'custom_snap_ref_traj.npy'), CUSTOM_REF_TRAJ, allow_pickle=True)
                     # # add attribute to self.TASK_INFO
-                    # self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
-                    #                      'custom_snap_ref_traj.npy')
+                    self.TASK_INFO['custom_snap_ref_traj'] = os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data',
+                                         'custom_snap_ref_traj.npy')
                     # _plot_trajectory(POS_REF,
                     #                  waypoints=waypoints,
                     #                  strings=strings,
-                    #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
+                                    #  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                     # _plot_xyz_kinematics(POS_REF, VEL_REF, ACC_REF, SPD_REF,
                     #                  waypoints=waypoints,
                     #                  strings=strings,
@@ -648,7 +662,7 @@ class Quadrotor(BaseAviary):
                     np.zeros(VEL_REF.shape[0]),
                     np.zeros(VEL_REF.shape[0])
                 ]).transpose()
-            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
                 self.X_GOAL = np.vstack([
                     POS_REF[:, 0],  # x
                     VEL_REF[:, 0],  # x_dot
@@ -664,7 +678,7 @@ class Quadrotor(BaseAviary):
                     np.zeros(VEL_REF.shape[0]),
                     np.ones(VEL_REF.shape[0]) * self.MASS * self.GRAVITY_ACC,
                 ]).transpose()
-            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
                 self.X_GOAL = np.vstack([
                     POS_REF[:, 0],  # x
                     VEL_REF[:, 0],  # x_dot
@@ -756,9 +770,21 @@ class Quadrotor(BaseAviary):
                 self.alpha_9 = prop_values['alpha_9']
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_expression(prop_values)
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             if self.PHYSICS == Physics.DYN_SI_3D_DELAY:
                 prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                prop_values['params_acc'] = getattr(self, 'params_acc', [0.13, 0.72, 0.08, -0.0171, 0.000811])
+                prop_values['params_roll_rate'] = getattr(self, 'params_roll_rate', [-238.1, -21.35, 179.65])
+                prop_values['params_pitch_rate'] = getattr(self, 'params_pitch_rate', [-238.1, -21.35, 179.65])
+                prop_values['params_yaw_rate'] = getattr(self, 'params_yaw_rate', [-170.4, -22.22, 280])
+                # print(self.RANDOMIZED_INERTIAL_PROP)
+                # print("old prop_values:", prop_values)
+                if self.RANDOMIZED_INERTIAL_PROP:
+                    prop_values = self._randomize_values_by_info(prop_values, self.INERTIAL_PROP_RAND_INFO)
+                # print("new prop_values:", prop_values)
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_delay_expression(prop_values)
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
@@ -792,7 +818,10 @@ class Quadrotor(BaseAviary):
             self.attitude_control.reset()
         else:
             INIT_ANG_VEL = [init_values.get('init_' + k, 0.) for k in ['p', 'q', 'r']]  # TODO: transform from body rates.
-        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE \
+            or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             INIT_TAU = init_values.get('init_tau', self.MASS * self.GRAVITY_ACC)
             self.init_tau = INIT_TAU
             self.motor_forces = INIT_TAU * np.ones((self.NUM_DRONES, 1))
@@ -834,7 +863,7 @@ class Quadrotor(BaseAviary):
         self.set_goals()
 
         # Reset previous action.
-        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             self.prev_physical_action = np.zeros(self.action_dim)
             self.current_physical_action = np.zeros(self.action_dim)
 
@@ -918,13 +947,17 @@ class Quadrotor(BaseAviary):
                 disturb_force = np.asarray(disturb_force).flatten()
             elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
                 disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+                disturb_force = np.asarray(disturb_force).flatten()
             elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+                disturb_force = np.asarray(disturb_force).flatten()
+            elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
                 disturb_force = np.asarray(disturb_force).flatten()
 
         # handle downwash force
         if 'downwash' in self.disturbances:
             assert self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY\
-                            , QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY], '[ERROR] in Quadrotor.step(), downwash model is only available for identified model.'
+                            , QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF], '[ERROR] in Quadrotor.step(), downwash model is only available for identified model.'
             # get the current observation
             # obs = self._get_observation()
             state = self.state
@@ -938,7 +971,7 @@ class Quadrotor(BaseAviary):
                 raise ValueError('[ERROR] in Quadrotor.step(), downwash force is only available for 2D attitude model.')
             if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_BODY, QuadType.TWO_D_ATTITUDE_5S]:
                 pos = np.array([state[0], 0, state[2]])
-            elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
+            elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
                 pos = np.array([state[0], state[2], state[4]])
 
             if self.DISTURBANCES['downwash'][0]['mode'] == 'track':
@@ -990,7 +1023,7 @@ class Quadrotor(BaseAviary):
         '''
         m = prior_prop.get('M', self.MASS)
         Iyy = prior_prop.get('Iyy', self.J[1, 1])
-
+        
         g, length = self.GRAVITY_ACC, self.L
         dt = self.CTRL_TIMESTEP
         # Define states.
@@ -1348,7 +1381,7 @@ class Quadrotor(BaseAviary):
             self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
             self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R], [R_mapping])
 
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
             nx, nu = 13, 4
             # Define states.
             x = cs.MX.sym('x')
@@ -1819,7 +1852,7 @@ class Quadrotor(BaseAviary):
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             
 
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             nx, nu = 17, 4
             # Define states.
             x = cs.MX.sym('x')
@@ -1845,6 +1878,133 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
 
             model_choice = "linear"
+            model_choice = "drag"
+            
+            if model_choice == "drag":
+                 # Transformation parameters from sys_id with mode 3 
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1 
+                
+                # Transform input command T from raw to normalized space (mode 3)
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                
+                # normalized forces_motor
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+
+                # Dynamics parameters
+                params_acc =  prior_prop.get('params_acc', [0.13, 0.72, 0.08, -0.0171, 0.000811])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                # print("Using drag model with params_acc:", params_acc)
+                # print("Using drag model with params_roll_rate:", params_roll_rate)
+                # print("Using drag model with params_pitch_rate:", params_pitch_rate)
+                # print("Using drag model with params_yaw_rate:", params_yaw_rate)
+                # Drag coefficients
+                drag_coeff_x = params_acc[3]
+                drag_coeff_y = params_acc[3]
+                drag_coeff_z = params_acc[4]
+
+                #drag_coeff_x = 0.0
+                #drag_coeff_y = 0.0
+                #drag_coeff_z = 0.0
+                
+                # Store parameters
+                self.drag_coeffs = [drag_coeff_x, drag_coeff_y, drag_coeff_z]
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+                
+                # Delay dynamics in normalized space
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                
+                # Rotation matrices
+                Rob = csRotXYZ(phi, theta, psi)  # body to world
+                Rbo = Rob.T  # world to body
+                
+                # Velocity vector in world frame
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                
+                # Drag matrix (diagonal, in body frame) [1/s]
+                drag_matrix = cs.diag(cs.vertcat(drag_coeff_x, drag_coeff_y, drag_coeff_z))
+                
+                # Compute drag force using the drag matrix approach:
+                vel_body = Rbo @ vel_world  # transform velocity to body frame
+                drag_body = drag_matrix @ vel_body  # apply drag in body frame
+                drag_world = Rob @ drag_body  # transform back to world frame
+                
+                # Thrust force in world frame (drone z-axis in world frame)
+                thrust_force_world = 1/m * force_motor * cs.vertcat(
+                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                    cs.cos(phi) * cs.cos(theta)
+                )
+                
+                # Define dynamics equations with drag
+                X_dot = cs.vertcat(
+                    x_dot,
+                    thrust_force_world[0] + 1/m * drag_world[0],
+                    y_dot,
+                    thrust_force_world[1] + 1/m * drag_world[1],
+                    z_dot,
+                    thrust_force_world[2] + 1/m * drag_world[2] - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    (f_max - f_min)/2 * df_dot,
+                    T_c,
+                    R_c,
+                    P_c,
+                    Y_c
+                )
+                
+                # Define observation
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+        
+            elif model_choice == "linear":
+                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
+                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+                self.params_roll_rate = params_roll_rate
+                self.params_pitch_rate = params_pitch_rate
+                self.params_yaw_rate = params_yaw_rate
+                self.params_acc = params_acc
+
+                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+                cmd_min = -1
+                cmd_max = 1
+                f_min = -1
+                f_max = 1
+                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+                # Define dynamics equations.
+                X_dot = cs.vertcat(x_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                                y_dot,
+                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                                z_dot,
+                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                                phi_dot,
+                                theta_dot,
+                                psi_dot,
+                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                                (f_max - f_min)/2 * df_dot,
+                                T_c,
+                                R_c,
+                                P_c,
+                                Y_c)
+                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
+        
             if model_choice == "quartic":
                 params_acc = prior_prop.get('param_acc',  [-0.0767232, 2.76419, -13.6398, 40.9609, -42.6217, 0.1086])
                 params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
@@ -1911,50 +2071,13 @@ class Quadrotor(BaseAviary):
                                 Y_c)
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
-            elif model_choice == "linear":
-                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
-                params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
-                params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
-                params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
-                self.params_roll_rate = params_roll_rate
-                self.params_pitch_rate = params_pitch_rate
-                self.params_yaw_rate = params_yaw_rate
-                self.params_acc = params_acc
-
-                # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
-                cmd_min = -1
-                cmd_max = 1
-                f_min = -1
-                f_max = 1
-                dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
-                df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
-                df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
-                # Define dynamics equations.
-                X_dot = cs.vertcat(x_dot,
-                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-                                y_dot,
-                                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                                z_dot,
-                                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
-                                phi_dot,
-                                theta_dot,
-                                psi_dot,
-                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                                (f_max - f_min)/2 * df_dot,
-                                T_c,
-                                R_c,
-                                P_c,
-                                Y_c)
-                Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor, prev_thrust, prev_roll_cmd, prev_pitch_cmd, prev_yaw_cmd)
         # Expand Q and R to be full matrices.
         self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
         self.R = get_cost_weight_matrix(self.rew_act_weight, nu)
 
         # Set the equilibrium values for linearizations.
         X_EQ = np.zeros(self.state_dim)
-        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY]:
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
             X_EQ[-1] = self.MASS * self.GRAVITY_ACC  # thrust equilibrium
 
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
@@ -1962,7 +2085,7 @@ class Quadrotor(BaseAviary):
             U_EQ = np.array([u_eq, 0])
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE]:
             U_EQ = np.array([u_eq, 0, 0, 0])
-        elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY]:
+        elif self.QUAD_TYPE  in [ QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
             U_EQ = np.array([u_eq/params_acc[1]-params_acc[0], 0, 0, 0])
         elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_10]:
             U_EQ = np.array([(u_eq - self.b) / self.a, 0, 0])
@@ -2271,7 +2394,8 @@ class Quadrotor(BaseAviary):
             action_dim = 4
             self.ACTION_LABELS = ['T1', 'T2', 'T3', 'T4']
             self.ACTION_UNITS = ['N', 'N', 'N', 'N'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, 
+                                QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
             action_dim = 4
             self.ACTION_LABELS = ['T_c', 'R_c', 'P_c', 'Y_c']
             self.ACTION_UNITS = ['N', 'rad', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
@@ -2294,7 +2418,7 @@ class Quadrotor(BaseAviary):
             a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32), np.full(1, -max_pitch_rad, np.float32)]).flatten(),
                                            np.array([np.full(1, a_high, np.float32), np.full(1, max_pitch_rad, np.float32)]).flatten())
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
             n_mot = 4  # due to collective thrust
             # a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
             # a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
@@ -2337,7 +2461,7 @@ class Quadrotor(BaseAviary):
         if self.NORMALIZED_RL_ACTION_SPACE:
             # Normalized thrust (around hover thrust).
             # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE or self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
-            if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY, QuadType.THREE_D_ATTITUDE_DELAY]:
+            if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE]:
                 self.hover_thrust = self.GRAVITY_ACC * self.MASS
             else:
                 self.hover_thrust = self.GRAVITY_ACC * self.MASS / action_dim
@@ -2370,7 +2494,7 @@ class Quadrotor(BaseAviary):
         self.force_motor_low = 0.08  # [N] measured from hardware data
         self.force_motor_high = 0.45  # [N] measured from hardware data
 
-        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
+        if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF]:
             # space for obstacle course
             self.x_threshold = 4
             self.y_threshold = 3
@@ -2451,7 +2575,7 @@ class Quadrotor(BaseAviary):
                                  'phi', 'theta', 'phi_dot', 'theta_dot']
             self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
                                 'rad', 'rad', 'rad/s', 'rad/s']
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
             low = np.array([
                 -self.x_threshold, -self.x_dot_threshold,
                 -self.y_threshold, -self.y_dot_threshold,
@@ -2472,7 +2596,7 @@ class Quadrotor(BaseAviary):
                                  'phi', 'theta', 'psi', 'p', 'q', 'r', 'force_motor']
             self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'm', 'm/s',
                                 'rad', 'rad', 'rad', 'rad/s', 'rad/s', 'rad/s', 'N']
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             low = np.array([
                 -self.x_threshold, -self.x_dot_threshold,
                 -self.y_threshold, -self.y_dot_threshold,
@@ -2499,20 +2623,41 @@ class Quadrotor(BaseAviary):
         # Define the state space for the dynamics.
         self.state_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
-        # Concatenate reference for RL.
         if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
-            # Include future goal state(s).
-            # e.g. horizon=1, obs = {state, state_target}
-            mul = 1 + self.obs_goal_horizon
-            low = np.concatenate([low] * mul)
-            high = np.concatenate([high] * mul)
+            # print(getattr(self, "obs_goal_append_positions_only", False))
+            if getattr(self, "obs_goal_append_positions_only", False):
+                # Only append positions (indices 0, 2, 4 for x, y, z) for each future goal
+                pos_dim = 3  # x, y, z
+                obs_dim = low.shape[0] + self.obs_goal_horizon * pos_dim
+                low_ext = np.concatenate([low, np.full(self.obs_goal_horizon * pos_dim, -np.inf)])
+                high_ext = np.concatenate([high, np.full(self.obs_goal_horizon * pos_dim, np.inf)])
+                self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
+            else:
+                # Default: append full state for each future goal
+                mul = 1 + self.obs_goal_horizon
+                low_ext = np.concatenate([low] * mul)
+                high_ext = np.concatenate([high] * mul)
+                self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
         elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
-            low = np.concatenate([low] * 2)
-            high = np.concatenate([high] * 2)
+            low_ext = np.concatenate([low] * 2)
+            high_ext = np.concatenate([high] * 2)
+            self.observation_space = spaces.Box(low=low_ext, high=high_ext, dtype=np.float32)
+        else:
+            self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+        # # Concatenate reference for RL.
+        # if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+        #     # Include future goal state(s).
+        #     # e.g. horizon=1, obs = {state, state_target}
+        #     mul = 1 + self.obs_goal_horizon
+        #     low = np.concatenate([low] * mul)
+        #     high = np.concatenate([high] * mul)
+        # elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+        #     low = np.concatenate([low] * 2)
+        #     high = np.concatenate([high] * 2)
 
-        # Define obs space exposed to the controller.
-        # Note how the obs space can differ from state space (i.e. augmented with the next reference states for RL)
-        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+        # # Define obs space exposed to the controller.
+        # # Note how the obs space can differ from state space (i.e. augmented with the next reference states for RL)
+        # self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
     def _setup_disturbances(self):
         """Sets up the disturbances."""
@@ -2522,7 +2667,7 @@ class Quadrotor(BaseAviary):
         self.DISTURBANCE_MODES['dynamics']['dim'] = int(self.QUAD_TYPE)
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S, QuadType.TWO_D_ATTITUDE_BODY]:
             self.DISTURBANCE_MODES['dynamics']['dim'] = 2
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE]:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_DIFF, QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE]:
             self.DISTURBANCE_MODES['dynamics']['dim'] = 3
         self.DISTURBANCE_MODES['downwash']['dim'] = 3
         super()._setup_disturbances()
@@ -2709,7 +2854,21 @@ class Quadrotor(BaseAviary):
                 [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
                 # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
             ).reshape((13,))
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
+            self.state = np.hstack(
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+            ).reshape((13,))
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
             # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
             # print(f'{self.last_clipped_action[0, 0]=}')
             # print(f'{self.motor_forces[0, 0]=}')
@@ -2743,11 +2902,35 @@ class Quadrotor(BaseAviary):
         # Plus two because ctrl_step_counter has not incremented yet, and we want to return the obs (which would be
         # ctrl_step_counter + 1 as the action has already been applied), and the next state (+ 2) for the RL to see
         # the next state.
+        # print(self.QUAD_TYPE)
+        # print(self.obs_goal_append_positions_only)
         obs = deepcopy(self.state)
-        if self.at_reset:
-            self.obs = self.extend_obs(obs, 1)
+        if getattr(self, "obs_goal_append_positions_only", False):
+            pos_only = self.obs_goal_append_positions_only
         else:
-            self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2)
+            pos_only = False
+        # print(pos_only)
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+            obs = obs - self.X_GOAL[wp_idx]
+            # self.obs = obs - self.X_GOAL
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+            obs[:-4] = obs[:-4] - self.X_GOAL[wp_idx][:-4]
+            # self.obs = obs - self.X_GOAL
+        if self.at_reset:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.obs = self.extend_obs(obs, 1, pos_only=pos_only, pos_diff=True)
+            else:
+                self.obs = self.extend_obs(obs, 1)
+        else:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2, pos_only=pos_only, pos_diff=True)
+            else:
+                self.obs = self.extend_obs(obs, self.ctrl_step_counter + 2, pos_only=pos_only)
+        # print(self.obs)
         # Apply observation disturbance.
         if 'observation' in self.disturbances:
             self.obs = self.disturbances['observation'].apply(self.obs, self)
@@ -2759,7 +2942,11 @@ class Quadrotor(BaseAviary):
         Returns:
             reward (float): The evaluated reward/cost.
         """
-        obs = self.shrink_obs(self.obs, self.ctrl_step_counter + 2)
+        if getattr(self, "obs_goal_append_positions_only", False):
+            pos_only = self.obs_goal_append_positions_only
+        else:
+            pos_only = False
+        obs = self.shrink_obs(self.obs, self.ctrl_step_counter + 2, pos_only=pos_only)
         # obs = self.state
         # RL cost.
         if self.COST == Cost.RL_REWARD:
@@ -2773,12 +2960,21 @@ class Quadrotor(BaseAviary):
             # TODO: consider using multiple future goal states for cost in tracking
             if self.TASK == Task.STABILIZATION:
                 state_error = obs - self.X_GOAL
+                if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                    state_error = obs
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             if self.TASK == Task.TRAJ_TRACKING:
                 wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
                     0] - 1)  # +1 because state has already advanced but counter not incremented.
                 state_error = obs - self.X_GOAL[wp_idx]
+                if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
+                    wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                            0] - 1)  # +1 because state has already advanced but counter not incremented.
+                    state_error = self.state - self.X_GOAL[wp_idx]
+                    # print(obs)
+                    # print(self.state)
+                    # print(obs)
                 dist = np.sum(self.rew_state_weight * state_error * state_error)
                 dist += np.sum(self.rew_act_weight * act_error * act_error)
             rew = -dist
@@ -2836,9 +3032,9 @@ class Quadrotor(BaseAviary):
                 mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0])
             if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
                 mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 0, 0])
-            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF:
                 mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0])
-            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE:
+            if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE or self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_DIFF_INPUT_RATE:
                 mask = np.array([1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0])
             # Element-wise or to check out-of-bound conditions.
             self.out_of_bounds = np.logical_or(self.state < self.state_space.low,

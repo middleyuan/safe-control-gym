@@ -92,6 +92,7 @@ class BenchmarkEnv(gym.Env, ABC):
                  adversary_disturbance=None,
                  adversary_disturbance_offset=0.0,
                  adversary_disturbance_scale=0.01,
+                 obs_goal_append_positions_only=False,
                  **kwargs
                  ):
         """Initialization method for BenchmarkEnv.
@@ -185,6 +186,7 @@ class BenchmarkEnv(gym.Env, ABC):
         # and `state_dim` is queried from it.
         self.action_dim = self.action_space.shape[0]
         self.obs_dim = self.observation_space.shape[0]
+        self.obs_goal_append_positions_only = obs_goal_append_positions_only
         if hasattr(self, 'state_space'):
             self.state_dim = self.state_space.shape[0]
         else:
@@ -206,7 +208,7 @@ class BenchmarkEnv(gym.Env, ABC):
         self.initial_reset = False
         self.at_reset = False
         self.INFO_IN_RESET = info_in_reset
-
+        
     def seed(self,
              seed=None
              ):
@@ -447,54 +449,115 @@ class BenchmarkEnv(gym.Env, ABC):
         # processed_action = self._preprocess_control(action)
         return action
 
-    def extend_obs(self, obs, next_step):
-        """Extends an observation with the next self.obs_goal_horizon reference points.
+    # def extend_obs(self, obs, next_step):
+    #     """Extends an observation with the next self.obs_goal_horizon reference points.
 
-        Args:
-            obs (ndarray): The observation to be extended.
-            next_step (int): The iteration for which to extend it.
+    #     Args:
+    #         obs (ndarray): The observation to be extended.
+    #         next_step (int): The iteration for which to extend it.
 
-        Returns:
-            extended_obs (ndarray): The extended observation.
-        """
+    #     Returns:
+    #         extended_obs (ndarray): The extended observation.
+    #     """
+    #     if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+    #         wp_idx = [
+    #             min(next_step + i, self.X_GOAL.shape[0] - 1)
+    #             for i in range(self.obs_goal_horizon)
+    #         ]
+    #         goal_state = self.X_GOAL[wp_idx].flatten()
+    #         extended_obs = np.concatenate([obs, goal_state])
+    #     elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+    #         goal_state = self.X_GOAL.flatten()
+    #         extended_obs = np.concatenate([obs, goal_state])
+    #     else:
+    #         extended_obs = obs
+
+    #     return extended_obs
+
+    # def shrink_obs(self, obs, next_step):
+    #     """shrink an observation to remove the next self.obs_goal_horizon reference points.
+
+    #     Args:
+    #         obs (ndarray): The observation to be shrunk.
+    #         next_step (int): The iteration for which to shrink it.
+
+    #     Returns:
+    #         shrunk_obs (ndarray): The shrunk observation.
+    #     """
+    #     if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
+    #         wp_idx = [
+    #             min(next_step + i, self.X_GOAL.shape[0] - 1)
+    #             for i in range(self.obs_goal_horizon)
+    #         ]
+    #         goal_state = self.X_GOAL[wp_idx].flatten()
+    #         shrunk_obs = obs[:goal_state.shape[0]]
+    #     elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
+    #         goal_state = self.X_GOAL.flatten()
+    #         shrunk_obs = obs[:goal_state.shape[0]]
+    #     else:
+    #         shrunk_obs = obs
+
+    #     return shrunk_obs
+    def extend_obs(self, obs, next_step, pos_only=False, pos_diff=False):
         if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
             wp_idx = [
                 min(next_step + i, self.X_GOAL.shape[0] - 1)
                 for i in range(self.obs_goal_horizon)
             ]
-            goal_state = self.X_GOAL[wp_idx].flatten()
-            extended_obs = np.concatenate([obs, goal_state])
-        elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
-            goal_state = self.X_GOAL.flatten()
-            extended_obs = np.concatenate([obs, goal_state])
+            # If pos_diff is True and obs is already a difference, reconstruct the current state
+            if pos_diff:
+                # The current goal index is one step before next_step
+                current_wp_idx = min(next_step - 1, self.X_GOAL.shape[0] - 1)
+                current_goal = self.X_GOAL[current_wp_idx]
+                current_state = obs[:current_goal.shape[0]] + current_goal
+            else:
+                current_state = obs[:self.X_GOAL.shape[1]]
+
+            if pos_only:
+                future_positions = self.X_GOAL[wp_idx][:, [0, 2, 4]]
+                if pos_diff:
+                    current_pos = current_state[[0, 2, 4]]
+                    diff = future_positions - current_pos
+                    extended_obs = np.concatenate([obs, diff.flatten()])
+                else:
+                    extended_obs = np.concatenate([obs, future_positions.flatten()])
+            else:
+                future_states = self.X_GOAL[wp_idx]
+                if pos_diff:
+                    diff = future_states - current_state
+                    extended_obs = np.concatenate([obs, diff.flatten()])
+                else:
+                    extended_obs = np.concatenate([obs, future_states.flatten()])
         else:
             extended_obs = obs
-
         return extended_obs
 
-    def shrink_obs(self, obs, next_step):
-        """shrink an observation to remove the next self.obs_goal_horizon reference points.
-
-        Args:
-            obs (ndarray): The observation to be shrunk.
-            next_step (int): The iteration for which to shrink it.
-
-        Returns:
-            shrunk_obs (ndarray): The shrunk observation.
-        """
+    def shrink_obs(self, obs, next_step, pos_only=False, pos_diff=False):
         if self.COST == Cost.RL_REWARD and self.TASK == Task.TRAJ_TRACKING and self.obs_goal_horizon > 0:
             wp_idx = [
                 min(next_step + i, self.X_GOAL.shape[0] - 1)
                 for i in range(self.obs_goal_horizon)
             ]
-            goal_state = self.X_GOAL[wp_idx].flatten()
-            shrunk_obs = obs[:goal_state.shape[0]]
+            if pos_only:
+                n_remove = self.X_GOAL[wp_idx][:, [0, 2, 4]].flatten().shape[0]
+            else:
+                n_remove = self.X_GOAL[wp_idx].flatten().shape[0]
+            # Remove the appended difference or appended values (same shape)
+            if n_remove > 0 and obs.shape[0] > n_remove:
+                shrunk_obs = obs[:-n_remove]
+            else:
+                shrunk_obs = obs
         elif self.COST == Cost.RL_REWARD and self.TASK == Task.STABILIZATION and self.obs_goal_horizon > 0:
-            goal_state = self.X_GOAL.flatten()
-            shrunk_obs = obs[:goal_state.shape[0]]
+            if pos_only:
+                n_remove = self.X_GOAL[[0, 2, 4]].flatten().shape[0]
+            else:
+                n_remove = self.X_GOAL.flatten().shape[0]
+            if n_remove > 0 and obs.shape[0] > n_remove:
+                shrunk_obs = obs[:-n_remove]
+            else:
+                shrunk_obs = obs
         else:
             shrunk_obs = obs
-
         return shrunk_obs
 
     def after_step(self, obs, rew, done, info):

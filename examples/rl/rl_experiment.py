@@ -179,6 +179,42 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path=None, model
             graph3_1 = 0
             graph3_2 = 2
             graph3_3 = 4
+        elif system == 'quadrotor_10D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
+        elif system == 'quadrotor_11D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
+
+            # Add back the reference to get the true trajectory
+            obs = results['obs'][0]
+            x_goal = env.X_GOAL
+            # Ensure shapes match
+            min_len = min(len(obs), len(x_goal))
+            obs = obs[:min_len]
+            x_goal = x_goal[:min_len]
+            obs[:, :13] = obs[:, :13] + x_goal
+        elif system == 'quadrotor_12D':
+            graph1_1 = 4
+            graph1_2 = 5
+            graph3_1 = 0
+            graph3_2 = 2
+            graph3_3 = 4
+
+            # Add back the reference to get the true trajectory
+            obs = results['obs'][0]
+            x_goal = env.X_GOAL
+            # Ensure shapes match
+            min_len = min(len(obs), len(x_goal))
+            obs = obs[:min_len]
+            x_goal = x_goal[:min_len]
+            obs[:, :17] = obs[:, :17] + x_goal
 
         _, ax3 = plt.subplots()
         ax3.plot(results['obs'][0][:, graph3_1], results['obs'][0][:, graph3_2], 'r--', label='RL Trajectory')
@@ -328,7 +364,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
         axs1[i].plot(times, state_stack[:, idx], label='actual')
         axs1[i].plot(times, reference[:, idx], color='r', linestyle='--', label='desired')
         axs1[i].set(ylabel=env.STATE_LABELS[idx] + f'\n[{env.STATE_UNITS[idx]}]')
-        axs1[i].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        axs1[i].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         axs1[i].legend()
         if i != len(group1) - 1:
             axs1[i].set_xticks([])
@@ -344,7 +380,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
         axs2[i].plot(times, state_stack[:, idx], label='actual')
         axs2[i].plot(times, reference[:, idx], color='r', linestyle='--', label='desired')
         axs2[i].set(ylabel=env.STATE_LABELS[idx] + f'\n[{env.STATE_UNITS[idx]}]')
-        axs2[i].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        axs2[i].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         axs2[i].legend()
         if i != len(group2) - 1:
             axs2[i].set_xticks([])
@@ -360,7 +396,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
         axs3[i].plot(times, state_stack[:, idx], label='actual')
         axs3[i].plot(times, reference[:, idx], color='r', linestyle='--', label='desired')
         axs3[i].set(ylabel=env.STATE_LABELS[idx] + f'\n[{env.STATE_UNITS[idx]}]')
-        axs3[i].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        axs3[i].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         axs3[i].legend()
         if i != len(group3) - 1:
             axs3[i].set_xticks([])
@@ -377,7 +413,7 @@ def post_analysis(state_stack, input_stack, env, curr_path):
     for k in range(model.nu):
         axs[k].plot(times, input_stack[:, k])
         axs[k].set(ylabel=env.ACTION_LABELS[k] + f'\n[{env.ACTION_UNITS[k]}]')
-        axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        axs[k].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     axs[0].set_title('Input Trajectories')
     axs[-1].set(xlabel='time (sec)')
     plt.tight_layout()

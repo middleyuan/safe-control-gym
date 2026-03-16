@@ -261,8 +261,8 @@ class MPC_ACADOS(MPC):
         '''
         nx, nu = self.model.nx, self.model.nu
         # set initial condition (0-th state)
-        self.acados_ocp_solver.set(0, 'lbx', obs)
-        self.acados_ocp_solver.set(0, 'ubx', obs)
+        self.acados_ocp_solver.set(0, 'lbx', obs[:nx])
+        self.acados_ocp_solver.set(0, 'ubx', obs[:nx])
 
         # warm-starting solver
         # NOTE: only for ipopt warm-starting; since acados
@@ -270,7 +270,7 @@ class MPC_ACADOS(MPC):
         if self.warmstart:
             if self.x_guess is None or self.u_guess is None:
                 # compute initial guess with IPOPT
-                self.compute_initial_guess(obs)
+                self.compute_initial_guess(obs[:nx])
             for idx in range(self.T + 1):
                 init_x = self.x_guess[:, idx]
                 self.acados_ocp_solver.set(idx, 'x', init_x)
