@@ -39,10 +39,10 @@ class PPO_MPC(BaseController):
             # Training and testing.
             self.venv = make_vec_envs(env_func, None, self.rollout_batch_size, self.num_workers, seed)
             self.venv = VecRecordEpisodeStatistics(self.venv, self.deque_size)
-            self.eval_venv = env_func(seed=seed * 111)
-            self.eval_venv = RecordEpisodeStatistics(self.eval_venv, self.deque_size)
-            # self.eval_venv = make_vec_envs(env_func, None, self.eval_batch_size, self.num_workers, seed * 111)
-            # self.eval_venv = VecRecordEpisodeStatistics(self.eval_venv, self.deque_size)
+            # self.eval_venv = env_func(seed=seed * 111)
+            # self.eval_venv = RecordEpisodeStatistics(self.eval_venv, self.deque_size)
+            self.eval_venv = make_vec_envs(env_func, None, self.eval_batch_size, self.num_workers, seed * 111)
+            self.eval_venv = VecRecordEpisodeStatistics(self.eval_venv, self.deque_size)
         else:
             # Testing only.
             self.env = RecordEpisodeStatistics(self.env)
@@ -248,7 +248,7 @@ class PPO_MPC(BaseController):
         start = time.time()
         agent_info = []
         for env in self.venv.envs:
-            agent_info.append({'current_step': 0, 'x_ref': env.X_GOAL})
+            agent_info.append({'current_step': env.ctrl_step_counter, 'x_ref': env.X_GOAL})
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(
@@ -297,7 +297,6 @@ class PPO_MPC(BaseController):
         results['train'] = self.agent.update(rollouts, self.device)
         results['step'] = self.total_steps
         results['elapsed_time'] = time.time()-start
-        # results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
     def run(self, env=None, render=False, n_episodes=1, verbose=False):
@@ -307,43 +306,54 @@ class PPO_MPC(BaseController):
         self.obs_normalizer.set_read_only()
         if env is None:
             env = self.venv
-        else:
-            pass
 
-        obs, env_info = env.reset()
+        obs, _ = env.reset()
         obs = self.obs_normalizer(obs)
-        ep_returns, ep_lengths = [], []
-        frames = []
-        agent_info = [{'current_step': 0, 'x_ref': env.X_GOAL}]
-        mse, ep_rmse = [], []
+        ep_returns, ep_lengths, ep_rmse, frames = [], [], [], []
+        if hasattr(env, "envs"):
+            agent_info = []
+            for e in env.envs:
+                agent_info.append({"current_step": 0, "x_ref": e.X_GOAL})
+        else:
+            agent_info = [{"current_step": 0, "x_ref": env.X_GOAL}]
+
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=agent_info)
             obs, _, done, info = env.step(action)
-            mse.append(info['mse'])
             if render:
                 env.render()
-                frames.append(env.render('rgb_array'))
+                frames.append(env.render("rgb_array"))
             if verbose:
-                print(f'obs {obs} | act {action}')
-            if done:
-                assert 'episode' in info
-                ep_rmse.append(np.array(mse).mean() ** 0.5)
-                mse = []
-                ep_returns.append(info['episode']['r'])
-                ep_lengths.append(info['episode']['l'])
-                obs, env_info = env.reset()
-                info['current_step'] = 0
-                self.agent.reset()
+                print(f"obs {obs} | act {action}")
+
+            if hasattr(env, "envs"):
+                for idx, inf in enumerate(info["n"]):
+                    if done[idx]:
+                        assert "episode" in inf
+                        ep_returns.append(inf["episode"]["r"])
+                        ep_lengths.append(inf["episode"]["l"])
+                        ep_rmse.append(np.sqrt(inf["episode"]["mse"] / inf["episode"]["l"]))
+                        self.agent.reset()
+                    agent_info[idx] = {"current_step": inf["current_step"], "x_ref": env.envs[idx].X_GOAL}
+            else:
+                if done:
+                    assert "episode" in info
+                    ep_returns.append(info["episode"]["r"])
+                    ep_lengths.append(info["episode"]["l"])
+                    ep_rmse.append(np.sqrt(info["episode"]["mse"] / info["episode"]["l"]))
+                    obs, _ = env.reset()
+                    info["current_step"] = 0
+                    self.agent.reset()
+                agent_info[0] = {"current_step": info["current_step"], "x_ref": env.X_GOAL}
             obs = self.obs_normalizer(obs)
-            agent_info[0] = {'current_step': info['current_step'], 'x_ref': env.X_GOAL}
         # Collect evaluation results.
-        ep_lengths = np.asarray(ep_lengths)
-        ep_returns = np.asarray(ep_returns)
-        eval_results = {'ep_returns': ep_returns, 'ep_lengths': ep_lengths,
-                        'rmse': np.array(ep_rmse).mean(),
-                        'rmse_std': np.array(ep_rmse).std()}
+        eval_results = {
+            "ep_returns": np.asarray(ep_returns),
+            "ep_lengths": np.asarray(ep_lengths),
+            "ep_rmse": np.asarray(ep_rmse),
+        }
         if len(frames) > 0:
-            eval_results['frames'] = frames
+            eval_results["frames"] = frames
         # Other episodic stats from evaluation env.
         if len(env.queued_stats) > 0:
             queued_stats = {k: np.asarray(v) for k, v in env.queued_stats.items()}
@@ -392,8 +402,7 @@ class PPO_MPC(BaseController):
             eval_ep_lengths = results['eval']['ep_lengths']
             eval_ep_returns = results['eval']['ep_returns']
             eval_constraint_violation = results['eval']['constraint_violation']
-            eval_rmse = results['eval']['rmse']
-            eval_rmse_std = results['eval']['rmse_std']
+            eval_ep_rmse = results["eval"]["ep_rmse"]
             self.logger.add_scalars(
                 {
                     'ep_length': eval_ep_lengths.mean(),
@@ -401,14 +410,14 @@ class PPO_MPC(BaseController):
                     'ep_return_std': eval_ep_returns.std(),
                     'ep_reward': (eval_ep_returns / eval_ep_lengths).mean(),
                     'constraint_violation': eval_constraint_violation.mean(),
-                    'rmse': eval_rmse,
-                    'rmse_std': eval_rmse_std
+                    'rmse': np.array(eval_ep_rmse).mean(),
+                    'rmse_std': np.array(eval_ep_rmse).std(),
                 },
                 step,
                 prefix='stat_eval')
         # Print summary table
-        self.logger.dump_scalars()
         print('MPC params:')
         print(self.agent.ac.actor.mpc_param.detach().numpy())
         print('Policy logstd:')
         print(self.agent.ac.actor.logstd.detach().numpy())
+        self.logger.dump_scalars()

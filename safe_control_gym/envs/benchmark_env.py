@@ -291,7 +291,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 if dist_type is not None and scale is not None:
                     if dist_type == 'normal':
                         # noise = np.clip(noise, -2 * scale, 2 * scale)
-                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0 * scale, high=2.0 * scale)
+                        noise = sample_truncated(mu=0.0, sigma=scale, low=-3.0 * scale, high=3.0 * scale)
                 randomized_values[key] += noise
         return randomized_values
 

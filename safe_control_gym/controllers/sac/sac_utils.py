@@ -79,7 +79,8 @@ class SACAgent:
         self.ac.to(device)
         self.ac_targ.to(device)
         # self.log_alpha = self.log_alpha.to(device)
-        self.log_alpha.to(device)
+        # self.log_alpha.to(device)
+        self.log_alpha.data = self.log_alpha.data.to(device)
 
     def train(self):
         '''Sets training mode.'''
@@ -210,21 +211,6 @@ class MLPActor(nn.Module):
         log_std = self.log_std_layer(net_out)
         log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
         dist = self.dist_fn(mu, log_std)
-
-        # if deterministic:
-        #     action = dist.mode()
-        # else:
-        #     action = dist.rsample()
-
-        # if with_logprob:
-        #     logp = dist.log_prob(action)
-        #     logp -= (2 * (np.log(2) - action - F.softplus(-2 * action))).sum(axis=1, keepdim=True)
-        # else:
-        #     logp = None
-
-        # action = torch.tanh(action)
-        # action = self.postprocess_fn(action)
-        # return action, logp
 
         if deterministic:
             x_t = dist.mode()

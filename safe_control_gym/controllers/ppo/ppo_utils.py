@@ -171,24 +171,11 @@ class MLPActor(nn.Module):
             self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
 
-        # action rescaling
-        # self.action_scale = torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32)
-        # self.action_bias = torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32)
-        self.register_buffer(
-            "action_scale", torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32).flatten()
-        )
-        self.register_buffer(
-            "action_bias", torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32).flatten()
-        )
-
     def forward(self,
                 obs,
                 act=None
                 ):
-        x_t = self.pi_net(obs)
-        y_t = torch.tanh(x_t)
-        mean_act = y_t * self.action_scale + self.action_bias
-        dist = self.dist_fn(mean_act)
+        dist = self.dist_fn(self.pi_net(obs))
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)

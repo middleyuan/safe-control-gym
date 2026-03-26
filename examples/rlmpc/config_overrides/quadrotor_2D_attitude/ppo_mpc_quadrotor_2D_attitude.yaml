@@ -27,13 +27,13 @@ algo_config:
   gae_lambda: 0.95  # 95
   use_clipped_value: False  # or True
   clip_param: 0.2
-  target_kl: 0.005
-  entropy_coef: 0.01
+  target_kl: 0.01
+  entropy_coef: 0.001
   exploration_init: -1.0
 
   # optim args
-  opt_epochs: 10
-  mini_batch_size: 128
+  opt_epochs: 5
+  mini_batch_size: 64
   actor_lr: 0.0003
   critic_lr: 0.0003
 
@@ -41,7 +41,7 @@ algo_config:
   max_env_steps: 660000
   rollout_batch_size: 10
   rollout_steps: 330
-  eval_batch_size: 5
+  eval_batch_size: 10
 
   # misc
   log_interval: 6600

@@ -4,7 +4,7 @@ algo_config:
   activation: "relu"
 
   # loss args
-  gamma: 0.99
+  gamma: 0.95
   use_gae: True
   gae_lambda: 0.95
   clip_param: 0.2
@@ -13,20 +13,20 @@ algo_config:
   exploration_init: -0.5
 
   # optim args
-  opt_epochs: 20
+  opt_epochs: 10
   mini_batch_size: 256
   actor_lr: 0.0003
   critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 1584000
+  max_env_steps: 2640000
   rollout_batch_size: 10
   rollout_steps: 330
   eval_batch_size: 10
 
   # misc
   log_interval: 13200
-  save_interval: 1584000
+  save_interval: 2640000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True

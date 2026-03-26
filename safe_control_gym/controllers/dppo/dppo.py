@@ -62,6 +62,7 @@ class DPPO(BaseController):
                                clip_param=self.clip_param,
                                target_kl=self.target_kl,
                                entropy_coef=self.entropy_coef,
+                               exploration_init=self.exploration_init,
                                actor_lr=self.actor_lr,
                                critic_lr=self.critic_lr,
                                opt_epochs=self.opt_epochs,
@@ -303,13 +304,11 @@ class DPPO(BaseController):
 
         obs, info = env.reset()
         obs = self.obs_normalizer(obs)
-        ep_returns, ep_lengths = [], []
+        ep_returns, ep_lengths, ep_rmse = [], [], []
         frames = []
-        mse, ep_rmse_mean, ep_rmse_std = [], [], []
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
             obs, _, done, info = env.step(action)
-            mse.append(info['mse'])
             if render:
                 env.render()
                 frames.append(env.render('rgb_array'))
@@ -317,19 +316,17 @@ class DPPO(BaseController):
                 print(f'obs {obs} | act {action}')
             if done:
                 assert 'episode' in info
-                ep_rmse_mean.append(np.array(mse).mean() ** 0.5)
-                ep_rmse_std.append(np.array(mse).std())
-                mse = []
                 ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
+                ep_rmse.append(np.sqrt(info["episode"]["mse"] / info["episode"]["l"]))
                 obs, _ = env.reset()
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
-        ep_lengths = np.asarray(ep_lengths)
-        ep_returns = np.asarray(ep_returns)
-        eval_results = {'ep_returns': ep_returns, 'ep_lengths': ep_lengths,
-                        'rmse': np.array(ep_rmse_mean).mean(),
-                        'rmse_std': np.array(ep_rmse_std).mean()}
+        eval_results = {
+            "ep_returns": np.asarray(ep_returns),
+            "ep_lengths": np.asarray(ep_lengths),
+            "ep_rmse": np.asarray(ep_rmse),
+        }
         if len(frames) > 0:
             eval_results['frames'] = frames
         # Other episodic stats from evaluation env.
@@ -379,8 +376,7 @@ class DPPO(BaseController):
             eval_ep_lengths = results['eval']['ep_lengths']
             eval_ep_returns = results['eval']['ep_returns']
             eval_constraint_violation = results['eval']['constraint_violation']
-            eval_rmse = results['eval']['rmse']
-            eval_rmse_std = results['eval']['rmse_std']
+            eval_ep_rmse = results["eval"]["ep_rmse"]
             self.logger.add_scalars(
                 {
                     'ep_length': eval_ep_lengths.mean(),
@@ -388,8 +384,8 @@ class DPPO(BaseController):
                     'ep_return_std': eval_ep_returns.std(),
                     'ep_reward': (eval_ep_returns / eval_ep_lengths).mean(),
                     'constraint_violation': eval_constraint_violation.mean(),
-                    'rmse': eval_rmse,
-                    'rmse_std': eval_rmse_std
+                    'rmse': np.array(eval_ep_rmse).mean(),
+                    'rmse_std': np.array(eval_ep_rmse).std(),
                 },
                 step,
                 prefix='stat_eval')

@@ -2,7 +2,7 @@
 
 #SYS='cartpole'
 #SYS='quadrotor_2D'
-SYS='quadrotor_2D_attitude'
+#SYS='quadrotor_2D_attitude'
 SYS='quadrotor_3D_attitude'
 
 #TASK='stab'
@@ -19,10 +19,10 @@ fi
 python3 ./rlmpc_experiment.py \
     --task ${SYS_NAME} \
     --algo ${ALGO} \
-    --seed 0 \
+    --seed 1 \
     --overrides \
-        ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
-        ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
+        ./config_overrides/${SYS}/obstacle_course_13.yaml \
+        ./config_overrides/${SYS}/${ALGO}_${SYS}_13.yaml \
     --kv_overrides \
         algo_config.training=False \
         task_config.randomized_init=False

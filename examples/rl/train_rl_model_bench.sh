@@ -15,29 +15,31 @@ fi
 # TASK='stab'
 TASK='track'
 
-ALGO='ppo'
+# ALGO='ppo'
 # ALGO='dppo'
-# ALGO='sac'
+ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
-EXP_NAME='Final'
-TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+EXP_NAME='Final_march'
+# TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+TRAIN_LIST=('robustness_combo')
 EVAL_LIST=('performance' 'generalization' 'robustness_ob' 'robustness_ps' 'robustness_pm')
 
-# ENV parameters for each algorithm
-if [ "${ALGO}" == 'ppo' ]; then
-    # PPO env parameters
-    # shellcheck disable=SC2054
-    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
-elif [ "${ALGO}" == 'dppo' ]; then
-    # DPPO env parameters
-    # shellcheck disable=SC2054
-    Q=(5.0,0.1,5.0,0.1,0.1,0.001)
-elif [ "${ALGO}" == 'sac' ]; then
-    # SAC env parameters
-    # shellcheck disable=SC2054
-    Q=(10.0,0.1,10.0,0.1,0.1,0.001)
-fi
+# # ENV parameters for each algorithm
+# if [ "${ALGO}" == 'ppo' ]; then
+#     # PPO env parameters
+#     # shellcheck disable=SC2054
+#     Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+# elif [ "${ALGO}" == 'dppo' ]; then
+#     # DPPO env parameters
+#     # shellcheck disable=SC2054
+#     Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+# elif [ "${ALGO}" == 'sac' ]; then
+#     # SAC env parameters
+#     # shellcheck disable=SC2054
+#     Q=(5.0,0.1,5.0,0.1,0.1,0.001)
+# fi
+Q=(10.0,0.1,10.0,0.1,0.1,0.001)
 
 # Train the unsafe controller/agent.
 for TRAIN in "${TRAIN_LIST[@]}"; do
@@ -52,31 +54,31 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_gen.yaml"
     elif [ "${TRAIN}" == 'robustness_ob5' ]; then
         # shellcheck disable=SC2054
-        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        # Q=(1.0,0.1,1.0,0.1,0.1,0.001)
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ob5.yaml"
     elif [ "${TRAIN}" == 'robustness_ps3' ]; then
         # shellcheck disable=SC2054
-        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        # Q=(1.0,0.1,1.0,0.1,0.1,0.001)
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ps3.yaml"
     elif [ "${TRAIN}" == 'robustness_ob5ps3' ]; then
         # shellcheck disable=SC2054
-        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        # Q=(1.0,0.1,1.0,0.1,0.1,0.001)
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_ob5ps3.yaml"
     elif [ "${TRAIN}" == 'robustness_pm' ]; then
         # shellcheck disable=SC2054
-        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        # Q=(1.0,0.1,1.0,0.1,0.1,0.001)
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_pm.yaml"
     elif [ "${TRAIN}" == 'robustness_combo' ]; then
         # shellcheck disable=SC2054
-        Q=(1.0,0.1,1.0,0.1,0.1,0.001)
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        # Q=(1.0,0.1,1.0,0.1,0.1,0.001)
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_combo.yaml"
     elif [ "${TRAIN}" == 'robustness_dw' ]; then
-        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}_dr.yaml"
+        CONFIG1="./config_overrides/${SYS}/${ALGO}_${SYS}.yaml"
         CONFIG2="./config_overrides/${SYS}/${SYS}_${TASK}_dw.yaml"
     fi
     echo ${CONFIG1}
@@ -118,7 +120,7 @@ for TRAIN in "${TRAIN_LIST[@]}"; do
             fi
 
             for EP in "${EXTERNAL_PARAM[@]}"; do
-                python3 ./rl_experiment.py \
+                python3 ./rl_experiment_bench.py \
                     --task ${SYS_NAME} \
                     --algo ${ALGO} \
                     --use_gpu \
