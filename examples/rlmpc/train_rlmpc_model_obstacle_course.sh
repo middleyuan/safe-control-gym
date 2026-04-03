@@ -8,14 +8,11 @@ SYS='quadrotor_2D_attitude'
 # TASK='stab'
 TASK='track'
 
-# ALGO='q_mpc'
-# ALGO='td3_mpc'
 ALGO='ppo_mpc'
-# ALGO='ppo_vmpc'
 # ALGO='appo_mpc'
 # ALGO='sac_mpc'
 
-EXP_NAME='quad_3d_obc_nov'
+EXP_NAME='test'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS

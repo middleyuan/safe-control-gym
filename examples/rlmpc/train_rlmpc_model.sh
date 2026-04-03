@@ -9,7 +9,7 @@ SYS='quadrotor_2D_attitude'
 TASK='track'
 
 ALGO='ppo_mpc'
-# ALGO='ppo_vmpc'
+# ALGO='appo_mpc'
 # ALGO='sac_mpc'
 
 EXP_NAME='quad_2d_track'

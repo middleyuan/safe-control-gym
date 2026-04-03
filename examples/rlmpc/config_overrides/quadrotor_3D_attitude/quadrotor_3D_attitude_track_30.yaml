@@ -71,11 +71,11 @@ task_config:
 
   episode_len_sec: 30
   cost: rl_reward
-  obs_goal_horizon: 1
+  obs_goal_horizon: 10
   rew_exponential: True
 
-  rew_state_weight: [10.0, 0.1, 10.0, 0.1, 10.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
-  rew_act_weight: [1.0, 1.0, 1.0, 1.0]  #set to 1 if action noise is too large
+  rew_state_weight: [20.0, 0.1, 20.0, 0.1, 20.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+  rew_act_weight: [0.1, 0.1, 0.1, 0.1]  #set to 1 if action noise is too large
 
   constraints:
     - constraint_form: default_constraint

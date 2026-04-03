@@ -1,7 +1,8 @@
-"""PPO-MPC utilities."""
+"""PPO utilities."""
 
 from collections import defaultdict
 from copy import deepcopy
+import time
 
 import casadi as cs
 import numpy as np
@@ -18,12 +19,14 @@ from safe_control_gym.math_and_models.distributions import Normal
 from safe_control_gym.math_and_models.neural_networks import MLP
 
 
-class PPO_MPC_Agent:
+class APPO_MPC_Agent:
     """A PPO class that encapsulates models, optimizers and update functions."""
 
     def __init__(
         self,
         env_fun,
+        obs_space,
+        act_space,
         gamma,
         model,
         hidden_dim=64,
@@ -43,8 +46,8 @@ class PPO_MPC_Agent:
 
         # Parameters.
         self.env = env_fun
-        self.obs_space = env_fun.observation_space
-        self.act_space = env_fun.action_space
+        self.obs_space = obs_space
+        self.act_space = act_space
         self.use_clipped_value = use_clipped_value
         self.clip_param = clip_param
         self.target_kl = target_kl
@@ -57,8 +60,8 @@ class PPO_MPC_Agent:
         # Model.
         self.ac = MLPActorCritic(
             self.env,
-            self.obs_space,
-            self.act_space,
+            obs_space,
+            act_space,
             gamma,
             model,
             hidden_dims=[hidden_dim] * 2,
@@ -101,17 +104,21 @@ class PPO_MPC_Agent:
         self.actor_opt.load_state_dict(state_dict["actor_opt"])
         self.critic_opt.load_state_dict(state_dict["critic_opt"])
 
-    def compute_policy_loss(self, batch, batch_th):
+    def compute_policy_loss(self, batch, theta_old):
         """Returns policy loss(es) given batch of data."""
         obs, act, logp_old, adv = (
-            batch_th["obs"],
-            batch_th["act"],
-            batch_th["logp"],
-            batch_th["adv"],
+            batch["obs"],
+            batch["act"],
+            batch["logp"],
+            batch["adv"],
         )
-        info = batch["info"]
-        action_th, dist, logp, nabla_pi_ref, nabla_pi_theta, optimal = (
-            self.ac.actor.forward_train(obs, act, info)
+        mpc_act, nabla_pi_theta, optimal = (
+            batch["mpc_act"],
+            batch["nabla_pi_theta"],
+            batch["optimal"],
+        )
+        action, dist, logp = self.ac.actor.forward_train(
+            obs, act, theta_old, mpc_act, nabla_pi_theta
         )
 
         # Policy.
@@ -125,18 +132,11 @@ class PPO_MPC_Agent:
         entropy_loss = torch.where(optimal > 0.9, -dist.entropy(), torch.nan).nanmean()
         # KL/trust region.
         approx_kl = torch.where(optimal > 0.9, (logp_old - logp), torch.nan).nanmean()
-        return (
-            policy_loss,
-            entropy_loss,
-            approx_kl,
-            action_th,
-            nabla_pi_ref,
-            nabla_pi_theta,
-        )
+        return policy_loss, entropy_loss, approx_kl
 
-    def compute_value_loss(self, batch_th):
+    def compute_value_loss(self, batch):
         """Returns value loss(es) given batch of data."""
-        obs, ret, v_old = batch_th["obs"], batch_th["ret"], batch_th["v"]
+        obs, ret, v_old = batch["obs"], batch["ret"], batch["v"]
         v_cur = self.ac.critic(obs)
         if self.use_clipped_value:
             v_old_clipped = v_old + (v_cur - v_old).clamp(
@@ -157,37 +157,21 @@ class PPO_MPC_Agent:
         )
         # assert if num_mini_batch is 0
         assert num_mini_batch != 0, "num_mini_batch is 0"
+        theta_old = self.ac.actor.mpc_param.detach().clone()
         for _ in range(self.opt_epochs):
-            p_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0
-            v_loss_epoch, theta_loss_epoch = 0, 0
-            for batch, batch_th in rollouts.sampler(self.mini_batch_size, device):
+            p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
+            theta_loss_epoch, ref_loss_epoch = 0, 0
+            for batch in rollouts.sampler(self.mini_batch_size, device):
                 # Actor update.
-                (
-                    policy_loss,
-                    entropy_loss,
-                    approx_kl,
-                    action_th,
-                    _,
-                    nabla_pi_theta,
-                ) = self.compute_policy_loss(batch, batch_th)
+                policy_loss, entropy_loss, approx_kl = self.compute_policy_loss(
+                    batch, theta_old
+                )
                 # Update only when no KL constraint or constraint is satisfied.
                 if (self.target_kl <= 0) or (
                     self.target_kl > 0 and approx_kl <= 1.5 * self.target_kl
                 ):
                     self.actor_opt.zero_grad()
                     (policy_loss + self.entropy_coef * entropy_loss).backward()
-
-                    # Passing the gradients through the mpc
-                    # action_th.grad now contains dL/da
-                    theta = self.ac.actor.get_theta_param(batch_th["obs"])
-                    theta_loss = (
-                        action_th.grad.unsqueeze(1)
-                        @ nabla_pi_theta
-                        @ theta.unsqueeze(2)
-                    ).sum()
-                    # traj_ref = self.ac.actor.get_ref_param(batch['info'])
-                    # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
-                    theta_loss.backward()
                     self.actor_opt.step()
                     with torch.no_grad():
                         self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
@@ -195,11 +179,9 @@ class PPO_MPC_Agent:
                     p_loss_epoch += policy_loss.item()
                     e_loss_epoch += entropy_loss.item()
                     kl_epoch += approx_kl.item()
-                    theta_loss_epoch += theta_loss.item()
-                    # ref_loss_epoch += ref_loss.sum().item()
 
                 # Critic update.
-                value_loss = self.compute_value_loss(batch_th)
+                value_loss = self.compute_value_loss(batch)
                 self.critic_opt.zero_grad()
                 value_loss.backward()
                 self.critic_opt.step()
@@ -209,6 +191,7 @@ class PPO_MPC_Agent:
             results["entropy_loss"].append(e_loss_epoch / num_mini_batch)
             results["approx_kl"].append(kl_epoch / num_mini_batch)
             results["theta_loss"].append(theta_loss_epoch / num_mini_batch)
+            results["ref_loss"].append(ref_loss_epoch / num_mini_batch)
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -262,9 +245,11 @@ class MLPActorCritic(nn.Module):
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
     def step(self, obs, info=None):
-        dist, _, soln_info, results_dict, optimal_flag = self.actor(
+        dist, _, mpc_act, nabla_pi_theta, optimal_flag = self.actor(
             obs, actor_info=info
         )
+        mpc_act = np.array(mpc_act)
+        nabla_pi_theta = np.array(nabla_pi_theta)
         a = dist.sample()
         logp_a = dist.log_prob(a)
         v = self.critic(obs)
@@ -272,8 +257,8 @@ class MLPActorCritic(nn.Module):
             a.cpu().numpy(),
             v.cpu().numpy(),
             logp_a.cpu().numpy(),
-            soln_info,
-            results_dict,
+            mpc_act,
+            nabla_pi_theta,
             optimal_flag,
         )
 
@@ -338,42 +323,47 @@ class MPCActor(nn.Module):
         self.mpc_param = self._build_mpc_param()
 
         # Construct output action distribution.
-        self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
-        self.dist_fn = lambda x: Normal(x, self.logstd.exp())
+        # self.net = MLP(obs_dim, hidden_dims[-1], hidden_dims[:-1], activation)
+        # self.log_std_layer = nn.Linear(hidden_dims[-1], act_dim)
+        self.log_std = nn.Parameter(exploration_init * torch.ones(act_dim))
+        self.dist_fn = lambda x, log_std: Normal(x, log_std.exp())
+        self.log_std_min = -20
+        self.log_std_max = 2
 
     def forward(self, obs, act=None, actor_info=None):
         theta = self.get_theta_param(obs)
         traj_param = self.get_references(actor_info)
         if obs.ndim > 1:
-            action, info, results_dict, optimal_flag = self.mpc.select_action_batch(
-                obs, theta.numpy(), traj_param, actor_info
+            mpc_act, nabla_pi_theta, optimal_flag = self.mpc.select_action_batch(
+                obs.cpu().numpy(), theta.cpu().numpy(), traj_param, actor_info
             )
         else:
-            action, info, results_dict, optimal_flag = self.mpc.select_action(
-                obs, theta.numpy(), traj_param
+            mpc_act, _, _, optimal_flag = self.mpc.select_action(
+                obs.cpu().numpy(), theta.cpu().numpy(), traj_param
             )
-        action = torch.FloatTensor(np.array(action))
-        optimal_flag = torch.FloatTensor(np.array(optimal_flag))
-        dist = self.dist_fn(action)
+            nabla_pi_theta = None
+        action = torch.FloatTensor(np.array(mpc_act)).to(theta.device)
+        # net_out = self.net(obs)
+        # log_std = self.log_std_layer(net_out)
+        log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
+        dist = self.dist_fn(action, log_std)
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)
-        return dist, logp_a, info, results_dict, optimal_flag
+        return dist, logp_a, mpc_act, nabla_pi_theta, optimal_flag
 
-    def forward_train(self, obs, act, info):
+    def forward_train(self, obs, act, theta_old, mpc_act, nabla_pi_theta):
         theta = self.get_theta_param(obs)
-        action, nabla_pi_ref, nabla_pi_theta, optimal_flag = (
-            self.mpc.select_action_batch_train(
-                obs.numpy(),
-                theta.detach().numpy(),
-                info,
-            )
-        )
-        action_th = action
-        action_th.requires_grad_()
-        dist = self.dist_fn(action_th)
+        action = mpc_act.unsqueeze(2) + nabla_pi_theta @ (
+            theta - theta_old.repeat(obs.shape[0], 1)
+        ).unsqueeze(2)
+        action = action.squeeze(2)
+        # net_out = self.net(obs)
+        # log_std = self.log_std_layer(net_out)
+        log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
+        dist = self.dist_fn(action, log_std)
         logp_a = dist.log_prob(act)
-        return action_th, dist, logp_a, nabla_pi_ref, nabla_pi_theta, optimal_flag
+        return action, dist, logp_a
 
     def reset(self, idx):
         self.mpc.reset(idx)
@@ -433,7 +423,6 @@ class MPCPolicyFunction(MPCFunction):
         constraint_tol: float = 1e-6,
         additional_constraints: list = None,
         n_parallel_solver: int = 1,
-        n_train_solver: int = 1,
         jit: bool = False,
         jit_options: dict = None,
     ):
@@ -447,17 +436,13 @@ class MPCPolicyFunction(MPCFunction):
             constraint_tol=constraint_tol,
             additional_constraints=additional_constraints,
             n_parallel_solver=n_parallel_solver,
-            n_train_solver=n_train_solver,
             jit=jit,
             jit_options=jit_options,
         )
 
         # Parallel solvers
-        self.pi_solvers, self.rkkt_norm_fns, _, _ = self.get_parallel_solver(
+        self.pi_solvers, _, _, self.all_solvers = self.get_parallel_solver(
             self.n_parallel_solver
-        )
-        self.pi_solvers_train, _, _, self.all_solvers_train = self.get_parallel_solver(
-            self.n_train_solver
         )
 
     def select_action_batch(self, obs_batch, theta, traj_ref, actor_info):
@@ -481,9 +466,9 @@ class MPCPolicyFunction(MPCFunction):
             fixed_param = obs[: self.model.nx]
             ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
             opt_vars_init = np.zeros(self.solver_dict["opt_vars"].shape)
-
-            # shift previous solutions by 1 step based on last soln, if available
-            if self.infos[i] is not None:
+            if (
+                self.infos[i] is not None
+            ):  # shift previous solutions by 1 step based on last soln
                 opt_vars_init = self.infos[i]["opt_var"]
                 x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
                 x_prev, u_prev, sigma_prev = (
@@ -506,11 +491,11 @@ class MPCPolicyFunction(MPCFunction):
         # Forward pass through solver
         soln_batch = self.pi_solvers(x0=x0, p=p, lbg=lbg, ubg=ubg)
         z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
-        rkkt_norm_batch = self.rkkt_norm_fns(z, fixed_p, ref_p, theta.T)
+        rkkt_norm_batch, dpidp_batch = self.all_solvers(z, fixed_p, ref_p, theta.T)
         optimal_batch = rkkt_norm_batch.full() < 1e-3
 
         # Post-processing the solution
-        action_batch, results_dict_batch, info_batch = [], [], []
+        action_batch, nabla_pi_theta_batch, info_batch = [], [], []
         for i, obs in enumerate(obs_batch):
             opt_vars = soln_batch["x"].full()[:, i]
             x_val, u_val, sigma_val = xus_fn(opt_vars)
@@ -535,78 +520,45 @@ class MPCPolicyFunction(MPCFunction):
             info = {
                 "success": optimal_batch[0, i],
                 "opt_var": opt_vars,
+                "action": deepcopy(action),
                 "fixed_param": deepcopy(fixed_p[:, i]),
                 "ref_param": deepcopy(ref_p[:, i]),
                 "theta_param": deepcopy(theta[i, :]),
                 "traj_step": deepcopy(actor_info[i]["current_step"]),
                 "x_ref": deepcopy(actor_info[i]["x_ref"]),
+                "dpidp": deepcopy(
+                    int(optimal_batch[0, i])
+                    * dpidp_batch[:, self.model.nu * i : self.model.nu * (i + 1)].T
+                ),
             }
 
-            # result batch
             action_batch.append(action)
-            results_dict_batch.append(results_dict)
-            info_batch.append(info)
-        self.infos = deepcopy(info_batch)
-        return action_batch, info_batch, results_dict_batch, optimal_batch
-
-    def select_action_batch_train(self, obs_batch, theta, info_batch):
-        con_lbg = self.solver_dict["lower_bound"]
-        con_ubg = self.solver_dict["upper_bound"]
-        opt_act_fn = self.solver_dict["opt_act_fn"]
-
-        x0, fixed_p, ref_p = [], [], []
-        lbg = con_lbg.full().repeat(obs_batch.shape[0], 1)
-        ubg = con_ubg.full().repeat(obs_batch.shape[0], 1)
-        if not obs_batch.ndim > 1:
-            obs_batch = obs_batch[None, :]
-        for i, obs in enumerate(obs_batch):
-            info = info_batch[i]
-            opt_vars_init = info["opt_var"]
-            fixed_param = obs[: self.model.nx]
-            ref_param = info["ref_param"]
-
-            x0.append(opt_vars_init)
-            fixed_p.append(fixed_param)
-            ref_p.append(ref_param)
-        x0, fixed_p, ref_p = np.array(x0).T, np.array(fixed_p).T, np.array(ref_p).T
-        p = np.concatenate((fixed_p, ref_p, theta.T), axis=0)
-
-        # Forward pass through solver
-        soln_batch = self.pi_solvers_train(x0=x0, p=p, lbg=lbg, ubg=ubg)
-        z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
-        action_batch = opt_act_fn(soln_batch["x"]).full().T
-
-        # Post-processing the solution
-        rkkt_norm_batch, dpi_cs = self.all_solvers_train(z, fixed_p, ref_p, theta.T)
-        optimal_batch = rkkt_norm_batch.full() < 1e-3
-        nabla_pi_ref_batch, nabla_pi_theta_batch = [], []
-        for i in range(obs_batch.shape[0]):
-            # nabla_pi_ref_batch.append(dpi_cs[:ref_p.shape[0], 2 * i: 2 * (i + 1)].T)
-            # nabla_pi_theta_batch.append(dpi_cs[ref_p.shape[0]:, 2 * i: 2 * (i + 1)].T)
             nabla_pi_theta_batch.append(
                 int(optimal_batch[0, i])
-                * dpi_cs[
+                * dpidp_batch[
                     self.model.nx : self.model.nx + self.model.nu,
                     self.solver_dict["theta_param"].shape[0]
                     * i : self.solver_dict["theta_param"].shape[0]
                     * (i + 1),
                 ]
             )
-        action_batch = torch.FloatTensor(action_batch)
-        nabla_pi_ref_batch = torch.FloatTensor(np.array(nabla_pi_ref_batch))
-        nabla_pi_theta_batch = torch.FloatTensor(np.array(nabla_pi_theta_batch))
-        optimal_batch = torch.FloatTensor(np.array(optimal_batch)).T
-        return action_batch, nabla_pi_ref_batch, nabla_pi_theta_batch, optimal_batch
+            info_batch.append(info)
+        self.infos = deepcopy(info_batch)
+        return action_batch, nabla_pi_theta_batch, optimal_batch.T
 
     def get_parallel_solver(self, n_solvers):
         pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread")
         rkkt_norm_solvers = self.solver_dict["rkkt_norm_fn"].map(n_solvers, "thread")
+        # rkkt_fn = cs.Function.load('rkkt_fn.casadi')
+        # rkkt_solvers = rkkt_fn.map(n_solvers, 'thread')
         dpi_solvers = self.solver_dict["dpi_fn"].map(n_solvers, "thread")
+        # dPi_fn = cs.Function.load('dPi_fn.casadi')
+        # dpi_solvers = dPi_fn.map(n_solvers, 'thread')
         all_solvers = self.solver_dict["all_fn"].map(n_solvers, "thread")
         return pi_solvers, rkkt_norm_solvers, dpi_solvers, all_solvers
 
 
-class PPOBuffer(object):
+class APPOBuffer(object):
     """Storage for a batch of episodes during training.
 
     Attributes:
@@ -616,7 +568,7 @@ class PPOBuffer(object):
         keys (list): names of all data from scheme.
     """
 
-    def __init__(self, obs_space, act_space, max_length, batch_size):
+    def __init__(self, obs_space, act_space, theta_dim, max_length, batch_size):
         super().__init__()
         self.max_length = max_length
         self.batch_size = batch_size
@@ -636,8 +588,8 @@ class PPOBuffer(object):
             "ret": {"vshape": (T, N, 1)},
             "adv": {"vshape": (T, N, 1)},
             "terminal_v": {"vshape": (T, N, 1)},
-            "info": {"vshape": (T, N), "dtype": object, "init": np.empty},
-            "results_dict": {"vshape": (T, N), "dtype": object, "init": np.empty},
+            "mpc_act": {"vshape": (T, N, act_dim)},
+            "nabla_pi_theta": {"vshape": (T, N, act_dim, theta_dim)},
             "optimal": {"vshape": (T, N, 1)},
         }
         self.keys = list(self.scheme.keys())
@@ -646,6 +598,7 @@ class PPOBuffer(object):
     def reset(self):
         """Allocates space for containers."""
         for k, info in self.scheme.items():
+            assert "vshape" in info, f"Scheme must define vshape for {k}"
             vshape = info["vshape"]
             dtype = info.get("dtype", np.float32)
             init = info.get("init", np.zeros)
@@ -656,43 +609,27 @@ class PPOBuffer(object):
         """Inserts transition step data (as dict) to storage."""
         for k, v in batch.items():
             assert k in self.keys
-            if k in ["info", "results_dict"]:
-                # v should be list-like length N (one per env)
-                assert len(v) == self.batch_size
-                self.__dict__[k][self.t, :] = v
-                continue
-
             shape = self.scheme[k]["vshape"][1:]
             dtype = self.scheme[k].get("dtype", np.float32)
             v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
             self.__dict__[k][self.t] = v_
-        self.t += 1
-        assert (
-            self.t <= self.max_length
-        ), "PPOBuffer overflow: call reset() after get()/training"
-        # self.t = (self.t + 1) % self.max_length
+        self.t = (self.t + 1) % self.max_length
 
     def get(self, device="cpu"):
+        """Returns all data."""
         batch = {}
         for k, info in self.scheme.items():
-            if k in ["info", "results_dict"]:
-                batch[k] = self.__dict__[k].reshape(-1).tolist()
-            else:
-                shape = info["vshape"][2:]  # (...), after flattening T*N
-                data = self.__dict__[k].reshape(-1, *shape)
-                batch[k] = torch.as_tensor(data, device=device)
+            shape = info["vshape"][2:]
+            data = self.__dict__[k].reshape(-1, *shape)
+            batch[k] = torch.as_tensor(data, device=device)
         return batch
 
     def sample(self, indices):
         """Returns partial data."""
         batch = {}
         for k, info in self.scheme.items():
-            if k in ["info", "results_dict"]:
-                # batch[k] = [self.__dict__[k][i] for i in indices]
-                batch[k] = self.__dict__[k].reshape(-1)[indices].tolist()
-            else:
-                shape = info["vshape"][2:]
-                batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]
+            shape = info["vshape"][2:]
+            batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]
         return batch
 
     def sampler(self, mini_batch_size, device="cpu", drop_last=True):
@@ -701,14 +638,8 @@ class PPOBuffer(object):
         sampler = random_sample(np.arange(total_steps), mini_batch_size, drop_last)
         for indices in sampler:
             batch = self.sample(indices)
-            # batch = {
-            #     k: torch.as_tensor(v, device=device) for k, v in batch.items()
-            # }
-            batch_th = {}
-            for k, v in batch.items():
-                if k not in ["info", "results_dict"]:
-                    batch_th[k] = torch.as_tensor(v, device=device)
-            yield batch, batch_th
+            batch = {k: torch.as_tensor(v, device=device) for k, v in batch.items()}
+            yield batch
 
 
 # -----------------------------------------------------------------------------------

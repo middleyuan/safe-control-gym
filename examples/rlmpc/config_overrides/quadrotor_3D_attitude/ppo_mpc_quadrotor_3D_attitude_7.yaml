@@ -5,19 +5,23 @@ algo_config:
 
   # actor args
   actor_config:
-    q_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 1., 1., 1., 0.001, 0.001, 0.001, 1.]
-    r_mpc: [1., 1., 1., 1.]
-    qt_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 1., 1., 1., 0.001, 0.001, 0.001, 1.]
+    q_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+    r_mpc: [0.5, 0.5, 0.5, 0.5]
+    qt_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
     back_off: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     model_param: [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]
     mpc_config:
-      horizon: 30
+      horizon: 20
       warmstart: True
       n_parallel_solver: 10
       n_train_solver: 16
+      jit: True
+      jit_options:
+        # compiler: "clang"  # gcc, ccache gcc, clang
+        flags: ["-O0"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
 
   # loss args
-  gamma: 0.98
+  gamma: 0.95
   use_gae: True
   gae_lambda: 0.95  # 95
   use_clipped_value: False  # or True
@@ -28,20 +32,20 @@ algo_config:
 
   # optim args
   opt_epochs: 10
-  mini_batch_size: 256
-  actor_lr: 0.001
-  critic_lr: 0.001
+  mini_batch_size: 64
+  actor_lr: 0.0003
+  critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 420000
+  max_env_steps: 840000
   rollout_batch_size: 10
-  rollout_steps: 210
-  eval_batch_size: 5
+  rollout_steps: 420
+  eval_batch_size: 10
 
   # misc
-  log_interval: 4200
-  save_interval: 420000
+  log_interval: 8400
+  save_interval: 840000
   num_checkpoints: 0
-  eval_interval: 4200
+  eval_interval: 8400
   eval_save_best: True
   tensorboard: True

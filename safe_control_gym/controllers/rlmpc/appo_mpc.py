@@ -1,4 +1,4 @@
-"""Proximal Policy Optimization (PPO) with MPC"""
+"""Approximate Proximal Policy Optimization (PPO) with MPC"""
 
 import os
 import time
@@ -8,9 +8,9 @@ import numpy as np
 import torch
 
 from safe_control_gym.controllers.base_controller import BaseController
-from safe_control_gym.controllers.rlmpc.ppo_mpc_utils import (
-    PPO_MPC_Agent,
-    PPOBuffer,
+from safe_control_gym.controllers.rlmpc.appo_mpc_utils import (
+    APPO_MPC_Agent,
+    APPOBuffer,
     compute_returns_and_advantages,
 )
 from safe_control_gym.envs.env_wrappers.record_episode_statistics import (
@@ -27,8 +27,8 @@ from safe_control_gym.utils.logging import ExperimentLogger
 from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
 
 
-class PPO_MPC(BaseController):
-    """Proximal policy optimization with MPC"""
+class APPO_MPC(BaseController):
+    """Approximate Proximal policy optimization with MPC"""
 
     def __init__(
         self,
@@ -64,8 +64,10 @@ class PPO_MPC(BaseController):
 
         # Agent.
         model = self.get_prior(self.env)
-        self.agent = PPO_MPC_Agent(
+        self.agent = APPO_MPC_Agent(
             self.env,
+            self.env.observation_space,
+            self.env.action_space,
             self.gamma,
             model,
             hidden_dim=self.hidden_dim,
@@ -266,7 +268,7 @@ class PPO_MPC(BaseController):
         """
 
         with torch.no_grad():
-            # obs = torch.FloatTensor(obs).to(self.device)
+            obs = torch.FloatTensor(obs).to(self.device)
             action = self.agent.ac.act(obs, info=info)
         return action
 
@@ -275,9 +277,10 @@ class PPO_MPC(BaseController):
         self.agent.reset()
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(
+        rollouts = APPOBuffer(
             self.venv.observation_space,
             self.venv.action_space,
+            self.agent.ac.actor.mpc_param.shape[0],
             self.rollout_steps,
             self.rollout_batch_size,
         )
@@ -290,7 +293,7 @@ class PPO_MPC(BaseController):
             )
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(
+                act, v, logp, mpc_act, nabla_pi_theta, optimal = self.agent.ac.step(
                     torch.FloatTensor(obs).to(self.device), info=agent_info
                 )
             next_obs, rew, done, info = self.venv.step(act)
@@ -332,8 +335,8 @@ class PPO_MPC(BaseController):
                     "v": v,
                     "logp": logp,
                     "terminal_v": terminal_v,
-                    "info": soln_info,
-                    "results_dict": results_dict,
+                    "mpc_act": mpc_act,
+                    "nabla_pi_theta": nabla_pi_theta,
                     "optimal": optimal,
                 }
             )
@@ -365,6 +368,7 @@ class PPO_MPC(BaseController):
         results["train"] = self.agent.update(rollouts, self.device)
         results["step"] = self.total_steps
         results["elapsed_time"] = time.time() - start
+        # results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
     def run(self, env=None, render=False, n_episodes=1, verbose=False):
@@ -462,6 +466,7 @@ class PPO_MPC(BaseController):
                         "entropy_loss",
                         "approx_kl",
                         "theta_loss",
+                        "ref_loss",
                     ]
                 },
                 step,
@@ -512,5 +517,5 @@ class PPO_MPC(BaseController):
         mpc_param = self.agent.ac.actor._build_mpc_param()
         print(mpc_param.cpu().detach().numpy())
         print("Policy logstd:")
-        print(self.agent.ac.actor.logstd.detach().numpy())
+        print(self.agent.ac.actor.log_std.cpu().detach().numpy())
         self.logger.dump_scalars()
