@@ -1,23 +1,25 @@
 algo: ilqr
 algo_config:
-  q_lqr:
-  - 15
-  - 0.05
-  - 15
-  - 0.05
-  - 8
-  - 0.05
-  - 0.5
-  - 0.5
-  - 0.5
-  - 0.001
-  - 0.001
-  - 0.001
-  r_lqr: 
-  - 15
-  - 3
-  - 3
-  - 3
+  # Cost parameters
+  q_lqr: 
+    - 15
+    - 0.05
+    - 15
+    - 0.05
+    - 8
+    - 0.05
+    - 0.5 
+    - 0.5 
+    - 0.5 
+    - 0.001
+    - 0.001
+    - 0.001
+    - 1
+  r_lqr:   
+    - 15
+    - 3
+    - 3
+    - 3
   discrete_dynamics: True
   epsilon: 0.005
   lamb_factor: 20
@@ -25,4 +27,4 @@ algo_config:
   max_iterations: 20
 
   output_dir: ./ilqr/results
-  warm_start_traj: ./data/mpc_acados_quadrotor_2D_attitude_11_warmstart_traj.npy
+  warm_start_traj: ./data/mpc_acados_quadrotor_3D_attitude_20_5_ref_traj.npy

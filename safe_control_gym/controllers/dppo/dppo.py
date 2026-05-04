@@ -55,7 +55,6 @@ class DPPO(BaseController):
             self.env = env_func()
             self.env = RecordEpisodeStatistics(self.env)
         # Agent.
-        self.risk_measure_config = {'beta': self.beta}
         self.agent = DPPOAgent(self.env.observation_space,
                                self.env.action_space,
                                hidden_dim=self.hidden_dim,
@@ -229,8 +228,20 @@ class DPPO(BaseController):
         """Performs a training/fine-tuning step."""
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = DPPOBuffer(self.env.observation_space, self.env.action_space,
-                              self.rollout_steps, self.rollout_batch_size, 100)
+        sample_count = (
+            self.agent.value_loss_kwargs["sample_count"]
+            if self.value_loss == "sample_energy"
+            else self.quantile_count
+        )
+        rollouts = DPPOBuffer(
+            self.env.observation_space,
+            self.env.action_space,
+            self.rollout_steps,
+            self.rollout_batch_size,
+            sample_count,
+        )
+        # rollouts = DPPOBuffer(self.env.observation_space, self.env.action_space,
+        #                       self.rollout_steps, self.rollout_batch_size, 100)
         obs = self.obs
         start = time.time()
         for _ in range(self.rollout_steps):
@@ -270,11 +281,14 @@ class DPPO(BaseController):
                                                                        rollouts.v_quant,
                                                                        rollouts.mask,
                                                                        rollouts.terminal_v,
+                                                                       rollouts.terminal_v_quant,
                                                                        last_val,
                                                                        last_val_quant.numpy(),
                                                                        gamma=self.gamma,
                                                                        use_gae=self.use_gae,
-                                                                       gae_lambda=self.gae_lambda)
+                                                                       gae_lambda=self.gae_lambda,
+                                                                       sr_lambda=self.sr_lambda,
+                                                                       sample_count=sample_count)
         rollouts.ret = ret
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)

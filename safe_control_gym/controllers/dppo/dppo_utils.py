@@ -167,6 +167,8 @@ class DPPOAgent:
         num_mini_batch = rollouts.max_length * rollouts.batch_size // self.mini_batch_size
         # assert if num_mini_batch is 0
         assert num_mini_batch != 0, 'num_mini_batch is 0'
+        n_updates, stop_training = 0, False
+
         for _ in range(self.opt_epochs):
             p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
             for batch in rollouts.sampler(self.mini_batch_size, device):
@@ -177,6 +179,9 @@ class DPPOAgent:
                     self.actor_opt.zero_grad()
                     (policy_loss + self.entropy_coef * entropy_loss).backward()
                     self.actor_opt.step()
+                else:
+                    # stop_training = True
+                    break
 
                 # Critic update.
                 value_loss = self.compute_value_loss(batch)
@@ -188,10 +193,13 @@ class DPPOAgent:
                 v_loss_epoch += value_loss.item()
                 e_loss_epoch += entropy_loss.item()
                 kl_epoch += approx_kl.item()
-            results['policy_loss'].append(p_loss_epoch / num_mini_batch)
-            results['value_loss'].append(v_loss_epoch / num_mini_batch)
-            results['entropy_loss'].append(e_loss_epoch / num_mini_batch)
-            results['approx_kl'].append(kl_epoch / num_mini_batch)
+                n_updates += 1
+            results['policy_loss'].append(p_loss_epoch / max(n_updates, 1))
+            results['value_loss'].append(v_loss_epoch / max(n_updates, 1))
+            results['entropy_loss'].append(e_loss_epoch / max(n_updates, 1))
+            results['approx_kl'].append(kl_epoch / max(n_updates, 1))
+            # if stop_training:
+            #     break
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -436,37 +444,42 @@ def compute_returns_and_advantages(rews,
                                    val_quants,
                                    masks,
                                    terminal_vals=0,
+                                   terminal_val_quants=0,
                                    last_val=0,
                                    last_quant=0,
                                    process_quants=None,
                                    gamma=0.99,
                                    use_gae=False,
                                    gae_lambda=0.95,
+                                   sr_lambda=0.95,
                                    sample_count=100
                                    ):
     '''Useful for policy-gradient algorithms.'''
     T, N = rews.shape[:2]
-    rets, advs, next_value_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, sample_count))
+    rets, advs, value_target_quants = np.zeros((T, N, 1)), np.zeros((T, N, 1)), np.zeros((T, N, sample_count))
 
     ret, ret_quant, adv = last_val, last_quant, np.zeros((N, 1))
     vals = np.concatenate([vals, last_val[np.newaxis, ...]], 0)
 
     # Compensate for time truncation.
-    rews += gamma * terminal_vals
+    rews_scalar = rews + gamma * terminal_vals
+    rews_quant = rews + gamma * terminal_val_quants
 
     # Cumulative discounted sums.
     for i in reversed(range(T)):
-        ret = rews[i] + gamma * masks[i] * ret
-        ret_quant = rews[i] + gamma * masks[i] * ret_quant
-        preserved_value_quants = masks[i].astype(bool) * (np.random.rand(*ret_quant.shape) < 1.0)
-        ret_quant_ = np.where(preserved_value_quants, ret_quant, val_quants[i])
+        ret = rews_scalar[i] + gamma * masks[i] * ret
+        ret_quant = rews_quant[i] + gamma * masks[i] * ret_quant
+        # preserved_value_quants = masks[i].astype(bool) * (np.random.rand(*ret_quant.shape) < gae_lambda)
+        # ret_quant_ = np.where(preserved_value_quants, ret_quant, val_quants[i])
+        sample_replace = (np.random.rand(*ret_quant.shape) >= sr_lambda) & masks[i].astype(bool)
+        ret_quant_ = np.where(sample_replace, val_quants[i], ret_quant)
         if not use_gae:
             adv = ret - vals[i]
         else:
-            td_error = rews[i] + gamma * masks[i] * vals[i + 1] - vals[i]
+            td_error = rews_scalar[i] + gamma * masks[i] * vals[i + 1] - vals[i]
             adv = adv * gae_lambda * gamma * masks[i] + td_error
         rets[i] = deepcopy(ret)
         advs[i] = deepcopy(adv)
-        next_value_quants[i, :, :] = deepcopy(ret_quant)
+        value_target_quants[i, :, :] = deepcopy(ret_quant_)
         ret_quant = deepcopy(ret_quant_)
-    return rets, advs, next_value_quants
+    return rets, advs, value_target_quants
