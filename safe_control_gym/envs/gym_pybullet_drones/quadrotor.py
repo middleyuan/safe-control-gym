@@ -1193,7 +1193,6 @@ class Quadrotor(BaseAviary):
             self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
             self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
 
-            # mp = [18.112984649321753, 3.6800, 0.0, 140.8, 13.4, 124.8, 0.0]
             lr_param = cs.MX.sym('learnable_param', 5)
             parameterized_X_dot = cs.vertcat(
                 x_dot,
@@ -1462,7 +1461,7 @@ class Quadrotor(BaseAviary):
 
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY or \
             self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_HIST or \
-                self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_REL:
+            self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY_REL:
             nx, nu = 13, 4
             # Define states.
             x = cs.MX.sym('x')
@@ -1482,9 +1481,8 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            # model_choice = "quartic" # options: linear, quadratic, quartic
-            # model_choice = "quadratic"  # options: linear, quadratic
-            model_choice = "linear"
+            model_choice = "linear"  # options: linear, quadratic, quartic
+            
             if model_choice == "quartic":
                 #Quartic Model
                 # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
@@ -1502,21 +1500,24 @@ class Quadrotor(BaseAviary):
                 force_motor_dot = 1 / params_acc[5] * (T_c - force_motor)
                 thrust = force_motor
                 forces_motor_z = 1 / self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2 + params_acc[3]*thrust**3 + params_acc[4]*thrust**4)  # [N]
-                X_dot = cs.vertcat(x_dot,
-                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-                                y_dot,
-                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                                z_dot,
-                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
-                                phi_dot,
-                                theta_dot,
-                                psi_dot,
-                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                                force_motor_dot)
+                X_dot = cs.vertcat(
+                    x_dot,
+                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    force_motor_dot
+                )
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+            
             elif model_choice == "quadratic":
                 #Quadratic Model
                 # params_acc = prior_prop.get('param_acc', [-1.02207, 6.42, -7.215, 0.12])
@@ -1532,21 +1533,24 @@ class Quadrotor(BaseAviary):
                 force_motor_dot = 1 / params_acc[3] * (T_c - force_motor)
                 thrust = force_motor
                 forces_motor_z = 1/self.MASS * (params_acc[0] + params_acc[1]*thrust + params_acc[2]*thrust**2)  # [N]
-                X_dot = cs.vertcat(x_dot,
-                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
-                                y_dot,
-                                forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
-                                z_dot,
-                                forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
-                                phi_dot,
-                                theta_dot,
-                                psi_dot,
-                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
-                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
-                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                                force_motor_dot)
+                X_dot = cs.vertcat(
+                    x_dot,
+                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    y_dot,
+                    forces_motor_z * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    z_dot,
+                    forces_motor_z * cs.cos(phi) * cs.cos(theta) - g,
+                    phi_dot,
+                    theta_dot,
+                    psi_dot,
+                    params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
+                    params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
+                    params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
+                    force_motor_dot
+                )
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
             elif model_choice == "linear":
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
                 # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
@@ -2256,7 +2260,6 @@ class Quadrotor(BaseAviary):
             world_state = np.hstack(
                 [pos[0], vel[0], pos[2], vel[2], rpy[1], rpy_rate[1]]
             ).reshape((6,))
-
         elif self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE_5S:
             # {x, x_dot, z, z_dot, theta, theta_dot}.
             self.state = np.hstack(
