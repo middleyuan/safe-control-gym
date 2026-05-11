@@ -1555,7 +1555,9 @@ class Quadrotor(BaseAviary):
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
                 # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
                 # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
-                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
+                params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105, -0.0171, 0.000811])
+                if len(params_acc) < 5:
+                    params_acc = list(params_acc) + [-0.0171, 0.000811]
                 params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
                 params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
                 params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
@@ -1576,14 +1578,27 @@ class Quadrotor(BaseAviary):
                 dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
                 df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
                 df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+
+                # Body-frame drag model transformed back to world frame.
+                Rob = csRotXYZ(phi, theta, psi)
+                Rbo = Rob.T
+                vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+                drag_matrix = cs.diag(cs.vertcat(params_acc[3], params_acc[3], params_acc[4]))
+                vel_body = Rbo @ vel_world
+                drag_body = drag_matrix @ vel_body
+                drag_world = Rob @ drag_body
+
+                thrust_world_x = 1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi))
+                thrust_world_y = 1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi))
+                thrust_world_z = 1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta)
                 # Define dynamics equations.
                 X_dot = cs.vertcat(
                     x_dot,
-                    1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    thrust_world_x + 1 / self.MASS * drag_world[0],
                     y_dot,
-                    1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    thrust_world_y + 1 / self.MASS * drag_world[1],
                     z_dot,
-                    1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    thrust_world_z + 1 / self.MASS * drag_world[2] - g,
                     phi_dot,
                     theta_dot,
                     psi_dot,
@@ -1596,15 +1611,17 @@ class Quadrotor(BaseAviary):
 
                 lr_param = cs.MX.sym('learnable_param', 12)
                 df_dot = (lr_param[10] * params_acc[1] * (dT_c + lr_param[9] * params_acc[0]) - df) / (lr_param[11] * params_acc[2])
+
+                parameterized_drag_matrix = cs.diag(cs.vertcat(params_acc[3], params_acc[3], params_acc[4]))
+                parameterized_drag_body = parameterized_drag_matrix @ vel_body
+                parameterized_drag_world = Rob @ parameterized_drag_body
                 parameterized_X_dot = cs.vertcat(
                     x_dot,
-                    1 / self.MASS * force_motor * (
-                                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                    thrust_world_x + 1 / self.MASS * parameterized_drag_world[0],
                     y_dot,
-                    1 / self.MASS * force_motor * (
-                                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                    thrust_world_y + 1 / self.MASS * parameterized_drag_world[1],
                     z_dot,
-                    1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                    thrust_world_z + 1 / self.MASS * parameterized_drag_world[2] - g,
                     phi_dot,
                     theta_dot,
                     psi_dot,
@@ -1644,7 +1661,9 @@ class Quadrotor(BaseAviary):
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
 
             # model_choice = "linear"
-            params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105])
+            params_acc = prior_prop.get('param_acc', [0.041, 0.87, 0.105, -0.0171, 0.000811])
+            if len(params_acc) < 5:
+                params_acc = list(params_acc) + [-0.0171, 0.000811]
             params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
             params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
             params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
@@ -1661,14 +1680,27 @@ class Quadrotor(BaseAviary):
             dT_c = 2 * (prev_thrust + T_c - cmd_min) / (cmd_max - cmd_min) - 1
             df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
             df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+
+            # Body-frame drag model transformed back to world frame.
+            Rob = csRotXYZ(phi, theta, psi)
+            Rbo = Rob.T
+            vel_world = cs.vertcat(x_dot, y_dot, z_dot)
+            drag_matrix = cs.diag(cs.vertcat(params_acc[3], params_acc[3], params_acc[4]))
+            vel_body = Rbo @ vel_world
+            drag_body = drag_matrix @ vel_body
+            drag_world = Rob @ drag_body
+
+            thrust_world_x = 1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi))
+            thrust_world_y = 1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi))
+            thrust_world_z = 1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta)
             # Define dynamics equations.
             X_dot = cs.vertcat(
                 x_dot,
-                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                thrust_world_x + 1 / self.MASS * drag_world[0],
                 y_dot,
-                1/self.MASS*force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                thrust_world_y + 1 / self.MASS * drag_world[1],
                 z_dot,
-                1/self.MASS*force_motor * cs.cos(phi) * cs.cos(theta) - g,
+                thrust_world_z + 1 / self.MASS * drag_world[2] - g,
                 phi_dot,
                 theta_dot,
                 psi_dot,
