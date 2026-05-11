@@ -562,15 +562,47 @@ class Quadrotor(BaseAviary):
                 VEL_REF = np.array(
                     [traj_data['obs'][:, 1], 0 * traj_data['obs'][:, 1], traj_data['obs'][:, 3]]).T
                 PITCH_REF = np.array([traj_data['obs'][:, 4], traj_data['obs'][:, 5]]).T
+                if VEL_REF.shape[0] > 1:
+                    ACC_REF = np.gradient(VEL_REF, self.CTRL_TIMESTEP, axis=0)
+                    JRK_REF = np.gradient(ACC_REF, self.CTRL_TIMESTEP, axis=0)
+                else:
+                    ACC_REF = np.zeros_like(VEL_REF)
+                    JRK_REF = np.zeros_like(VEL_REF)
             else:
                 if hasattr(self.TASK_INFO, 'custom_snap_ref_traj'):
                     traj_data = np.load(self.TASK_INFO['custom_snap_ref_traj'], allow_pickle=True).item()
                     POS_REF = traj_data['POS_REF']
                     VEL_REF = traj_data['VEL_REF']
+                    ACC_REF = traj_data['ACC_REF'] if 'ACC_REF' in traj_data else None
+                    JRK_REF = traj_data['JRK_REF'] if 'JRK_REF' in traj_data else traj_data.get('JER_REF', None)
+                    if ACC_REF is None:
+                        if VEL_REF.shape[0] > 1:
+                            ACC_REF = np.gradient(VEL_REF, self.CTRL_TIMESTEP, axis=0)
+                        else:
+                            ACC_REF = np.zeros_like(VEL_REF)
+                    if JRK_REF is None:
+                        if ACC_REF.shape[0] > 1:
+                            JRK_REF = np.gradient(ACC_REF, self.CTRL_TIMESTEP, axis=0)
+                        else:
+                            JRK_REF = np.zeros_like(ACC_REF)
                 elif hasattr(self.TASK_INFO, 'custom_snap_ref_traj_obs'):
                     traj_data = np.load(self.TASK_INFO['custom_snap_ref_traj_obs'], allow_pickle=True).item()
                     POS_REF = traj_data['obs'][:, [0, 2, 4]]
                     VEL_REF = traj_data['obs'][:, [1, 3, 5]]
+                    if traj_data['obs'].shape[1] >= 9:
+                        ACC_REF = traj_data['obs'][:, [6, 7, 8]]
+                    else:
+                        if VEL_REF.shape[0] > 1:
+                            ACC_REF = np.gradient(VEL_REF, self.CTRL_TIMESTEP, axis=0)
+                        else:
+                            ACC_REF = np.zeros_like(VEL_REF)
+                    if traj_data['obs'].shape[1] >= 12:
+                        JRK_REF = traj_data['obs'][:, [9, 10, 11]]
+                    else:
+                        if ACC_REF.shape[0] > 1:
+                            JRK_REF = np.gradient(ACC_REF, self.CTRL_TIMESTEP, axis=0)
+                        else:
+                            JRK_REF = np.zeros_like(ACC_REF)
                 else:
                     strings = self.TASK_INFO['strings'] if 'strings' in self.TASK_INFO else None
                     waypoints = self.TASK_INFO['waypoints'] if 'waypoints' in self.TASK_INFO else None
@@ -604,6 +636,20 @@ class Quadrotor(BaseAviary):
                     #                  strings=strings,
                     #                  save_path=os.path.join(script_dir, '../../../benchmarking_sim/quadrotor/data', 'trajectory.png'))
                 # Each of the 3 returned values is of shape (Ctrl timesteps, 3)
+
+            # Cache trajectory derivatives in task_info so controllers (e.g. FMPC)
+            # can consume a single environment-generated reference source.
+            if isinstance(self.TASK_INFO, dict):
+                self.TASK_INFO['POS_REF'] = POS_REF
+                self.TASK_INFO['VEL_REF'] = VEL_REF
+                self.TASK_INFO['ACC_REF'] = ACC_REF
+                self.TASK_INFO['JRK_REF'] = JRK_REF
+            else:
+                setattr(self.TASK_INFO, 'POS_REF', POS_REF)
+                setattr(self.TASK_INFO, 'VEL_REF', VEL_REF)
+                setattr(self.TASK_INFO, 'ACC_REF', ACC_REF)
+                setattr(self.TASK_INFO, 'JRK_REF', JRK_REF)
+
             if self.QUAD_TYPE == QuadType.ONE_D:
                 self.X_GOAL = np.vstack([
                     POS_REF[:, 2],  # z

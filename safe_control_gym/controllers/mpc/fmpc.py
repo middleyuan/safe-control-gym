@@ -1051,16 +1051,45 @@ def get_full_reference_trajectory_FMPC(QUAD_TYPE: QuadType,
         ndarray: array with full reference on flat state vector
     """
 
-    # task info parameters from yaml file
-    scaling = task_info.trajectory_scale
-    num_cycles = task_info.num_cycles
-    position_offset = task_info.trajectory_position_offset
-    traj_plane = task_info.trajectory_plane
-    traj_type = task_info.trajectory_type
-    custom_snap_ref_traj = getattr(task_info, 'custom_snap_ref_traj', None)
-    pos_ref_traj, vel_ref_traj, acc_ref_traj, jer_ref_traj = _generate_trajectory_FMPC(
-        traj_type, traj_length, num_cycles, traj_plane, position_offset, scaling, sample_time, horizon, custom_snap_ref_traj
-    )
+    # Prefer references precomputed by the environment.
+    if isinstance(task_info, dict):
+        pos_ref_traj = task_info.get('POS_REF', None)
+        vel_ref_traj = task_info.get('VEL_REF', None)
+        acc_ref_traj = task_info.get('ACC_REF', None)
+        jer_ref_traj = task_info.get('JRK_REF', None)
+    else:
+        pos_ref_traj = getattr(task_info, 'POS_REF', None)
+        vel_ref_traj = getattr(task_info, 'VEL_REF', None)
+        acc_ref_traj = getattr(task_info, 'ACC_REF', None)
+        jer_ref_traj = getattr(task_info, 'JRK_REF', None)
+
+    if pos_ref_traj is not None and vel_ref_traj is not None:
+        pos_ref_traj = np.asarray(pos_ref_traj)
+        vel_ref_traj = np.asarray(vel_ref_traj)
+        if acc_ref_traj is None:
+            acc_ref_traj = np.gradient(vel_ref_traj, sample_time, axis=0) if vel_ref_traj.shape[0] > 1 else np.zeros_like(vel_ref_traj)
+        else:
+            acc_ref_traj = np.asarray(acc_ref_traj)
+        if jer_ref_traj is None:
+            jer_ref_traj = np.gradient(acc_ref_traj, sample_time, axis=0) if acc_ref_traj.shape[0] > 1 else np.zeros_like(acc_ref_traj)
+        else:
+            jer_ref_traj = np.asarray(jer_ref_traj)
+        if horizon > 0:
+            pos_ref_traj = np.vstack([pos_ref_traj, np.repeat(pos_ref_traj[-1:, :], horizon, axis=0)])
+            vel_ref_traj = np.vstack([vel_ref_traj, np.repeat(vel_ref_traj[-1:, :], horizon, axis=0)])
+            acc_ref_traj = np.vstack([acc_ref_traj, np.repeat(acc_ref_traj[-1:, :], horizon, axis=0)])
+            jer_ref_traj = np.vstack([jer_ref_traj, np.repeat(jer_ref_traj[-1:, :], horizon, axis=0)])
+    else:
+        # task info parameters from yaml file
+        scaling = task_info.trajectory_scale
+        num_cycles = task_info.num_cycles
+        position_offset = task_info.trajectory_position_offset
+        traj_plane = task_info.trajectory_plane
+        traj_type = task_info.trajectory_type
+        custom_snap_ref_traj = getattr(task_info, 'custom_snap_ref_traj', None)
+        pos_ref_traj, vel_ref_traj, acc_ref_traj, jer_ref_traj = _generate_trajectory_FMPC(
+            traj_type, traj_length, num_cycles, traj_plane, position_offset, scaling, sample_time, horizon, custom_snap_ref_traj
+        )
     num_times = np.shape(pos_ref_traj)[0]
     if QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
         z_ref = np.zeros([num_times, 12])
