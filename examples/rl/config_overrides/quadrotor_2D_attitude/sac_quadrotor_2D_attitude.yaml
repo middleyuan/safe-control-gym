@@ -16,7 +16,7 @@ algo_config:
   max_env_steps: 1320000
   warm_up_steps: 1000
   rollout_batch_size: 10
-  max_buffer_size: 132000
+  max_buffer_size: 264000
   deque_size: 10
   eval_batch_size: 10
 

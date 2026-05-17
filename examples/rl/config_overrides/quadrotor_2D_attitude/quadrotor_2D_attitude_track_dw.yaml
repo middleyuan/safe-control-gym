@@ -19,19 +19,19 @@ task_config:
   inertial_prop_randomization_info:
     beta_1: # Nominal: 17.7903
       distrib: 'normal'
-      scale: 0.212
+      scale: 0.053  #0.106 #0.053  #0.212
     beta_2: # Nominal: 4.2209
       distrib: 'normal'
-      scale: 0.071
+      scale: 0.01775  #0.0355 #0.01775  #0.071
     alpha_1: # Nominal: -149.740766
       distrib: 'normal'
-      scale: 4.609533
+      scale: 1.1524  #2.3048 #1.1524  #4.609533
     alpha_2: # Nominal: -16.755920
       distrib: 'normal'
-      scale: 0.440198
+      scale: 0.1100  #0.2201 #0.1100  #0.440198
     alpha_3: # Nominal: 129.041538
       distrib: 'normal'
-      scale: 5.823345
+      scale: 1.4558  #2.9117 #1.4558  #5.823345
 
   init_state_randomization_info:
     init_x:
@@ -79,7 +79,7 @@ task_config:
   obs_goal_horizon: 1
 
   # RL Reward
-  rew_state_weight: [3., .1, 3., .1, .1, 0.001]
+  rew_state_weight: [1., .1, 1., .1, .1, 0.001]
   rew_act_weight: [.1, .1]
   rew_exponential: True
 

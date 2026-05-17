@@ -5,26 +5,26 @@ algo_config:
   use_entropy_tuning: True
 
   # optim args
-  gamma: 0.9
-  train_interval: 3000
-  train_batch_size: 512
+  gamma: 0.95
+  train_interval: 2000
+  train_batch_size: 256
   actor_lr: 0.0001
   critic_lr: 0.0001
   entropy_lr: 0.0001
 
   # runner args
-  max_env_steps: 3300000
+  max_env_steps: 2640000
   warm_up_steps: 10000
-  rollout_batch_size: 100
+  rollout_batch_size: 80
   num_workers: 1
-  max_buffer_size: 330000
-  deque_size: 10
-  eval_batch_size: 10
+  max_buffer_size: 264000  # 1056000
+  deque_size: 80
+  eval_batch_size: 20
 
   # misc
-  log_interval: 66000
-  save_interval: 3300000
+  log_interval: 26400
+  save_interval: 2640000
   num_checkpoints: 0
-  eval_interval: 66000
+  eval_interval: 26400
   eval_save_best: True
   tensorboard: True
