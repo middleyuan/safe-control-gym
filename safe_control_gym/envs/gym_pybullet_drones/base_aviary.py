@@ -234,12 +234,16 @@ class BaseAviary(BenchmarkEnv):
         self.ang_v = np.zeros((self.NUM_DRONES, 3))
         self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
         self.motor_forces = np.zeros((self.NUM_DRONES, 1)) 
+        # Differential dynamic and cost symbolic model.
+        if self.PHYSICS in [Physics.DYN_SI]:
+            self.dnxdx = 0.0
+            self.dnxdu = 0.0
+        else:
+            assert self.simulator_diff, 'dnxdx and dnxdu only defined for DYN_SI physics update.'
+        # Initialize the motor forces for certain types of physics update.
         if self.PHYSICS in [Physics.DYN_SI_3D_DELAY] \
             and hasattr(self, 'init_tau'):
             self.motor_forces = np.ones((self.NUM_DRONES, 1)) * self.init_tau
-        # if (self.PHYSICS == Physics.DYN or self.PHYSICS == Physics.RK4
-        #         or self.PHYSICS == Physics.DYN_2D or self.PHYSICS == Physics.DYN_SI):
-        #     self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
 
         # Set PyBullet's parameters.
         p.resetSimulation(physicsClientId=self.PYB_CLIENT)
@@ -419,6 +423,7 @@ class BaseAviary(BenchmarkEnv):
             # if self.PHYSICS in [Physics.DYN_SI_3D_DELAY]\
             #      and hasattr(self, 'init_tau'):
             #     self.motor_forces[i] = self.init_tau
+
     def _start_video_recording(self):
         '''Starts the recording of a video output.
 
@@ -456,6 +461,13 @@ class BaseAviary(BenchmarkEnv):
         # state.reshape(20, )
         return state.copy()
 
+    def _get_diff_simulator_info(self):
+        # info = {
+        #     "dnxdx": self.dnxdx,
+        #     "dnxdu": self.dnxdu,
+        # }
+        return self.dnxdx.copy(), self.dnxdu.copy()
+    
     def _physics(self, rpm, nth_drone):
         '''Base PyBullet physics implementation.
 
@@ -843,11 +855,15 @@ class BaseAviary(BenchmarkEnv):
         # perform euler integration
         # next_state = state + self.PYB_TIMESTEP * self.X_dot_fun(state, action, d).full()[:, 0]
         # perform RK4 integration
-        k1 = self.X_dot_fun(state, action, d).full()[:, 0]
-        k2 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k1, action, d).full()[:, 0]
-        k3 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k2, action, d).full()[:, 0]
-        k4 = self.X_dot_fun(state + self.PYB_TIMESTEP * k3, action, d).full()[:, 0]
-        next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        # k1 = self.X_dot_fun(state, action, d).full()[:, 0]
+        # k2 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k1, action, d).full()[:, 0]
+        # k3 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k2, action, d).full()[:, 0]
+        # k4 = self.X_dot_fun(state + self.PYB_TIMESTEP * k3, action, d).full()[:, 0]
+        # next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        # next state with Casadi's fixed step integrator
+        next_state = self.fd_func(x0=state, p=np.hstack([action, d]))['xf'].full()[:, 0]
+        dnxdx = self.dnxdx_func(state, action, d).full()
+        dnxdu = self.dnxdu_func(state, action, d).full()
 
         # Updated information
         pos = np.array([next_state[0], 0, next_state[2]])
@@ -860,6 +876,8 @@ class BaseAviary(BenchmarkEnv):
         self.vel[nth_drone, :] = vel.copy()
         self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
+        self.dnxdx = dnxdx.copy()
+        self.dnxdu = dnxdu.copy()
 
     def setup_dynamics_si_expression(self, prop_values=None):
         # Casadi states
@@ -894,6 +912,10 @@ class BaseAviary(BenchmarkEnv):
                                prop_values['alpha_1'] * theta + prop_values['alpha_2'] * theta_dot + prop_values[
                                    'alpha_3'] * P)
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        self.fd_func = cs.integrator('fd', 'rk', {'x': X, 'p': cs.vertcat(U, d), 'ode': X_dot}, 0.0, self.PYB_TIMESTEP)
+        X_next = self.fd_func(x0=X, p=cs.vertcat(U, d))['xf']
+        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)]) 
+        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)])
 
     def _dynamics_si_3d(self, action, nth_drone, disturbance_force=None):
         '''Explicit dynamics implementation from the identified model.
@@ -1255,7 +1277,7 @@ class BaseAviary(BenchmarkEnv):
         P_c = cs.MX.sym('P')  # desired pitch angle [rad]
         Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
         U = cs.vertcat(T_c, R_c, P_c, Y_c)
-        model_choice = "drag"  # options: linear, quadratic, quartic
+        model_choice = "drag"  # options: linear, quadratic, quartic, drag
 
         if model_choice == "quartic":
             # params_acc = [7.4500, -79.6638, 323.8091, -569.0000, 368.0000, 0.1086]

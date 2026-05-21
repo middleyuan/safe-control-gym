@@ -19,7 +19,7 @@ class SymbolicModel:
                  dynamics,
                  cost,
                  dt=1e-3,
-                 integration_algo='cvodes',
+                 integration_algo='rk',
                  funcs=None,
                  params=None,
                  ):
@@ -128,3 +128,15 @@ class SymbolicModel:
         l_outputs = [self.cost_func, self.l_x, self.l_xx, self.l_u, self.l_uu, self.l_xu]
         l_outputs_str = ['l', 'l_x', 'l_xx', 'l_u', 'l_uu', 'l_xu']
         self.loss = cs.Function('loss', l_inputs, l_outputs, l_inputs_str, l_outputs_str)
+
+        # Reward function.
+        r_func = -2.0 * self.cost_func
+        exp_r_func = cs.exp(-2.0 * self.cost_func)
+        r_x = cs.jacobian(r_func, self.x_sym)
+        r_u = cs.jacobian(r_func, self.u_sym)
+        exp_r_x = cs.jacobian(exp_r_func, self.x_sym)
+        exp_r_u = cs.jacobian(exp_r_func, self.u_sym)
+
+        r_outputs = [r_func, exp_r_func, r_x, r_u, exp_r_x, exp_r_u]
+        r_outputs_str = ['r', 'exp_r', 'r_x', 'r_u', 'exp_r_x', 'exp_r_u']
+        self.reward_func = cs.Function('reward', l_inputs, r_outputs, l_inputs_str, r_outputs_str)

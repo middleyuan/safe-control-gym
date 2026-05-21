@@ -5,6 +5,7 @@ task_config:
   physics: dyn_si
   quad_type: 4
   normalized_rl_action_space: False
+  simulator_diff: False
 
   init_state:
     init_x: 0

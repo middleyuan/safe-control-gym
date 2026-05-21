@@ -92,6 +92,8 @@ class BenchmarkEnv(gym.Env, ABC):
                  adversary_disturbance=None,
                  adversary_disturbance_offset=0.0,
                  adversary_disturbance_scale=0.01,
+                 # Simulator differentiable dynamics and cost symbolic model.
+                 simulator_diff=False,
                  **kwargs
                  ):
         """Initialization method for BenchmarkEnv.
@@ -206,6 +208,8 @@ class BenchmarkEnv(gym.Env, ABC):
         self.initial_reset = False
         self.at_reset = False
         self.INFO_IN_RESET = info_in_reset
+        # Differential dynamic and cost symbolic model.
+        self.simulator_diff = simulator_diff
 
     def seed(self,
              seed=None

@@ -1,0 +1,33 @@
+algo_config:
+  # model args
+  hidden_dim: 256
+  activation: "relu"
+
+  # loss args
+  gamma: 0.95
+  use_gae: True
+  gae_lambda: 0.95
+  clip_param: 0.2
+  target_kl: 0.01
+  entropy_coef: 0.001  # 0.008
+  exploration_init: -0.5
+
+  # optim args
+  opt_epochs: 5
+  mini_batch_size: 64
+  actor_lr: 0.0003
+  critic_lr: 0.0003
+
+  # runner args
+  max_env_steps: 2640000
+  rollout_batch_size: 64
+  rollout_steps: 20
+  eval_batch_size: 10
+
+  # misc
+  log_interval: 1280
+  save_interval: 2640000
+  num_checkpoints: 0
+  eval_interval: 1280
+  eval_save_best: True
+  tensorboard: True

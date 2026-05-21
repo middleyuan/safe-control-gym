@@ -51,7 +51,7 @@ SEEDS=(11)
 
 # Loop through each SEED
 for SEED in "${SEEDS[@]}"; do
-    echo "Running with SEED: $SEED"
+    echo "Running ${ALGO} on ${SYS_NAME} with seed ${SEED}"
     python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         --algo ${ALGO} \
         --task ${SYS_NAME} \
@@ -64,7 +64,8 @@ for SEED in "${SEEDS[@]}"; do
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
-            task_config.normalized_rl_action_space=False
+            task_config.normalized_rl_action_space=False \
+            task_config.simulator_diff=True
 done
 
 # Move the newly trained unsafe model.

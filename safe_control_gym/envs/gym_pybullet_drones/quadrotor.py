@@ -2486,6 +2486,33 @@ class Quadrotor(BaseAviary):
                                                      R=self.R)['l'])
         return None
 
+    def _get_additional_reward_info(self):
+        state = self.state
+        
+        # RL cost.
+        if self.COST == Cost.RL_REWARD:
+            act = np.asarray(self.current_physical_action)
+            if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, QuadType.THREE_D_ATTITUDE_DELAY_REL_IR]:
+                act -= self.prev_physical_action
+
+            # Quadratic costs w.r.t state and action
+            # TODO: consider using multiple future goal states for cost in tracking
+            if self.TASK == Task.STABILIZATION:
+                raise NotImplementedError("Additional reward info not implemented for stabilization task.")
+            if self.TASK == Task.TRAJ_TRACKING:
+                wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[
+                    0] - 1)  # +1 because state has already advanced but counter not incremented.
+                rew_info = self.symbolic.reward_func(x=state,
+                                                     Xr=self.X_GOAL[wp_idx],
+                                                     u=act,
+                                                     Ur=self.U_GOAL,
+                                                     Q=self.Q,
+                                                     R=self.R)
+                if self.rew_exponential:
+                    return rew_info['exp_r_x'].full(), rew_info['exp_r_u'].full()
+                else:
+                    return rew_info['r_x'].full(), rew_info['r_u'].full()
+
     def _get_done(self):
         """Computes the conditions for termination of an episode.
 
@@ -2562,6 +2589,11 @@ class Quadrotor(BaseAviary):
         if self.constraints is not None:
             info['constraint_values'] = self.constraints.get_values(self)
             info['constraint_violations'] = self.constraints.get_violations(self)
+        # Differential simulator info.
+        if self.simulator_diff:
+            rew_x, rew_u = self._get_additional_reward_info()
+            nx_x, nx_u = self._get_diff_simulator_info()
+            info['diff_sim_info'] = {'rew_x': rew_x, 'rew_u': rew_u, 'nx_x': nx_x, 'nx_u': nx_u}
         return info
 
     def _get_reset_info(self):
