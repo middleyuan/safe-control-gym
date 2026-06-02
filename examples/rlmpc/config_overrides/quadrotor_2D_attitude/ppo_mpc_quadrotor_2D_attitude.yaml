@@ -28,12 +28,12 @@ algo_config:
   use_clipped_value: False  # or True
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.001
+  entropy_coef: 0.01
   exploration_init: -1.0
 
   # optim args
-  opt_epochs: 5
-  mini_batch_size: 64
+  opt_epochs: 20
+  mini_batch_size: 128
   actor_lr: 0.0003
   critic_lr: 0.0003
 

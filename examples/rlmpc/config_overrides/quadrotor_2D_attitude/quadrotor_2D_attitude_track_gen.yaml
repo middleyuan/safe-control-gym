@@ -73,8 +73,8 @@ task_config:
     alpha_3: 129.041538
     pitch_bias: 0.0 # in radian
 
-  episode_len_sec: 11
-  # episode_len_sec: [9, 11, 15]  # for generalization learning
+  # episode_len_sec: 11
+  episode_len_sec: [9, 11, 15]  # for generalization learning
   cost: rl_reward
   obs_goal_horizon: 1
 

@@ -77,15 +77,17 @@ def _create_semi_definite_matrix(n):
     return W, P, n_param
 
 
-def update_initial_guess(x_prev, u_prev, sigma_prev, opt_vars_fn):
+def update_initial_guess(x_prev, u_prev, sigma_prev, sigma_u0, opt_vars_fn):
     # shift previous solutions by 1 step
     u_guess = deepcopy(u_prev)
     x_guess = deepcopy(x_prev)
     sigma_guess = deepcopy(sigma_prev)
+    sigma_u0_guess = deepcopy(sigma_u0)
     u_guess[:, :-1] = u_guess[:, 1:]
     x_guess[:, :-1] = x_guess[:, 1:]
     sigma_guess[:, :-1] = sigma_guess[:, 1:]
-    opt_vars_init = opt_vars_fn(x_guess, u_guess, sigma_guess).full()
+    sigma_u0_guess = 0.0 * sigma_u0_guess
+    opt_vars_init = opt_vars_fn(x_guess, u_guess, sigma_guess, sigma_u0_guess).full()
     return opt_vars_init
 
 
@@ -120,10 +122,8 @@ class MPCFunction:
         horizon: int = 5,
         warmstart: bool = True,
         soft_constraints: bool = True,
-        constraint_tol: float = 1e-6,
+        constraint_tol: float = 1e-3,
         additional_constraints: list = None,
-        n_parallel_solver: int = 1,
-        n_train_solver: int = 1,
         jit: bool = False,
         jit_options: dict = None,
     ):
@@ -136,8 +136,6 @@ class MPCFunction:
         self.soft_constraints = soft_constraints
         self.constraint_tol = constraint_tol
         self.warmstart = warmstart
-        self.n_parallel_solver = n_parallel_solver
-        self.n_train_solver = n_train_solver
         self.jit = jit
         self.jit_options = jit_options if jit_options is not None else {}
 
@@ -166,11 +164,10 @@ class MPCFunction:
         self.u_prev = None
         self.x_prev = None
         self.sigma_prev = None
+        self.sigma_u0_prev = None
         self.x_goal = None
         self.mode = None
         self.traj = None
-        self.traj_step = 0
-        self.infos = [None] * self.n_parallel_solver
         # Setup reference input.
         if self.env.TASK == Task.STABILIZATION:
             self.mode = "stabilization"
@@ -178,8 +175,6 @@ class MPCFunction:
         elif self.env.TASK == Task.TRAJ_TRACKING:
             self.mode = "tracking"
             self.traj = self.env.X_GOAL.T
-            # Step along the reference.
-            self.traj_step = 0
 
         # Setup optimizer
         self.solver_dict = None
@@ -192,13 +187,9 @@ class MPCFunction:
         self.u_prev = None
         self.x_prev = None
         self.sigma_prev = None
+        self.sigma_u0_prev = None
         self.x_goal = None
         self.traj = None
-        self.traj_step = 0
-        if idx is not None:
-            self.infos[idx] = None
-        else:
-            self.infos = [None] * self.n_parallel_solver
 
         # Setup reference input.
         if self.env.TASK == Task.STABILIZATION:
@@ -207,8 +198,6 @@ class MPCFunction:
         elif self.env.TASK == Task.TRAJ_TRACKING:
             self.mode = "tracking"
             self.traj = self.env.X_GOAL.T
-            # Step along the reference.
-            self.traj_step = 0
 
     def add_constraints(self, constraints):
         """Add the constraints (from a list) to the system.
@@ -257,7 +246,7 @@ class MPCFunction:
         """Sets up nonlinear optimization problem."""
         nx, nu, npl = self.model.nx, self.model.nu, self.model.npl
         T = self.T
-        etau = 1e-5  # barrier parameter for interior point method
+        etau = 1e-6  # barrier parameter for interior point method
         start_time = time.time()
 
         # Optimization variable: [x0, u0, sigma0, x1, u1, ...]
@@ -267,7 +256,7 @@ class MPCFunction:
             x = cs.MX.sym("x", nx)
             u = cs.MX.sym("u", nu)
             sigma = cs.MX.sym("sigma", nx)
-            # append the casadi var to opt_Vars
+            # append the casadi var to opt_vars
             opt_vars.append(x)
             opt_vars.append(u)
             opt_vars.append(sigma)
@@ -275,6 +264,10 @@ class MPCFunction:
             x_var.append(x)
             u_var.append(u)
             sigma_var.append(sigma)
+            # special condition for initial action
+            if i == 0:
+                sigma_u0 = cs.MX.sym("sigma_u0", nu)
+                opt_vars.append(sigma_u0)
         x = cs.MX.sym("x", nx)  # final state
         sigma = cs.MX.sym("sigma", nx)
         opt_vars.append(x)
@@ -285,17 +278,18 @@ class MPCFunction:
         opt_vars = cs.vcat(opt_vars)
         x_var, u_var, sigma_var = cs.hcat(x_var), cs.hcat(u_var), cs.hcat(sigma_var)
         # function definitions for conversion
-        opt_vars_fn = cs.Function("opt_vars_fun", [x_var, u_var, sigma_var], [opt_vars])
-        xus_fn = cs.Function("xus_fun", [opt_vars], [x_var, u_var, sigma_var])
+        opt_vars_fn = cs.Function("opt_vars_fun", [x_var, u_var, sigma_var, sigma_u0], [opt_vars])
+        xus_fn = cs.Function("xus_fun", [opt_vars], [x_var, u_var, sigma_var, sigma_u0])
         opt_act_fn = cs.Function("opt_act_fun", [opt_vars], [u_var[:, 0]])
 
         # Parameters
         # Fixed parameters
         # Initial state.
         x_init = cs.MX.sym("x_init", nx, 1)
+        a_init = cs.MX.sym("a_init", nu, 1)
         # Reference (equilibrium point or trajectory, last step for terminal cost).
         x_ref = cs.MX.sym("x_ref", nx, T + 1)
-        fixed_param = cs.vertcat(x_init)
+        fixed_param = cs.vertcat(x_init, a_init)
         ref_param = cs.reshape(x_ref, -1, 1)
 
         # Learnable parameters
@@ -305,13 +299,13 @@ class MPCFunction:
         Qt, th_qt, _ = _create_semi_definite_matrix(nx)
         # theta_param = cs.MX.sym("theta_var", nq + nr)
         cost_param = cs.vertcat(th_q, th_r, th_qt)
-        back_off_param = cs.MX.sym("back_off_param", nx)
+        back_off_param = cs.MX.zeros(nx)  # cs.MX.sym("back_off_param", nx)
         # Model
         model_param = cs.MX.sym("f_param", npl)
 
         # cost (cumulative)
         cost = 0
-        w = 1e3 * np.ones((1, nx))
+        w, wu0 = 1e3 * np.ones((1, nx)), 1e3 * np.ones((1, nu))  # weights for constraint violation penalties
         cost_func = self.model.loss
         for i in range(T):
             cost += (
@@ -341,16 +335,28 @@ class MPCFunction:
         con_list, con_lbg, con_ubg, con_eq = [], [], [], []
         H_eq, H_ieq = [], []
         mult, lamb, mu = [], [], []
-        # initial condition constraints
+        qcon_list, qcon_lbg, qcon_ubg, qcon_eq = [], [], [], []
+        qH_eq, qH_ieq = [], []
+        qmult, qlamb, qmu = [], [], []
+
+        # initial state condition constraints
         con_list.append(x_var[:, 0] - x_init)
         con_lbg.append(cs.DM.zeros(nx, 1))
         con_ubg.append(cs.DM.zeros(nx, 1))
         con_eq += [True] * nx
+        qcon_list.append(x_var[:, 0] - x_init)
+        qcon_lbg.append(cs.DM.zeros(nx, 1))
+        qcon_ubg.append(cs.DM.zeros(nx, 1))
+        qcon_eq += [True] * nx
 
         H_eq.append(x_var[:, 0] - x_init)
         lm = cs.MX.sym("lm", nx)
         mult.append(lm)
         lamb.append(lm)
+        qH_eq.append(x_var[:, 0] - x_init)
+        qmult.append(lm)
+        qlamb.append(lm)
+
         for i in range(self.T):
             # Dynamics constraints.
             next_state = self.dynamics_func(
@@ -360,88 +366,130 @@ class MPCFunction:
             con_lbg.append(cs.DM.zeros(nx, 1))
             con_ubg.append(cs.DM.zeros(nx, 1))
             con_eq += [True] * nx
+            qcon_list.append(x_var[:, i + 1] - next_state)
+            qcon_lbg.append(cs.DM.zeros(nx, 1))
+            qcon_ubg.append(cs.DM.zeros(nx, 1))
+            qcon_eq += [True] * nx
 
-            H_eq.append(x_var[:, i + 1] - next_state)
             lm = cs.MX.sym("lm", nx)
+            H_eq.append(x_var[:, i + 1] - next_state)
             mult.append(lm)
             lamb.append(lm)
+            qH_eq.append(x_var[:, i + 1] - next_state)
+            qmult.append(lm)
+            qlamb.append(lm)
 
             # State bounds
             for sc_i, state_constraint in enumerate(self.state_constraints_sym):
                 cost += w @ sigma_var[:, i]
-                con_list.append(
-                    state_constraint(x_var[:, i])[:nx]
-                    - sigma_var[:, i]
-                    + back_off_param
-                )
-                con_list.append(
-                    state_constraint(x_var[:, i])[nx:]
-                    - sigma_var[:, i]
-                    + back_off_param
-                )
-                con_list.append(-sigma_var[:, i])
+                constraint = [
+                    state_constraint(x_var[:, i])[:nx] - sigma_var[:, i],
+                    state_constraint(x_var[:, i])[nx:] - sigma_var[:, i],
+                    -sigma_var[:, i],
+                ]
+                con_list += constraint
                 con_lbg.append(-cs.DM.inf(3 * nx, 1))
                 con_ubg.append(cs.DM.zeros(3 * nx, 1))
                 con_eq += [False] * 3 * nx
+                qcon_list += constraint
+                qcon_lbg.append(-cs.DM.inf(3 * nx, 1))
+                qcon_ubg.append(cs.DM.zeros(3 * nx, 1))
+                qcon_eq += [False] * 3 * nx
 
-                H_ieq.append(
-                    state_constraint(x_var[:, i])[:nx]
-                    - sigma_var[:, i]
-                    + back_off_param
-                )
-                H_ieq.append(
-                    state_constraint(x_var[:, i])[nx:]
-                    - sigma_var[:, i]
-                    + back_off_param
-                )
-                H_ieq.append(-sigma_var[:, i])
                 lm = cs.MX.sym("lm", 3 * nx)
+                H_ieq += constraint
                 mult.append(lm)
                 mu.append(lm)
+                qH_ieq += constraint
+                qmult.append(lm)
+                qmu.append(lm)
 
             # Action bounds
             for ic_i, input_constraint in enumerate(self.input_constraints_sym):
-                con_list.append(input_constraint(u_var[:, i]) + self.constraint_tol)
-                con_lbg.append(-cs.DM.inf(2 * nu, 1))
-                con_ubg.append(cs.DM.zeros(2 * nu, 1))
-                con_eq += [False] * 2 * nu
+                constraint = [
+                    input_constraint(u_var[:, i])[:nu] + self.constraint_tol,
+                    input_constraint(u_var[:, i])[nu:] + self.constraint_tol,
+                ]
+                con_list += constraint
+                con_lbg.append(-cs.DM.inf(len(constraint)*nu, 1))
+                con_ubg.append(cs.DM.zeros(len(constraint)*nu, 1))
+                con_eq += [False] * len(constraint)*nu
+                qcon_list += constraint
+                qcon_lbg.append(-cs.DM.inf(len(constraint)*nu, 1))
+                qcon_ubg.append(cs.DM.zeros(len(constraint)*nu, 1))
+                qcon_eq += [False] * len(constraint)*nu
 
-                H_ieq.append(input_constraint(u_var[:, i]) + self.constraint_tol)
-                lm = cs.MX.sym("lm", 2 * nu)
+                H_ieq += constraint
+                lm = cs.MX.sym("lm", len(constraint)*nu)
                 mult.append(lm)
                 mu.append(lm)
+                qH_ieq += constraint
+                qmult.append(lm)
+                qmu.append(lm)
 
+                if i == 0:  # additional constraints for initial action condition
+                    cost += wu0 @ sigma_u0
+                    constraint = [-sigma_u0]
+                    con_list += constraint
+                    con_lbg.append(-cs.DM.inf(nu, 1))
+                    con_ubg.append(cs.DM.zeros(nu, 1))
+                    con_eq += [False] * nu
+                    lm = cs.MX.sym("lm", nu)
+                    H_ieq += constraint
+                    mult.append(lm)
+                    mu.append(lm)
+
+                    constraint = [
+                        u_var[:, i] - a_init - sigma_u0,
+                        -u_var[:, i] + a_init - sigma_u0,
+                        -sigma_u0,
+                    ]
+                    qcon_list += constraint
+                    qcon_lbg.append(-cs.DM.inf(3*nu, 1))
+                    qcon_ubg.append(cs.DM.zeros(3*nu, 1))
+                    qcon_eq += [False] * 3*nu
+                    lm = cs.MX.sym("lm", 3*nu)
+                    qH_ieq += constraint
+                    qmult.append(lm)
+                    qmu.append(lm)
         # Final state constraints.
         for sc_i, state_constraint in enumerate(self.state_constraints_sym):
             cost += w @ sigma_var[:, -1]
-            con_list.append(
-                state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param
-            )
-            con_list.append(
-                state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param
-            )
-            con_list.append(-sigma_var[:, -1])
+            constraint = [
+                state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1],
+                state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1],
+                -sigma_var[:, -1],
+            ]
+            con_list += constraint
             con_lbg.append(-cs.DM.inf(3 * nx, 1))
             con_ubg.append(cs.DM.zeros(3 * nx, 1))
             con_eq += [False] * 3 * nx
+            qcon_list += constraint
+            qcon_lbg.append(-cs.DM.inf(3 * nx, 1))
+            qcon_ubg.append(cs.DM.zeros(3 * nx, 1))
+            qcon_eq += [False] * 3 * nx
 
-            H_ieq.append(
-                state_constraint(x_var[:, -1])[:nx] - sigma_var[:, -1] + back_off_param
-            )
-            H_ieq.append(
-                state_constraint(x_var[:, -1])[nx:] - sigma_var[:, -1] + back_off_param
-            )
-            H_ieq.append(-sigma_var[:, -1])
             lm = cs.MX.sym("lm", 3 * nx)
+            H_ieq += constraint
             mult.append(lm)
             mu.append(lm)
+            qH_ieq += constraint
+            qmult.append(lm)
+            qmu.append(lm)
         # concatenating all the lists
         con_list, H_eq, H_ieq = cs.vcat(con_list), cs.vcat(H_eq), cs.vcat(H_ieq)
         mult, lamb, mu = cs.vcat(mult), cs.vcat(lamb), cs.vcat(mu)
         con_lbg, con_ubg = cs.vcat(con_lbg), cs.vcat(con_ubg)
-        lang_mult_fn = cs.Function("lang_mult_fn", [mult], [lamb, mu])
+        qcon_list, qH_eq, qH_ieq = cs.vcat(qcon_list), cs.vcat(qH_eq), cs.vcat(qH_ieq)
+        qmult, qlamb, qmu = cs.vcat(qmult), cs.vcat(qlamb), cs.vcat(qmu)
+        qcon_lbg, qcon_ubg = cs.vcat(qcon_lbg), cs.vcat(qcon_ubg)
+        # z contains all variables of the lagrangian
+        z = cs.vertcat(opt_vars, mult)
+        qz = cs.vertcat(opt_vars, qmult)
+        theta = cs.vertcat(cost_param, model_param)
+        # lang_mult_fn = cs.Function("lang_mult_fn", [mult], [lamb, mu])
 
-        # Create solver (IPOPT solver in this version)
+        # Create solver (FATROP solver in this version)
         opts_setting = {
             "print_time": 0,
             "record_time": True,
@@ -456,8 +504,8 @@ class MPCFunction:
         }
         jit_opts = {
             "jit": self.jit,
-            "jit_cleanup": False,
-            "jit_temp_suffix": False,
+            "jit_cleanup": True,
+            "jit_temp_suffix": True,
             "jit_options": self.jit_options,
         }
         opts_setting.update(jit_opts)
@@ -465,14 +513,47 @@ class MPCFunction:
             "f": cost,
             "x": opt_vars,
             "p": cs.vertcat(
-                fixed_param, ref_param, cost_param, back_off_param, model_param
+                fixed_param, ref_param, cost_param, model_param
             ),
             "g": con_list,
         }
         pisolver = cs.nlpsol("pisolver", "fatrop", vnlp_prob, opts_setting)
+
+        # Q function
+        qcost = cost # + wu0 @ sigma_u0  # + 0.5 * wu0 * cs.sumsqr(u_var[:, 0] - a_init)
+        qopts_setting = deepcopy(opts_setting)
+        qopts_setting.update({"equality": qcon_eq})
+        qnlp_prob = deepcopy(vnlp_prob)
+        qnlp_prob["f"] = qcost
+        qnlp_prob["g"] = qcon_list
+        qsolver = cs.nlpsol("qsolver", "fatrop", qnlp_prob, qopts_setting)
         print(
             f"[MPC Setup] NLP problem setup time: {time.time() - start_time:.3f} seconds."
         )
+        self.solver_dict = {
+            "x_var": x_var,
+            "u_var": u_var,
+            "state_slack": sigma_var,
+            "action_slack": sigma_u0,
+            "opt_vars": opt_vars,
+            "mult": mult,
+            "z": z,
+            "qz": qz,
+            "fixed_param": fixed_param,
+            "ref_param": ref_param,
+            "theta_param": theta,
+            "opt_vars_fn": opt_vars_fn,
+            "xus_fn": xus_fn,
+            "opt_act_fn": opt_act_fn,
+            "cost": cost,
+            "lower_bound": con_lbg,
+            "upper_bound": con_ubg,
+            "solver": pisolver,
+            "qlower_bound": qcon_lbg,
+            "qupper_bound": qcon_ubg,
+            "qsolver": qsolver,
+            "jit_options": jit_opts,
+        }
         start_time = time.time()
 
         # Build Lagrangian
@@ -484,9 +565,6 @@ class MPCFunction:
             H_eq,
             mu * H_ieq + etau,
         )
-        # z contains all variables of the lagrangian
-        z = cs.vertcat(opt_vars, mult)
-        theta = cs.vertcat(cost_param, back_off_param, model_param)
 
         #### Sensitivities for value function
         lagrangian_fn = cs.Function(
@@ -495,11 +573,16 @@ class MPCFunction:
         dlag_fn = lagrangian_fn.factory(
             "dV", ["i0", "i1", "i2", "i3"], ["jac:o0:i2", "jac:o0:i3"]
         )
-        [dVdref, dVdtheta] = dlag_fn(z, fixed_param, ref_param, theta)
+        [_, dVdtheta] = dlag_fn(z, fixed_param, ref_param, theta)
         # Sensitivity against theta
         dVdtheta_fn = cs.Function(
             "dVdtheta_fn", [z, fixed_param, ref_param, theta], [dVdtheta.T]
         )
+        self.v_sensitivities_dict = {
+            "dVdtheta": dVdtheta,
+            "dVdtheta_fn": dVdtheta_fn,
+            "jit_options": jit_opts,
+        }
 
         #### Generate sensitivity of the KKT matrix
         rkkt_fn = cs.Function("rkkt_fn", [z, fixed_param, ref_param, theta], [R_kkt])
@@ -515,6 +598,7 @@ class MPCFunction:
         [dRdz, dRdP_ref, dRdP_theta] = dR_sensfunc(z, fixed_param, ref_param, theta)
         # dRdP = cs.horzcat(dRdP_ref, dRdP_theta)
         dRdP = cs.horzcat(dRdP_theta)  # only learnable param
+        dRdz_fn = cs.Function("dRdz", [z, fixed_param, ref_param, theta], [dRdz])
         print(
             f"[MPC Setup] KKT matrix setup time: {time.time() - start_time:.3f} seconds."
         )
@@ -524,15 +608,15 @@ class MPCFunction:
         # 1. Pseudo inverse method (less efficient when there are many decision variables)
         # dzdP = -cs.inv(dRdz) @ dRdP
         # 2. Linear solver method (more efficient, especially for large problems, since it can exploit sparsity)
-        dzdP = -cs.solve(dRdz, dRdP)
+        # dzdP = -cs.solve(dRdz, dRdP)
         # dPi = dzdP[nx: nx + nu, :].T
-        dPi = dzdP
+        # dPi = dzdP
         # 3. Adjoint method (most efficient when there are many parameters, but requires additional implementation effort)
-        # S = cs.DM.zeros(nu, dRdz.shape[0])
-        # for i in range(nu):
-        #     S[i, nx + i] = 1.0
-        # dPi_prime = cs.solve(dRdz.T, S.T).T
-        # dPi = -(dPi_prime @ dRdP).T
+        S = cs.DM.zeros(nu, dRdz.shape[0])
+        for i in range(nu):
+            S[i, nx + i] = 1.0
+        dPi_prime = cs.solve(dRdz.T, S.T).T
+        dPi = -(dPi_prime @ dRdP)
         dPi_zeros = cs.MX.zeros(dPi.shape)
         f_true = cs.Function("f_true", [z, fixed_param, ref_param, theta], [dPi])
         f_false = cs.Function(
@@ -540,6 +624,16 @@ class MPCFunction:
         )
         dPi_fn = cs.Function.if_else("dPi_fn", f_true, f_false)
         # dPi_fn.save('dPi_fn.casadi')
+        self.pi_sensitivity_dict = {
+            "R_kkt": R_kkt,
+            "rkkt_fn": rkkt_fn,
+            "rkkt_norm_fn": rkkt_norm_fn,
+            "dRdz": dRdz,
+            "dRdP": dRdP,
+            "dRdz_fn": dRdz_fn,
+            "dpi_fn": dPi_fn,
+            "jit_options": jit_opts,
+        }
         print(
             f"[MPC Setup] Sensitivity setup time: {time.time() - start_time:.3f} seconds."
         )
@@ -556,33 +650,7 @@ class MPCFunction:
         print(
             f"[MPC Setup] JIT compilation time: {time.time() - start_time:.3f} seconds."
         )
-
-        self.solver_dict = {
-            "x_var": x_var,
-            "u_var": u_var,
-            "state_slack": sigma_var,
-            "opt_vars": opt_vars,
-            "mult": mult,
-            "fixed_param": fixed_param,
-            "ref_param": ref_param,
-            "theta_param": theta,
-            "opt_vars_fn": opt_vars_fn,
-            "xus_fn": xus_fn,
-            "opt_act_fn": opt_act_fn,
-            "cost": cost,
-            "lower_bound": con_lbg,
-            "upper_bound": con_ubg,
-            "lang_mult_fn": lang_mult_fn,
-            "solver": pisolver,
-            "R_kkt": R_kkt,
-            "dVdtheta": dVdtheta,
-            "dVdtheta_fn": dVdtheta_fn,
-            "rkkt_fn": rkkt_fn,
-            "rkkt_norm_fn": rkkt_norm_fn,
-            "dpi_fn": dPi_fn,
-            "all_fn": all_fn,
-            "jit_options": jit_opts,
-        }
+        self.pi_sensitivity_dict["all_fn"] = all_fn
 
     def get_references(self, traj_step=None, traj_ref=None):
         """Constructs reference states along mpc horizon.(nx, T+1)."""
@@ -624,15 +692,14 @@ class MPCFunction:
         xus_fn = solver_dict["xus_fn"]
 
         # Collect the fixed param
+        fixed_param = np.zeros((self.model.nx + self.model.nu, 1))
+        fixed_param[: self.model.nx, :] = obs[: self.model.nx, None]
         # Assign reference trajectory within horizon.
-        fixed_param = obs[: self.model.nx, None]
         # goal_states = self.get_references(self.traj_step, traj_ref)
         goal_states = traj_ref[0].copy()
         ref_param = goal_states.T.reshape(-1, 1)
         # Collect learnable parameters
         p_param = np.concatenate((fixed_param, ref_param, theta[:, None]))[:, 0]
-        if self.mode == "tracking":
-            self.traj_step += 1
 
         opt_vars_init = np.zeros(
             (solver_dict["opt_vars"].shape[0], solver_dict["opt_vars"].shape[1])
@@ -640,7 +707,7 @@ class MPCFunction:
         if self.warmstart and self.x_prev is not None and self.u_prev is not None:
             # shift previous solutions by 1 step
             opt_vars_init = update_initial_guess(
-                self.x_prev, self.u_prev, self.sigma_prev, opt_vars_fn
+                self.x_prev, self.u_prev, self.sigma_prev, self.sigma_u0_prev, opt_vars_fn
             )
 
         # Solve the optimization problem.
@@ -654,10 +721,11 @@ class MPCFunction:
 
         # Post-processing the solution
         opt_vars = soln["x"].full()
-        x_val, u_val, sigma_val = xus_fn(opt_vars)
+        x_val, u_val, sigma_val, sigma_u0_val = xus_fn(opt_vars)
         self.x_prev = x_val.full()
         self.u_prev = u_val.full()
         self.sigma_prev = sigma_val.full()
+        self.sigma_u0_prev = sigma_u0_val.full()
         results_dict = {
             "horizon_states": deepcopy(self.x_prev),
             "horizon_inputs": deepcopy(self.u_prev),
@@ -678,6 +746,5 @@ class MPCFunction:
             "fixed_param": deepcopy(fixed_param),
             "ref_param": deepcopy(ref_param),
             "theta_param": deepcopy(theta),
-            "traj_step": deepcopy(self.traj_step) - 1,
         }
         return action, info, results_dict, optimal

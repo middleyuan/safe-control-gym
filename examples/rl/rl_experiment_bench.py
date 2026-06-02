@@ -63,13 +63,14 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.', model_
     env_func = partial(make,
                        config.task,
                        **config.task_config)
-    env = env_func(gui=gui)
+    env = env_func(gui=gui, seed=config.seed)
 
     # Setup controller.
     ctrl = make(config.algo,
                 env_func,
                 **config.algo_config,
-                output_dir=curr_path + '/temp')
+                output_dir=curr_path + '/temp',
+                seed=config.seed)
 
     # Load state_dict from trained.
     # ctrl.load(f'{curr_path}/models/{config.algo}/{config.algo}_model_{system}_{task}.pt')

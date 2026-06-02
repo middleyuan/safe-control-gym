@@ -10,28 +10,29 @@ algo_config:
   sr_lambda: 0.95
   clip_param: 0.2
   target_kl: 0.01
-  entropy_coef: 0.001
+  entropy_coef: 0.01
   exploration_init: -0.5
   quantile_count: 200
   value_loss: 'sample_energy'
+  value_loss_kwargs: {'sample_count': 200}
   risk_measure: 'wang'
-  risk_measure_config: {'beta': 0.0}
+  risk_measure_config: {'beta': 2.0}
 
   # optim args
   opt_epochs: 10
-  mini_batch_size: 256
-  actor_lr: 0.0003
-  critic_lr: 0.0003
+  mini_batch_size: 512
+  actor_lr: 0.0001
+  critic_lr: 0.0001
 
   # runner args
-  max_env_steps: 3960000
+  max_env_steps: 5280000
   rollout_batch_size: 10
   rollout_steps: 330
   eval_batch_size: 10
 
   # misc
   log_interval: 13200
-  save_interval: 3960000
+  save_interval: 5280000
   num_checkpoints: 0
   eval_interval: 13200
   eval_save_best: True

@@ -221,7 +221,6 @@ class MLPActor(nn.Module):
         if with_logprob:
             logp = dist.log_prob(x_t)
             logp -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6).sum(-1, keepdim=True)
-            # logp = logp.sum(1, keepdim=True)
         else:
             logp = None
     

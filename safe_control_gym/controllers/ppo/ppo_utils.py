@@ -121,10 +121,9 @@ class PPOAgent:
         num_mini_batch = rollouts.max_length * rollouts.batch_size // self.mini_batch_size
         # assert if num_mini_batch is not 0
         assert num_mini_batch != 0, 'num_mini_batch is 0'
-        n_updates, stop_training = 0, False
         
         for _ in range(self.opt_epochs):
-            p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
+            p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch, n_updates = 0, 0, 0, 0, 0
             for batch in rollouts.sampler(self.mini_batch_size, device):
                 # Actor update.
                 policy_loss, entropy_loss, approx_kl = self.compute_policy_loss(batch)
@@ -134,7 +133,6 @@ class PPOAgent:
                     (policy_loss + self.entropy_coef * entropy_loss).backward()
                     self.actor_opt.step()
                 else:
-                    # stop_training = True
                     break
                 # Critic update.
                 value_loss = self.compute_value_loss(batch)
@@ -151,8 +149,6 @@ class PPOAgent:
             results['value_loss'].append(v_loss_epoch / max(n_updates, 1))
             results['entropy_loss'].append(e_loss_epoch / max(n_updates, 1))
             results['approx_kl'].append(kl_epoch / max(n_updates, 1))
-            # if stop_training:
-            #     break
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 

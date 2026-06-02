@@ -70,6 +70,7 @@ class DPPO(BaseController):
                                quantile_count=self.quantile_count,
                                gae_lambda=self.gae_lambda,
                                value_loss=self.value_loss,
+                               value_loss_kwargs=self.value_loss_kwargs,
                                risk_measure=self.risk_measure,
                                risk_measure_config=self.risk_measure_config,
                                device=self.device)

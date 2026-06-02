@@ -127,7 +127,11 @@ class SAC_MPC(BaseController):
             self.agent_info = []
             for env in self.venv.envs:
                 self.agent_info.append(
-                    {"current_step": env.ctrl_step_counter, "x_ref": env.X_GOAL}
+                    {
+                        "current_step": env.ctrl_step_counter,
+                        "x_ref": env.X_GOAL,
+                        "soln_info": None,
+                    }
                 )
             self.buffer = SACBuffer(
                 self.env.observation_space,
@@ -324,9 +328,11 @@ class SAC_MPC(BaseController):
             self.agent_info[idx] = {
                 "current_step": inf["current_step"],
                 "x_ref": self.venv.envs[idx].X_GOAL,
+                "soln_info": soln_info[idx],
             }
             if done[idx]:
                 self.agent.reset(idx)
+                self.agent_info[idx]["soln_info"] = None
             if "terminal_info" not in inf:
                 continue
             inff = inf["terminal_info"]
@@ -399,9 +405,11 @@ class SAC_MPC(BaseController):
         if hasattr(env, "envs"):
             agent_info = []
             for e in env.envs:
-                agent_info.append({"current_step": 0, "x_ref": e.X_GOAL})
+                agent_info.append(
+                    {"current_step": 0, "x_ref": e.X_GOAL, "soln_info": None}
+                )
         else:
-            agent_info = [{"current_step": 0, "x_ref": env.X_GOAL}]
+            agent_info = [{"current_step": 0, "x_ref": env.X_GOAL, "soln_info": None}]
 
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=agent_info)
@@ -425,6 +433,7 @@ class SAC_MPC(BaseController):
                     agent_info[idx] = {
                         "current_step": inf["current_step"],
                         "x_ref": env.envs[idx].X_GOAL,
+                        "soln_info": None,
                     }
             else:
                 if done:
@@ -440,6 +449,7 @@ class SAC_MPC(BaseController):
                 agent_info[0] = {
                     "current_step": info["current_step"],
                     "x_ref": env.X_GOAL,
+                    "soln_info": None,
                 }
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
@@ -478,6 +488,7 @@ class SAC_MPC(BaseController):
                         "policy_loss",
                         "critic_loss",
                         "entropy_loss",
+                        "logp_loss",
                         "alpha",
                         "theta_loss",
                     ]
@@ -531,5 +542,5 @@ class SAC_MPC(BaseController):
         print(mpc_param.cpu().detach().numpy())
         if not self.sigma_network:
             print("Policy logstd:")
-            print(self.agent.ac.actor.log_std.detach().numpy())
+            print(self.agent.ac.actor.logstd.detach().numpy())
         self.logger.dump_scalars()

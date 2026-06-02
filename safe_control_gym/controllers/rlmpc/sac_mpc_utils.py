@@ -7,6 +7,7 @@ import casadi as cs
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from gymnasium.spaces import Box
 
 from safe_control_gym.controllers.rlmpc.rlmpc_utils import (
@@ -147,8 +148,9 @@ class SAC_MPC_Agent:
         entropy_loss = torch.zeros(1)
         if self.use_entropy_tuning:
             entropy_loss = -(self.log_alpha * (logp + self.target_entropy).detach())
+            logp_loss = (logp + self.target_entropy).detach().mean()
             entropy_loss = torch.where(optimal > 0.9, entropy_loss, torch.nan).nanmean()
-        return policy_loss, entropy_loss
+        return policy_loss, entropy_loss, logp_loss
 
     def compute_q_loss(
         self, batch, batch_th
@@ -156,7 +158,7 @@ class SAC_MPC_Agent:
         """Returns q-value loss(es) given batch of data."""
         obs, act, next_obs = batch_th["obs"], batch_th["act"], batch_th["next_obs"]
         rew, mask = batch_th["rew"], batch_th["mask"]
-        next_obs_np = np.array(batch["next_obs"])
+        next_obs_np = batch["next_obs"]
         info = batch["info"]
         q1 = self.ac.q1(obs, act)
         q2 = self.ac.q2(obs, act)
@@ -193,12 +195,6 @@ class SAC_MPC_Agent:
 
         # actor update
         if self.count % self.update_freq == 0:
-            # Set requires_grad to False for critic networks so that the gradients can be passed through the mpc to actor parameters.
-            for p in self.ac.q1.parameters():
-                p.requires_grad = False
-            for p in self.ac.q2.parameters():
-                p.requires_grad = False
-
             # MPC forward and backward
             obs_th = batch_th["obs"]
             obs, info = batch["obs"], batch["info"]
@@ -211,7 +207,7 @@ class SAC_MPC_Agent:
                 optimal,
             ) = self.ac.actor.forward_train(obs, info)
 
-            policy_loss, entropy_loss = self.compute_policy_loss(
+            policy_loss, entropy_loss, logp_loss = self.compute_policy_loss(
                 obs_th, act_th, logp, optimal
             )
             self.actor_opt.zero_grad()
@@ -227,8 +223,16 @@ class SAC_MPC_Agent:
             theta_loss.backward()
             self.actor_opt.step()
             with torch.no_grad():
-                self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
-                # self.ac.actor.logstd.clamp_(-3.5, -0.5)
+                self.ac.actor.q_param.clamp_(1e-5, 100.0)
+                self.ac.actor.r_param.clamp_(1e-5, 100.0)
+                self.ac.actor.qt_param.clamp_(1e-5, 100.0)
+                self.ac.actor.model_param.clamp_(1e-5, 100.0)
+                # self.ac.actor.back_off_fixed.clamp_(1e-5, 100.0)
+                # self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
+                if not self.ac.actor.sigma_network:
+                    self.ac.actor.logstd.clamp_(
+                        self.ac.actor.log_std_min, self.ac.actor.log_std_max
+                    )
 
             if self.use_entropy_tuning:
                 self.alpha_opt.zero_grad()
@@ -239,13 +243,8 @@ class SAC_MPC_Agent:
             results["entropy_loss"] = entropy_loss.item()
             results["alpha"] = self.alpha.item()
             results["theta_loss"] = theta_loss.item()
+            results["logp_loss"] = logp_loss.item()
             # results['exploration_std'] = self.ac.actor.logstd.exp().mean().item()
-
-            # Set requires_grad back to True for critic networks for next update step.
-            for p in self.ac.q1.parameters():
-                p.requires_grad = True
-            for p in self.ac.q2.parameters():
-                p.requires_grad = True
 
         # update target networks
         # soft_update(self.ac, self.ac_targ, self.tau)
@@ -368,31 +367,35 @@ class MPCActor(nn.Module):
         # self.back_off_param = nn.Parameter(
         #     torch.tensor(self.back_off_init, dtype=torch.float32)
         # )
-        self.register_buffer(
-            "back_off_fixed",
-            torch.tensor(self.back_off_init, dtype=torch.float32)
-        )
-        self.mpc_param = self._build_mpc_param()
+        # self.register_buffer(
+        #     "back_off_fixed", torch.tensor(self.back_off_init, dtype=torch.float32)
+        # )
 
         # Construct output action distribution.
         self.sigma_network = sigma_network
         self.tanh_squash = tanh_squash
-        self.log_std_min = -20
+        self.log_std_min = -4
         self.log_std_max = 2
         if self.sigma_network:
             self.net = MLP(obs_dim, hidden_dims[-1], hidden_dims[:-1], activation)
             self.log_std_layer = nn.Linear(hidden_dims[-1], act_dim)
         else:
-            self.log_std = nn.Parameter(exploration_init * torch.ones(act_dim))
+            self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
         self.dist_fn = lambda mu, log_std: Normal(mu, log_std.exp())
 
         # action rescaling (from cleanrl)
-        self.action_scale = torch.tensor(
-            (action_space.high - action_space.low) / 2.0, dtype=torch.float32
-        ).flatten()
-        self.action_bias = torch.tensor(
-            (action_space.high + action_space.low) / 2.0, dtype=torch.float32
-        ).flatten()
+        self.register_buffer(
+            "action_scale",
+            torch.tensor(
+                (action_space.high - action_space.low) / 2.0, dtype=torch.float32
+            ).flatten(),
+        )
+        self.register_buffer(
+            "action_bias",
+            torch.tensor(
+                (action_space.high + action_space.low) / 2.0, dtype=torch.float32
+            ).flatten(),
+        )
 
     def forward(self, obs, deterministic=False, actor_info=None):
         theta = self.get_theta_param(obs)
@@ -415,7 +418,7 @@ class MPCActor(nn.Module):
             net_out = self.net(torch.FloatTensor(obs))
             log_std = self.log_std_layer(net_out)
         else:
-            log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
+            log_std = self.logstd
         dist = self.dist_fn(act, log_std)
         if deterministic:
             x_t = dist.mode()
@@ -455,7 +458,7 @@ class MPCActor(nn.Module):
             net_out = self.net(torch.FloatTensor(obs))
             log_std = self.log_std_layer(net_out)
         else:
-            log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
+            log_std = self.logstd
         if self.tanh_squash:
             # Inverse squashing
             z_t = self.inverse_squashing(action)
@@ -467,11 +470,15 @@ class MPCActor(nn.Module):
 
         # Squash the output
         if self.tanh_squash:
+            # logp -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6).sum(
+            #     -1, keepdim=True
+            # )
+            logp -= (2 * (np.log(2) - x_t - F.softplus(-2 * x_t))).sum(
+                axis=1, keepdim=True
+            )
+            logp -= torch.log(self.action_scale).sum()
             y_t = torch.tanh(x_t)
             act = y_t * self.action_scale + self.action_bias
-            logp -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6).sum(
-                -1, keepdim=True
-            )
         else:
             act = x_t
         return (
@@ -486,7 +493,7 @@ class MPCActor(nn.Module):
     def inverse_squashing(self, y):
         """Inverse of tanh squashing function."""
         y = (y - self.action_bias) / self.action_scale
-        return torch.atanh(torch.clamp(y, -1.0 + 1e-6, 1.0 - 1e-6))
+        return torch.atanh(torch.clamp(y, -1.0 + 1e-4, 1.0 - 1e-4))
 
     def reset(self, idx=None):
         self.mpc.reset(idx)
@@ -497,7 +504,7 @@ class MPCActor(nn.Module):
                 self.q_param,
                 self.r_param,
                 self.qt_param,
-                self.back_off_fixed,
+                # self.back_off_fixed,
                 self.model_param,
             ],
             dim=0,
@@ -535,6 +542,7 @@ class MPCActor(nn.Module):
 
 
 class MPCPolicyFunction(MPCFunction):
+
     def __init__(
         self,
         env_fun,
@@ -559,19 +567,27 @@ class MPCPolicyFunction(MPCFunction):
             soft_constraints=soft_constraints,
             constraint_tol=constraint_tol,
             additional_constraints=additional_constraints,
-            n_parallel_solver=n_parallel_solver,
-            n_train_solver=n_train_solver,
             jit=jit,
             jit_options=jit_options,
         )
+        self.n_parallel_solver = n_parallel_solver
+        self.n_train_solver = n_train_solver
+        self.infos = [None] * self.n_parallel_solver
 
         # Parallel solvers
-        self.pi_solvers, self.rkkt_norm_fns, _, _ = self.get_parallel_solver(
+        self.pi_solvers, self.rkkt_norm_fns, _ = self.get_parallel_solver(
             self.n_parallel_solver
         )
-        self.pi_solvers_train, self.rkkt_norm_fns_train, _, self.all_solvers_train = (
+        self.pi_solvers_train, self.rkkt_norm_fns_train, self.all_solvers_train = (
             self.get_parallel_solver(self.n_train_solver)
         )
+
+    def reset(self, idx=None):
+        super().reset()
+        if idx is not None:
+            self.infos[idx] = None
+        else:
+            self.infos = [None] * self.n_parallel_solver
 
     def select_action_batch(self, obs_batch, theta, traj_ref, agent_info):
         if not obs_batch.ndim > 1:
@@ -580,10 +596,6 @@ class MPCPolicyFunction(MPCFunction):
         con_ubg = self.solver_dict["upper_bound"]
         opt_vars_fn = self.solver_dict["opt_vars_fn"]
         xus_fn = self.solver_dict["xus_fn"]
-        traj_step = self.traj_step
-        # goal_states = self.get_references(traj_step, traj_ref)
-        if self.mode == "tracking":
-            self.traj_step += 1
 
         # eval_data_batch = []
         x0, fixed_p, ref_p = [], [], []
@@ -593,24 +605,29 @@ class MPCPolicyFunction(MPCFunction):
         if not obs_batch.ndim > 1:
             obs_batch = obs_batch[None, :]
         for i, obs in enumerate(obs_batch):
-            fixed_param = obs[: self.model.nx]
+            fixed_param = np.zeros((self.model.nx + self.model.nu))
+            fixed_param[: self.model.nx] = obs[: self.model.nx]
             ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
             opt_vars_init = np.zeros(self.solver_dict["opt_vars"].shape)
-            if (
-                self.infos[i] is not None
-            ):  # shift previous solutions by 1 step based on last soln
+
+            # shift previous solutions by 1 step based on last soln
+            info = agent_info[i]["soln_info"]
+            if info is not None:
+                opt_vars_init = info["opt_var"]
+            elif self.infos[i] is not None:
                 opt_vars_init = self.infos[i]["opt_var"]
-                x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
-                x_prev, u_prev, sigma_prev = (
-                    x_prev.full(),
-                    u_prev.full(),
-                    sigma_prev.full(),
-                )
-                opt_vars_init = update_initial_guess(
-                    x_prev, u_prev, sigma_prev, opt_vars_fn
-                )
-                if agent_info[i]["current_step"] == 0:
-                    opt_vars_init = np.zeros_like(opt_vars_init)
+            else:
+                opt_vars_init = np.zeros_like(opt_vars_init)
+            x_prev, u_prev, sigma_prev, sigma_u0_prev = xus_fn(opt_vars_init)
+            x_prev, u_prev, sigma_prev, sigma_u0_prev = (
+                x_prev.full(),
+                u_prev.full(),
+                sigma_prev.full(),
+                sigma_u0_prev.full()
+            )
+            opt_vars_init = update_initial_guess(
+                x_prev, u_prev, sigma_prev, sigma_u0_prev, opt_vars_fn
+            )
 
             x0.append(opt_vars_init[:, 0])
             fixed_p.append(fixed_param)
@@ -628,14 +645,16 @@ class MPCPolicyFunction(MPCFunction):
         action_batch, results_dict_batch, info_batch = [], [], []
         for i, obs in enumerate(obs_batch):
             opt_vars = soln_batch["x"].full()[:, i]
-            x_val, u_val, sigma_val = xus_fn(opt_vars)
+            x_val, u_val, sigma_val, sigma_u0_val = xus_fn(opt_vars)
             x_prev = x_val.full()
             u_prev = u_val.full()
             sigma_prev = sigma_val.full()
+            sigma_u0_prev = sigma_u0_val.full()
             results_dict = {
                 "horizon_states": deepcopy(x_prev),
                 "horizon_inputs": deepcopy(u_prev),
                 "horizon_slacks": deepcopy(sigma_prev),
+                "horizon_u0_slacks": deepcopy(sigma_u0_prev),
                 "goal_states": deepcopy(ref_p[:, i]),
             }
             # results_dict['t_wall'].append(opti.stats()['t_wall_total'])
@@ -686,18 +705,20 @@ class MPCPolicyFunction(MPCFunction):
         for i, obs in enumerate(obs_batch):
             info = info_batch[i]
             opt_vars_init = info["opt_var"]
-            fixed_param = obs[: self.model.nx]
+            fixed_param = np.zeros((self.model.nx + self.model.nu))
+            fixed_param[: self.model.nx] = obs[: self.model.nx]
             ref_param = info["ref_param"]
             if update_info:
                 # update the optimization variable init
-                x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
-                x_prev, u_prev, sigma_prev = (
+                x_prev, u_prev, sigma_prev, sigma_u0_prev = xus_fn(opt_vars_init)
+                x_prev, u_prev, sigma_prev, sigma_u0_prev = (
                     x_prev.full(),
                     u_prev.full(),
                     sigma_prev.full(),
+                    sigma_u0_prev.full(),
                 )
                 opt_vars_init = update_initial_guess(
-                    x_prev, u_prev, sigma_prev, opt_vars_fn
+                    x_prev, u_prev, sigma_prev, sigma_u0_prev, opt_vars_fn
                 )[:, 0]
                 # update the reference parameter
                 ref_param = self.get_references(
@@ -723,16 +744,12 @@ class MPCPolicyFunction(MPCFunction):
             optimal_batch = rkkt_norm_batch.full() < 1e-3
             nabla_pi_ref_batch, nabla_pi_theta_batch = [], []
             # dpi_cs = dpi_fn_train(optimal_batch, z, fixed_p, ref_p, theta.T).full()
-            nx, nu, npl = (
-                self.model.nx,
-                self.model.nu,
-                self.solver_dict["theta_param"].shape[0],
-            )
+            npl = self.solver_dict["theta_param"].shape[0]
             for i in range(obs_batch.shape[0]):
                 nabla_pi_theta_batch.append(
                     int(optimal_batch[0, i])
                     * dpi_cs[
-                        nx : nx + nu,
+                        :,
                         npl * i : npl * (i + 1),
                     ]
                 )
@@ -751,10 +768,11 @@ class MPCPolicyFunction(MPCFunction):
 
     def get_parallel_solver(self, n_solvers):
         pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread")
-        rkkt_norm_fns = self.solver_dict["rkkt_norm_fn"].map(n_solvers, "thread")
-        dpi_fns = self.solver_dict["dpi_fn"].map(n_solvers, "thread")
-        all_fns = self.solver_dict["all_fn"].map(n_solvers, "thread")
-        return pi_solvers, rkkt_norm_fns, dpi_fns, all_fns
+        rkkt_norm_fns = self.pi_sensitivity_dict["rkkt_norm_fn"].map(
+            n_solvers, "thread"
+        )
+        all_fns = self.pi_sensitivity_dict["all_fn"].map(n_solvers, "thread")
+        return pi_solvers, rkkt_norm_fns, all_fns
 
 
 class SACBuffer(object):
