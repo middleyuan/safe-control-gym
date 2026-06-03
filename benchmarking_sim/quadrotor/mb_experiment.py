@@ -62,7 +62,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'gpmpc_acados_TP'
         # ALGO = 'gpmpc_acados_TRP'
         # ALGO = 'mpc'
-        ALGO = 'mpc_acados'
+        # ALGO = 'mpc_acados'
         # ALGO = 'linear_mpc_acados'
         # ALGO = 'linear_mpc'
         # ALGO = 'lqr'
@@ -85,7 +85,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     ADDITIONAL = '_delay'
     # ADDITIONAL = ''
     # CTRL_ADD = ADDITIONAL
-    CTRL_ADD = ''
+    CTRL_ADD = '_delay'
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
