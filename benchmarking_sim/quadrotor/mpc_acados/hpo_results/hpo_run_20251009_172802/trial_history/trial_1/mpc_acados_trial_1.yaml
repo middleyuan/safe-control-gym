@@ -1,0 +1,26 @@
+algo: mpc_acados
+algo_config:
+  horizon: 30
+  output_dir: ./mpc_acados/results
+  q_mpc:
+  - 23.9
+  - 2.82
+  - 50.8
+  - 7.7
+  - 110.33
+  - 4.46
+  - 19.25
+  - 24.78
+  - 18.76
+  - 0.001
+  - 0.001
+  - 0.001
+  - 2.2
+  r_mpc:
+  - 8.91
+  - 20.74
+  - 12.72
+  - 15.72
+  soft_constraints: true
+  use_RTI: true
+  warmstart: true

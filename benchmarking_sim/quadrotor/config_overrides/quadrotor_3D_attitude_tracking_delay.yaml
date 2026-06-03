@@ -101,7 +101,7 @@ task_config:
     trajectory_position_offset: [0.0, 0, 0]
     trajectory_scale: 1.0
     # custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj.npy"
-    custom_snap_ref_traj: /home/zoujoey/LSY_Projects/safe_control_gym/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v7_2.npy
+    custom_snap_ref_traj: /home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v7_2.npy
     # custom_snap_ref_traj_obs: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/mpc_acados_quadrotor_3D_attitude_12_5_ref_traj.npy"
   cost: rl_reward
   obs_goal_horizon: 0

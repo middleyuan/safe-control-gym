@@ -239,7 +239,7 @@ class BaseAviary(BenchmarkEnv):
             self.dnxdx = 0.0
             self.dnxdu = 0.0
         else:
-            assert self.simulator_diff, 'dnxdx and dnxdu only defined for DYN_SI physics update.'
+            assert not self.simulator_diff, 'dnxdx and dnxdu only defined for DYN_SI physics update.'
         # Initialize the motor forces for certain types of physics update.
         if self.PHYSICS in [Physics.DYN_SI_3D_DELAY] \
             and hasattr(self, 'init_tau'):
