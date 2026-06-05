@@ -1,0 +1,171 @@
+algo: mpc_acados
+algo_config:
+  constraint_tol: 1.0e-06
+  deque_size: 10
+  eval_batch_size: 10
+  horizon: 30
+  output_dir: ./mpc_acados/results
+  q_mpc:
+  - 14.816647159591962
+  - 6.345672598035517
+  - 46.397424528641444
+  - 3.081342312431248
+  - 76.8060626067327
+  - 9.740976470741947
+  - 18.89493874727513
+  - 19.453044115389858
+  - 28.051535531030606
+  - 0.001
+  - 0.001
+  - 0.001
+  - 4.25452071476411
+  r_mpc:
+  - 20.009067269703884
+  - 22.184016159331907
+  - 22.735735070815316
+  - 22.491838426712945
+  soft_constraints: true
+  use_RTI: true
+  warmstart: true
+experiment_type: basic
+func: train
+n_episodes: 1
+output_dir: ./mpc_acados/results/temp/seed1_Oct-09-17-36-59_5a14c3b
+overrides:
+- ./config_overrides/quadrotor_3D_attitude_tracking_delay.yaml
+- ./config_overrides/mpc_acados_quadrotor_3D_attitude_tracking_100.yaml
+restore: null
+seed: 1
+tag: temp
+task: quadrotor
+task_config:
+  adversary_disturbance: null
+  adversary_disturbance_offset: 0.0
+  adversary_disturbance_scale: 0.01
+  constraint_penalty: -1
+  constraints:
+  - constrained_variable: state
+    constraint_form: default_constraint
+  - constrained_variable: input
+    constraint_form: default_constraint
+  cost: rl_reward
+  ctrl_freq: 60
+  disturbances:
+    action:
+    - disturbance_func: white_noise
+      std:
+      - 0.021
+      - 0.078
+      - 0.071
+      - 0.064
+    observation:
+    - disturbance_func: white_noise
+      std:
+      - 1.31e-05
+      - 0.000509
+      - 1.42e-05
+      - 0.000523
+      - 1.47e-05
+      - 0.000591
+      - 0.00123
+      - 0.000611
+      - 0.000604
+      - 0.0525
+      - 0.0262
+      - 0.0253
+      - 0.0001
+  done_on_out_of_bound: true
+  done_on_violation: false
+  episode_len_sec: 15.5
+  gui: false
+  inertial_prop:
+    M: 0.037
+  inertial_prop_randomization_info: null
+  info_in_reset: true
+  init_state:
+    init_tau: 0.36
+    init_x: 1.3
+    init_x_dot: 0
+    init_y: 0.5
+    init_y_dot: 0
+    init_z: 1.1
+    init_z_dot: 0
+  init_state_randomization_info:
+    init_p:
+      distrib: normal
+      scale: 0.03452115832640752
+    init_phi:
+      distrib: normal
+      scale: 0.0026984744060397532
+    init_psi:
+      distrib: normal
+      scale: 0.0023822834889102923
+    init_q:
+      distrib: normal
+      scale: 0.02387283406599296
+    init_r:
+      distrib: normal
+      scale: 0.03123258323211547
+    init_theta:
+      distrib: normal
+      scale: 0.0024088251667187467
+    init_x:
+      distrib: normal
+      scale: 0.0011629923113331312
+    init_x_dot:
+      distrib: normal
+      scale: 0.003635597781389117
+    init_y:
+      distrib: normal
+      scale: 0.00835274639765562
+    init_y_dot:
+      distrib: normal
+      scale: 0.004965500657569368
+    init_z:
+      distrib: normal
+      scale: 0.0024990695232428458
+    init_z_dot:
+      distrib: normal
+      scale: 0.010193088084183025
+  norm_act_scale: 0.1
+  normalized_rl_action_space: false
+  obs_goal_horizon: 0
+  physics: dyn_si_3d_delay
+  pyb_freq: 60
+  quad_type: 9
+  randomized_inertial_prop: false
+  randomized_init: true
+  rew_act_weight:
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  rew_exponential: true
+  rew_state_weight:
+  - 5.0
+  - 0.1
+  - 5.0
+  - 0.1
+  - 5.0
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0.001
+  - 0.001
+  - 0.001
+  - 0.001
+  task: traj_tracking
+  task_info:
+    custom_snap_ref_traj: /home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_1_vf_ss.npy
+    num_cycles: 1
+    trajectory_plane: xy
+    trajectory_position_offset:
+    - 0.0
+    - 0
+    - 0
+    trajectory_scale: 1.0
+    trajectory_type: snap_custom
+  use_constraint_penalty: false
+  verbose: false
+use_gpu: true
