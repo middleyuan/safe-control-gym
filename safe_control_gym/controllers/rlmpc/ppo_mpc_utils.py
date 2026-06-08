@@ -38,6 +38,7 @@ class PPO_MPC_Agent:
         critic_lr=0.001,
         opt_epochs=10,
         mini_batch_size=64,
+        rollout_batch_size=10,
         **kwargs,
     ):
 
@@ -52,6 +53,7 @@ class PPO_MPC_Agent:
         self.exploration_init = exploration_init
         self.opt_epochs = opt_epochs
         self.mini_batch_size = mini_batch_size
+        self.rollout_batch_size = rollout_batch_size
         self.activation = activation
 
         # Model.
@@ -65,6 +67,7 @@ class PPO_MPC_Agent:
             exploration_init=self.exploration_init,
             activation=self.activation,
             actor_config=actor_config,
+            parallel_workers=rollout_batch_size,
         )
 
         # Optimizers.
@@ -188,6 +191,7 @@ class PPO_MPC_Agent:
                     # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     theta_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
                     self.actor_opt.step()
                     with torch.no_grad():
                         self.ac.actor.q_param.clamp_(1e-5, 100.0)
@@ -248,6 +252,7 @@ class MLPActorCritic(nn.Module):
         exploration_init=-1.0,
         activation="tanh",
         actor_config=None,
+        parallel_workers=10,
     ):
         super().__init__()
         obs_dim = obs_space.shape[0]
@@ -268,6 +273,7 @@ class MLPActorCritic(nn.Module):
             model,
             exploration_init,
             actor_config,
+            parallel_workers=parallel_workers,
         )
         # Value function.
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
@@ -322,10 +328,11 @@ class MPCActor(nn.Module):
         model,
         exploration_init,
         actor_config,
+        parallel_workers=10,
     ):
         super().__init__()
         # mpc actor
-        self.mpc = MPCPolicyFunction(env, gamma, model, **actor_config["mpc_config"])
+        self.mpc = MPCPolicyFunction(env, gamma, model, parallel_workers=parallel_workers, **actor_config["mpc_config"])
 
         # Parameters
         self.q_init = actor_config["q_mpc"]
@@ -447,6 +454,7 @@ class MPCPolicyFunction(MPCFunction):
         n_train_solver: int = 1,
         jit: bool = False,
         jit_options: dict = None,
+        parallel_workers: int = 10,
     ):
         super().__init__(
             env_fun,
@@ -460,9 +468,10 @@ class MPCPolicyFunction(MPCFunction):
             jit=jit,
             jit_options=jit_options,
         )
+        self.parallel_workers = parallel_workers
         self.n_parallel_solver = n_parallel_solver
         self.n_train_solver = n_train_solver
-        self.infos = [None] * self.n_parallel_solver
+        self.infos = [None] * self.parallel_workers
 
         # Parallel solvers
         self.pi_solvers, self.rkkt_norm_fns, _ = self.get_parallel_solver(
@@ -477,7 +486,7 @@ class MPCPolicyFunction(MPCFunction):
         if idx is not None:
             self.infos[idx] = None
         else:
-            self.infos = [None] * self.n_parallel_solver
+            self.infos = [None] * self.parallel_workers
 
     def select_action_batch(self, obs_batch, theta, traj_ref, agent_info):
         if not obs_batch.ndim > 1:

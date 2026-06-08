@@ -32,8 +32,8 @@ algo_config:
   exploration_init: -1.0
 
   # optim args
-  opt_epochs: 20
-  mini_batch_size: 128
+  opt_epochs: 10
+  mini_batch_size: 64
   actor_lr: 0.0003
   critic_lr: 0.0003
 
