@@ -239,7 +239,7 @@ class BaseAviary(BenchmarkEnv):
             self.dnxdx = 0.0
             self.dnxdu = 0.0
         else:
-            assert not self.simulator_diff, 'dnxdx and dnxdu only defined for DYN_SI physics update.'
+            assert self.simulator_diff, 'dnxdx and dnxdu only defined for DYN_SI physics update.'
         # Initialize the motor forces for certain types of physics update.
         if self.PHYSICS in [Physics.DYN_SI_3D_DELAY] \
             and hasattr(self, 'init_tau'):
@@ -862,8 +862,9 @@ class BaseAviary(BenchmarkEnv):
         # next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         # next state with Casadi's fixed step integrator
         next_state = self.fd_func(x0=state, p=np.hstack([action, d]))['xf'].full()[:, 0]
-        dnxdx = self.dnxdx_func(state, action, d).full()
-        dnxdu = self.dnxdu_func(state, action, d).full()
+        # if self.simulator_diff:
+        #     dnxdx = self.dnxdx_func(state, action, d).full()
+        #     dnxdu = self.dnxdu_func(state, action, d).full()
 
         # Updated information
         pos = np.array([next_state[0], 0, next_state[2]])
@@ -876,8 +877,9 @@ class BaseAviary(BenchmarkEnv):
         self.vel[nth_drone, :] = vel.copy()
         self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
-        self.dnxdx = dnxdx.copy()
-        self.dnxdu = dnxdu.copy()
+        # if self.simulator_diff:
+        #     self.dnxdx = dnxdx.copy()
+        #     self.dnxdu = dnxdu.copy()
 
     def setup_dynamics_si_expression(self, prop_values=None):
         # Casadi states
@@ -914,8 +916,8 @@ class BaseAviary(BenchmarkEnv):
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
         self.fd_func = cs.integrator('fd', 'rk', {'x': X, 'p': cs.vertcat(U, d), 'ode': X_dot}, 0.0, self.PYB_TIMESTEP)
         X_next = self.fd_func(x0=X, p=cs.vertcat(U, d))['xf']
-        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)]) 
-        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)])
+        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)], ['X', 'U', 'd'], ['dnxdx']) 
+        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)], ['X', 'U', 'd'], ['dnxdu'])
 
     def _dynamics_si_3d(self, action, nth_drone, disturbance_force=None):
         '''Explicit dynamics implementation from the identified model.

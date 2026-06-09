@@ -1,6 +1,7 @@
 '''Symbolic Models.'''
 
 import casadi as cs
+import os
 
 
 class SymbolicModel:
@@ -61,6 +62,18 @@ class SymbolicModel:
         self.R = cost['vars']['R']
         self.Xr = cost['vars']['Xr']
         self.Ur = cost['vars']['Ur']
+        # JIT options
+        temp_dir = os.path.join("./temp/", "casadi_jit_cache")
+        # os.makedirs(temp_dir, exist_ok=True)
+        self.jit_opts = {
+            "jit": False,
+            "jit_cleanup": True,
+            "jit_temp_suffix": True,
+            "jit_options": {
+                "directory": temp_dir+"/",
+                "flags": ["-O2"]
+            },
+        }
         # Setup symbolic model.
         self.setup_model()
         # Setup Jacobian and Hessian of the dynamics and cost functions.
@@ -69,19 +82,19 @@ class SymbolicModel:
     def setup_model(self):
         '''Exposes functions to evaluate the model.'''
         # Continuous time dynamics.
-        self.fc_func = cs.Function('fc', [self.x_sym, self.u_sym], [self.x_dot], ['x', 'u'], ['f'])
+        self.fc_func = cs.Function('fc', [self.x_sym, self.u_sym], [self.x_dot], ['x', 'u'], ['f'], self.jit_opts)
 
         # Parameterized continuous time dynamics
         if self.param_x_dot is not None:
             self.param_fc_func = cs.Function('fc_param', [self.x_sym, self.u_sym, self.p_sym], [self.param_x_dot],
-                                             ['x', 'u', 'p'], ['f'])
+                                             ['x', 'u', 'p'], ['f'], self.jit_opts)
 
         # Discrete time dynamics.
         self.fd_func = cs.integrator('fd', self.integration_algo,
                                      {'x': self.x_sym, 'p': self.u_sym, 'ode': self.x_dot}, 0.0, self.dt)
 
         # Observation model.
-        self.g_func = cs.Function('g', [self.x_sym, self.u_sym], [self.y_sym], ['x', 'u'], ['g'])
+        self.g_func = cs.Function('g', [self.x_sym, self.u_sym], [self.y_sym], ['x', 'u'], ['g'], self.jit_opts)
 
     def setup_linearization(self):
         '''Exposes functions for the linearized model.'''
@@ -90,12 +103,12 @@ class SymbolicModel:
         self.dfdu = cs.jacobian(self.x_dot, self.u_sym)
         self.df_func = cs.Function('df', [self.x_sym, self.u_sym],
                                    [self.dfdx, self.dfdu], ['x', 'u'],
-                                   ['dfdx', 'dfdu'])
+                                   ['dfdx', 'dfdu'], self.jit_opts)
         self.dgdx = cs.jacobian(self.y_sym, self.x_sym)
         self.dgdu = cs.jacobian(self.y_sym, self.u_sym)
         self.dg_func = cs.Function('dg', [self.x_sym, self.u_sym],
                                    [self.dgdx, self.dgdu], ['x', 'u'],
-                                   ['dgdx', 'dgdu'])
+                                   ['dgdx', 'dgdu'], self.jit_opts)
         # Evaluation point for linearization.
         self.x_eval = cs.MX.sym('x_eval', self.nx, 1)
         self.u_eval = cs.MX.sym('u_eval', self.nu, 1)
@@ -127,16 +140,16 @@ class SymbolicModel:
         l_inputs_str = ['x', 'u', 'Xr', 'Ur', 'Q', 'R']
         l_outputs = [self.cost_func, self.l_x, self.l_xx, self.l_u, self.l_uu, self.l_xu]
         l_outputs_str = ['l', 'l_x', 'l_xx', 'l_u', 'l_uu', 'l_xu']
-        self.loss = cs.Function('loss', l_inputs, l_outputs, l_inputs_str, l_outputs_str)
+        self.loss = cs.Function('loss', l_inputs, l_outputs, l_inputs_str, l_outputs_str, self.jit_opts)
 
         # Reward function.
         r_func = -2.0 * self.cost_func
         exp_r_func = cs.exp(-2.0 * self.cost_func)
-        r_x = cs.jacobian(r_func, self.x_sym)
-        r_u = cs.jacobian(r_func, self.u_sym)
-        exp_r_x = cs.jacobian(exp_r_func, self.x_sym)
-        exp_r_u = cs.jacobian(exp_r_func, self.u_sym)
+        r_x = cs.jacobian(r_func, self.x_sym).T
+        r_u = cs.jacobian(r_func, self.u_sym).T
+        exp_r_x = cs.jacobian(exp_r_func, self.x_sym).T
+        exp_r_u = cs.jacobian(exp_r_func, self.u_sym).T
 
         r_outputs = [r_func, exp_r_func, r_x, r_u, exp_r_x, exp_r_u]
         r_outputs_str = ['r', 'exp_r', 'r_x', 'r_u', 'exp_r_x', 'exp_r_u']
-        self.reward_func = cs.Function('reward', l_inputs, r_outputs, l_inputs_str, r_outputs_str)
+        self.reward_func = cs.Function('reward', l_inputs, r_outputs, l_inputs_str, r_outputs_str, self.jit_opts)

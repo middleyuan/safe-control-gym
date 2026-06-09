@@ -2591,9 +2591,14 @@ class Quadrotor(BaseAviary):
             info['constraint_violations'] = self.constraints.get_violations(self)
         # Differential simulator info.
         if self.simulator_diff:
-            rew_x, rew_u = self._get_additional_reward_info()
-            nx_x, nx_u = self._get_diff_simulator_info()
-            info['diff_sim_info'] = {'rew_x': rew_x, 'rew_u': rew_u, 'nx_x': nx_x, 'nx_u': nx_u}
+            info["state"] = self.state.copy()
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[0] - 1)  
+            info["state_reference"] = self.X_GOAL[wp_idx].copy()
+            info["action_reference"] = self.U_GOAL.copy()
+            # +1 because state has already advanced but counter not incremented.
+            # rew_x, rew_u = self._get_additional_reward_info()
+            # nx_x, nx_u = self._get_diff_simulator_info()
+            # info['diff_sim_info'] = {'rew_x': rew_x, 'rew_u': rew_u, 'nx_x': nx_x, 'nx_u': nx_u}
         return info
 
     def _get_reset_info(self):
