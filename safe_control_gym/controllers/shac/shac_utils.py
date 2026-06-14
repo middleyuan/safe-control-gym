@@ -98,7 +98,7 @@ class SHACAgent:
         # actor update
         self.actor_opt.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
+        # torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
         self.actor_opt.step()
         results['actor_loss'].append(actor_loss.item())
         
@@ -109,7 +109,7 @@ class SHACAgent:
                 value_loss = self.compute_value_loss(batch)
                 self.critic_opt.zero_grad()
                 value_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.ac.critic.parameters(), max_norm=10.0)
+                # torch.nn.utils.clip_grad_norm_(self.ac.critic.parameters(), max_norm=10.0)
                 self.critic_opt.step()
                 # logging
                 v_loss_epoch += value_loss.item()

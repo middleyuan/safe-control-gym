@@ -855,13 +855,13 @@ class BaseAviary(BenchmarkEnv):
         # perform euler integration
         # next_state = state + self.PYB_TIMESTEP * self.X_dot_fun(state, action, d).full()[:, 0]
         # perform RK4 integration
-        # k1 = self.X_dot_fun(state, action, d).full()[:, 0]
-        # k2 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k1, action, d).full()[:, 0]
-        # k3 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k2, action, d).full()[:, 0]
-        # k4 = self.X_dot_fun(state + self.PYB_TIMESTEP * k3, action, d).full()[:, 0]
-        # next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+        k1 = self.X_dot_fun(state, action, d).full()[:, 0]
+        k2 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k1, action, d).full()[:, 0]
+        k3 = self.X_dot_fun(state + 0.5 * self.PYB_TIMESTEP * k2, action, d).full()[:, 0]
+        k4 = self.X_dot_fun(state + self.PYB_TIMESTEP * k3, action, d).full()[:, 0]
+        next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         # next state with Casadi's fixed step integrator
-        next_state = self.fd_func(x0=state, p=np.hstack([action, d]))['xf'].full()[:, 0]
+        # next_state = self.fd_func(x0=state, p=np.hstack([action, d]))['xf'].full()[:, 0]
         # if self.simulator_diff:
         #     dnxdx = self.dnxdx_func(state, action, d).full()
         #     dnxdu = self.dnxdu_func(state, action, d).full()
@@ -1407,7 +1407,7 @@ class BaseAviary(BenchmarkEnv):
 
             # Dynamics parameters
             if prop_values is None:
-                params_acc = [0.13, 0.72, 0.08, -0.0171, 0.000811]
+                params_acc = [0.041, 0.87, 0.105, -0.0171, 0.000811]
                 params_roll_rate = [-238.1, -21.35, 179.65]
                 params_pitch_rate = [-238.1, -21.35, 179.65]
                 params_yaw_rate = [-170.4, -22.22, 280]
