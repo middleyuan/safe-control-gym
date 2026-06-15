@@ -20,9 +20,6 @@ class SHACAgent:
                  act_space,
                  hidden_dim=64,
                  use_clipped_value=False,
-                 clip_param=0.2,
-                 target_kl=0.01,
-                 entropy_coef=0.01,
                  exploration_init=-0.5,
                  actor_lr=0.0003,
                  critic_lr=0.001,
@@ -35,9 +32,6 @@ class SHACAgent:
         self.obs_space = obs_space
         self.act_space = act_space
         self.use_clipped_value = use_clipped_value
-        self.clip_param = clip_param
-        self.target_kl = target_kl
-        self.entropy_coef = entropy_coef
         self.opt_epochs = opt_epochs
         self.mini_batch_size = mini_batch_size
         self.activation = activation
@@ -81,35 +75,13 @@ class SHACAgent:
         self.actor_opt.load_state_dict(state_dict['actor_opt'])
         self.critic_opt.load_state_dict(state_dict['critic_opt'])
 
-    def compute_policy_loss(self,
-                            batch
-                            ):
-        '''Returns policy loss(es) given batch of data.'''
-        obs, act, logp_old, adv = batch['obs'], batch['act'], batch['logp'], batch['adv']
-        dist, logp = self.ac.actor(obs, act)
-        # Policy.
-        ratio = torch.exp(logp - logp_old)
-        clip_adv = torch.clamp(ratio, 1 - self.clip_param, 1 + self.clip_param) * adv
-        policy_loss = -torch.min(ratio * adv, clip_adv).mean()
-        # Entropy.
-        entropy_loss = -dist.entropy().mean()
-        # KL/trust region.
-        approx_kl = (logp_old - logp).mean()
-        return policy_loss, entropy_loss, approx_kl
-
     def compute_value_loss(self,
                            batch
                            ):
         '''Returns value loss(es) given batch of data.'''
-        obs, ret, v_old = batch['obs'], batch['ret'], batch['v']
+        obs, ret = batch['obs'], batch['ret']
         v_cur = self.ac.critic(obs)
-        if self.use_clipped_value:
-            v_old_clipped = v_old + (v_cur - v_old).clamp(-self.clip_param, self.clip_param)
-            v_loss = (v_cur - ret).pow(2)
-            v_loss_clipped = (v_old_clipped - ret).pow(2)
-            value_loss = 0.5 * torch.max(v_loss, v_loss_clipped).mean()
-        else:
-            value_loss = 0.5 * (v_cur - ret).pow(2).mean()
+        value_loss = 0.5 * (v_cur - ret).pow(2).mean()
         return value_loss
 
     def update(self,
@@ -122,22 +94,22 @@ class SHACAgent:
         num_mini_batch = rollouts.max_length * rollouts.batch_size // self.mini_batch_size
         # assert if num_mini_batch is not 0
         assert num_mini_batch != 0, 'num_mini_batch is 0'
-        n_updates = 0
 
         # actor update
         self.actor_opt.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=1.0)
+        # torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
         self.actor_opt.step()
         results['actor_loss'].append(actor_loss.item())
         
         for _ in range(self.opt_epochs):
-            v_loss_epoch = 0
-            for batch in rollouts.sampler(self.mini_batch_size, device):
+            v_loss_epoch, n_updates = 0, 0
+            for batch in rollouts.sampler(self.mini_batch_size):
                 # Critic update.
                 value_loss = self.compute_value_loss(batch)
                 self.critic_opt.zero_grad()
                 value_loss.backward()
+                # torch.nn.utils.clip_grad_norm_(self.ac.critic.parameters(), max_norm=10.0)
                 self.critic_opt.step()
                 # logging
                 v_loss_epoch += value_loss.item()
@@ -164,12 +136,23 @@ class MLPActor(nn.Module):
         # Construct output action distribution.
         self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
         self.dist_fn = lambda x: Normal(x, self.logstd.exp())
+        self.register_buffer(
+            "action_scale",
+            torch.tensor((action_space.high - action_space.low) / 2.0, dtype=torch.float32),
+        )
+        self.register_buffer(
+            "action_bias",
+            torch.tensor((action_space.high + action_space.low) / 2.0, dtype=torch.float32),
+        )
 
     def forward(self,
                 obs,
                 ):
         dist = self.dist_fn(self.pi_net(obs))
         return dist
+
+    def squash(self, raw_action):
+        return torch.tanh(raw_action) * self.action_scale + self.action_bias
 
 
 class MLPCritic(nn.Module):
@@ -182,12 +165,6 @@ class MLPCritic(nn.Module):
                  ):
         super().__init__()
         self.v_net = MLP(obs_dim, 1, hidden_dims, activation)
-
-    # def forward(self,
-    #             obs
-    #             ):
-    #     v = self.v_net(obs)
-    #     return v
     
     def forward(self, obs, return_grad=False, create_graph=False):
         """
@@ -251,195 +228,238 @@ class MLPActorCritic(nn.Module):
              obs
              ):
         dist = self.actor(obs)
-        action = dist.rsample()
-        v = self.critic(obs)
-        return action, v
+        action = self.actor.squash(dist.rsample())
+        return action
 
     def act(self,
             obs,
             extra_info=False
             ):
         dist = self.actor(obs)
-        action = dist.mode()
-        v = self.critic(obs)
+        action = self.actor.squash(dist.mode())
         if extra_info:
-            return action.cpu().numpy(), v.cpu().numpy()
+            return action.cpu().numpy()
         return action.cpu().numpy()
+    
+    def actor_vjp_state(self, obs, q_t, state_dim=None, action=None):
+        """
+        Computes q_t @ d pi(obs) / d obs efficiently.
+
+        Args:
+            obs: [N, obs_dim]
+            q_t: [N, 1, act_dim] or [N, act_dim]
+            state_dim: optional, only keep first state_dim components
+
+        Returns:
+            q_pi_x: [N, 1, state_dim] if q_t was [N, 1, act_dim]
+                    or [N, state_dim] if q_t was [N, act_dim]
+        """
+        obs_req = obs.detach().clone().requires_grad_(True)
+
+        mean = self.actor.pi_net(obs_req)  # [N, act_dim]
+        if action is None:
+            policy_action = self.actor.squash(mean)
+            scalar = (q_t.detach() @ policy_action.unsqueeze(-1)).sum()
+        else:
+            normalized_action = (action.detach() - self.actor.action_bias) / self.actor.action_scale
+            normalized_action = normalized_action.clamp(-1.0, 1.0)
+            squash_grad = self.actor.action_scale * (1.0 - normalized_action.pow(2))
+            weighted_q = q_t.detach().squeeze(1) if q_t.dim() == 3 else q_t.detach()
+            scalar = (weighted_q * squash_grad * mean).sum()
+
+        q_pi_x = torch.autograd.grad(
+            outputs=scalar,
+            inputs=obs_req,
+            create_graph=False,
+            retain_graph=False,
+            only_inputs=True,
+        )[0]  # [N, obs_dim]
+
+        if state_dim is not None:
+            q_pi_x = q_pi_x[:, :state_dim]
+        return q_pi_x.detach().unsqueeze(1) if q_t.dim() == 3 else q_pi_x.detach()
 
 
 class SHACBuffer(object):
-    '''Storage for a batch of episodes during training.
-
-    Attributes:
-        max_length (int): maximum length of episode.
-        batch_size (int): number of episodes per batch.
-        scheme (dict): describs shape & other info of data to be stored.
-        keys (list): names of all data from scheme.
-    '''
-
-    def __init__(self,
-                 obs_space,
-                 act_space,
-                 max_length,
-                 batch_size
-                 ):
+    def __init__(self, obs_space, act_space, max_length, batch_size, device="cpu"):
         super().__init__()
         self.max_length = max_length
         self.batch_size = batch_size
+        self.device = device
+
         T, N = max_length, batch_size
         obs_dim = obs_space.shape
+
         if isinstance(act_space, Box):
             act_dim = act_space.shape[0]
         else:
             act_dim = act_space.n
+
         self.scheme = {
-            'obs': {
-                'vshape': (T, N, *obs_dim)
-            },
-            'act': {
-                'vshape': (T, N, act_dim)
-            },
-            'rew': {
-                'vshape': (T, N, 1)
-            },
-            'mask': {
-                'vshape': (T, N, 1),
-                'init': np.ones
-            },
-            'v': {
-                'vshape': (T, N, 1)
-            },
-            'ret': {
-                'vshape': (T, N, 1)
-            },
-            'terminal_v': {
-                'vshape': (T, N, 1)
-            }
+            "obs": {"vshape": (T, N, *obs_dim)},
+            "act": {"vshape": (T, N, act_dim)},
+            "rew": {"vshape": (T, N, 1)},
+            "mask": {"vshape": (T, N, 1), "init": "ones"},
+            "ret": {"vshape": (T, N, 1)},
+            "terminal_v": {"vshape": (T, N, 1)},
         }
+
         self.keys = list(self.scheme.keys())
         self.reset()
 
     def reset(self):
-        '''Allocates space for containers.'''
         for k, info in self.scheme.items():
-            assert 'vshape' in info, f'Scheme must define vshape for {k}'
-            vshape = info['vshape']
-            dtype = info.get('dtype', np.float32)
-            init = info.get('init', np.zeros)
-            self.__dict__[k] = init(vshape, dtype=dtype)
+            vshape = info["vshape"]
+            init = info.get("init", "zeros")
+
+            if init == "ones":
+                self.__dict__[k] = torch.ones(
+                    vshape, dtype=torch.float32, device=self.device
+                )
+            else:
+                self.__dict__[k] = torch.zeros(
+                    vshape, dtype=torch.float32, device=self.device
+                )
+
         self.t = 0
 
-    def push(self,
-             batch
-             ):
-        '''Inserts transition step data (as dict) to storage.'''
+    def push(self, batch):
         for k, v in batch.items():
             assert k in self.keys
-            shape = self.scheme[k]['vshape'][1:]
-            dtype = self.scheme[k].get('dtype', np.float32)
-            v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
-            self.__dict__[k][self.t] = v_
+
+            shape = self.scheme[k]["vshape"][1:]
+
+            if torch.is_tensor(v):
+                v_t = v.detach().to(self.device, dtype=torch.float32).reshape(shape)
+            else:
+                v_t = torch.as_tensor(
+                    v, dtype=torch.float32, device=self.device
+                ).reshape(shape)
+
+            self.__dict__[k][self.t].copy_(v_t)
+
         self.t = (self.t + 1) % self.max_length
 
-    def get(self,
-            device='cpu'
-            ):
-        '''Returns all data.'''
+    def get(self):
         batch = {}
         for k, info in self.scheme.items():
-            shape = info['vshape'][2:]
+            shape = info["vshape"][2:]
+            batch[k] = self.__dict__[k].reshape(-1, *shape)
+        return batch
+
+    def sample(self, indices):
+        batch = {}
+
+        for k, info in self.scheme.items():
+            shape = info["vshape"][2:]
             data = self.__dict__[k].reshape(-1, *shape)
-            batch[k] = torch.as_tensor(data, device=device)
+            batch[k] = data[indices]
+
         return batch
 
-    def sample(self,
-               indices
-               ):
-        '''Returns partial data.'''
-        batch = {}
-        for k, info in self.scheme.items():
-            shape = info['vshape'][2:]
-            batch[k] = self.__dict__[k].reshape(-1, *shape)[indices]
-        return batch
-
-    def sampler(self,
-                mini_batch_size,
-                device='cpu',
-                drop_last=True
-                ):
-        '''Makes sampler to loop through all data.'''
+    def sampler(self, mini_batch_size, drop_last=True):
         total_steps = self.max_length * self.batch_size
-        sampler = random_sample(np.arange(total_steps), mini_batch_size, drop_last)
-        for indices in sampler:
-            batch = self.sample(indices)
-            batch = {
-                k: torch.as_tensor(v, device=device) for k, v in batch.items()
-            }
-            yield batch
+
+        indices = torch.randperm(total_steps, device=self.device)
+
+        if drop_last:
+            end = total_steps // mini_batch_size * mini_batch_size
+            indices = indices[:end]
+
+        for idx in indices.split(mini_batch_size):
+            if drop_last and idx.numel() < mini_batch_size:
+                continue
+            yield self.sample(idx)
 
 
-def random_sample(indices,
-                  batch_size,
-                  drop_last=True
-                  ):
-    '''Returns index batches to iterate over.'''
-    indices = np.asarray(np.random.permutation(indices))
-    batches = indices[:len(indices) // batch_size * batch_size].reshape(
-        -1, batch_size)
-    for batch in batches:
-        yield batch
-    if not drop_last:
-        r = len(indices) % batch_size
-        if r:
-            yield indices[-r:]
-
-
-def compute_shac_returns_and_actor_loss(act_dim, 
-                                        act_v_list,
-                                        rews,
-                                        vals,
-                                        masks,
-                                        terminal_vals=0,
-                                        last_val=0,
-                                        last_val_grad=0,
-                                        gamma=0.99,
-                                        device='cpu'
-                                        ):
-    '''Useful for policy-gradient algorithms.'''
+def compute_shac_returns_and_actor_loss(
+        env,
+        diff_sim,
+        rews,
+        masks,
+        terminal_vals=0,
+        last_val=0,
+        last_val_grad=0,
+        gamma=0.99,
+        actor_vjp_fn=None,
+        device='cpu'
+    ):
+    '''Compute returns and the SHAC actor loss with mapped CasADi derivatives.'''
     T, N = rews.shape[:2]
-    rets = np.zeros((T, N, 1))
+    rets = torch.zeros((T, N, 1), dtype=torch.float32, device=device)
     ret = last_val
-    # Compensate for time truncation.
-    rews_eff = rews +  gamma * terminal_vals
-    # Loss graph for SHAC.
+    rews_eff = rews + gamma * terminal_vals
     lambda_next = last_val_grad
     actor_loss = 0.0
-    masks_th = torch.as_tensor(masks, dtype=torch.float32, device=device)
-    # Cumulative discounted sums.
+    masks_th = torch.as_tensor(masks, dtype=torch.float32, device=device).unsqueeze(-1)
+
+    # Prepare mapped CasADi derivatives for SHAC loss computation.
+    state_dim = env.state_space.shape[0]
+    act_dim = env.action_space.shape[0]
+    reward_fn = env.symbolic.reward_func.map(N, "thread")
+    dnxdx_fn = env.dnxdx_func.map(N, "thread")
+    dnxdu_fn = env.dnxdu_func.map(N, "thread")
+    next_states = np.asarray([step[0] for step in diff_sim], dtype=np.float64)
+    obss = torch.stack([step[1] for step in diff_sim]).to(device)
+    prev_states = obss[:, :, :state_dim].detach().cpu().numpy()
+    actions_np = np.asarray(
+        [step[2].detach().cpu().numpy() for step in diff_sim], dtype=np.float64
+    )
+    x_ref = np.asarray([step[3] for step in diff_sim], dtype=np.float64)
+    u_ref = np.asarray([step[4] for step in diff_sim], dtype=np.float64)
+    disturbance_dim = env.dnxdx_func.size1_in(2)
+    disturbances = np.zeros((N, disturbance_dim), dtype=np.float64)
+
     for i in reversed(range(T)):
         ret = rews_eff[i] + gamma * masks[i] * ret
-        rets[i] = deepcopy(ret)
+        rets[i].copy_(ret)
 
-        # Create graph for SHAC.
-        action_t, terminal_v_grad_t, diff_info_t = act_v_list[i]
-        lambda_t = torch.zeros_like(lambda_next)
-        q_t_all = torch.zeros((N, act_dim), dtype=torch.float32, device=device)
-        for j in range(N):
-            diff = diff_info_t[j]
-            rew_x = torch.as_tensor(diff['rew_x'], dtype=torch.float32, device=device)
-            rew_u = torch.as_tensor(diff['rew_u'], dtype=torch.float32, device=device)
-            nx_x = torch.as_tensor(diff['nx_x'], dtype=torch.float32, device=device)
-            nx_u = torch.as_tensor(diff['nx_u'], dtype=torch.float32, device=device)
-            obs_dim = rew_x.numel()
-            lambda_eff = masks_th[i, j] * lambda_next[j] + terminal_v_grad_t[j]
-            q_t = rew_u + gamma * (lambda_eff[:obs_dim] @ nx_u)
-            lambda_t[j, :obs_dim] = rew_x + gamma * (lambda_eff[:obs_dim] @ nx_x)
-            q_t_all[j] = q_t
+        rew_info = reward_fn(
+            x=next_states[i].T,
+            u=actions_np[i].T,
+            Xr=x_ref[i].T,
+            Ur=u_ref[i].T,
+            Q=env.Q,
+            R=env.R,
+        )
+        rew_x = torch.tensor(
+            rew_info["exp_r_x"].full(), dtype=torch.float32, device=device
+        ).T
+        rew_u = torch.tensor(
+            rew_info["exp_r_u"].full(), dtype=torch.float32, device=device
+        ).T
+        nx_x = dnxdx_fn(
+            X=prev_states[i].T, U=actions_np[i].T, d=disturbances.T
+        )["dnxdx"].full()
+        nx_u = dnxdu_fn(
+            X=prev_states[i].T, U=actions_np[i].T, d=disturbances.T
+        )["dnxdu"].full()
+        nx_x = torch.tensor(
+            nx_x.reshape(state_dim, N, state_dim).transpose(1, 0, 2),
+            dtype=torch.float32,
+            device=device,
+        )
+        nx_u = torch.tensor(
+            nx_u.reshape(state_dim, N, act_dim).transpose(1, 0, 2),
+            dtype=torch.float32,
+            device=device,
+        )
 
-            # ret_graph[i, j] = info_t['n'][j]['diff_sim_info']['rew_u'] + gamma * (lambda_next[j] @ info_t['n'][j]['diff_sim_info']['nx_u'])
-            # lambda_t[j] = info_t['n'][j]['diff_sim_info']['rew_x'] + gamma * (lambda_next[j] @ info_t['n'][j]['diff_sim_info']['nx_x'])
-            # lambda_t[j] += 0.0 # add policy grad
-        actor_loss -= (action_t * q_t_all.detach()).sum(dim=1).mean()
+        action_t = diff_sim[i][2]
+        # terminal_v_grad_t = torch.tensor(diff_sim[i][5], dtype=torch.float32, device=device)
+        terminal_v_grad_t = diff_sim[i][5]
+        lambda_eff = masks_th[i] * lambda_next + terminal_v_grad_t
+        next_state_grad = rew_x.unsqueeze(1) + gamma * lambda_eff
+        q_t = rew_u.unsqueeze(1) + next_state_grad @ nx_u
+        lambda_t = next_state_grad @ nx_x
+
+        if actor_vjp_fn is not None:
+            lambda_t += actor_vjp_fn(
+                obss[i], q_t, state_dim=state_dim, action=action_t
+            )
+
+        actor_loss -= (action_t.unsqueeze(1) * q_t.detach()).sum(dim=1).mean()
         lambda_next = lambda_t
+
     actor_loss = actor_loss / T
     return rets, actor_loss

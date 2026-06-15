@@ -1527,7 +1527,7 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            model_choice = "linear"  # options: linear, quadratic, quartic
+            model_choice = "drag"  # options: linear, quadratic, quartic
             
             if model_choice == "quartic":
                 #Quartic Model
@@ -1597,7 +1597,7 @@ class Quadrotor(BaseAviary):
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
 
-            elif model_choice == "linear":
+            elif model_choice == "drag":
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
                 # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
                 # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
@@ -2591,9 +2591,14 @@ class Quadrotor(BaseAviary):
             info['constraint_violations'] = self.constraints.get_violations(self)
         # Differential simulator info.
         if self.simulator_diff:
-            rew_x, rew_u = self._get_additional_reward_info()
-            nx_x, nx_u = self._get_diff_simulator_info()
-            info['diff_sim_info'] = {'rew_x': rew_x, 'rew_u': rew_u, 'nx_x': nx_x, 'nx_u': nx_u}
+            info["state"] = self.state.copy()
+            wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[0] - 1)  
+            info["state_reference"] = self.X_GOAL[wp_idx].copy()
+            info["action_reference"] = self.U_GOAL.copy()
+            # +1 because state has already advanced but counter not incremented.
+            # rew_x, rew_u = self._get_additional_reward_info()
+            # nx_x, nx_u = self._get_diff_simulator_info()
+            # info['diff_sim_info'] = {'rew_x': rew_x, 'rew_u': rew_u, 'nx_x': nx_x, 'nx_u': nx_u}
         return info
 
     def _get_reset_info(self):

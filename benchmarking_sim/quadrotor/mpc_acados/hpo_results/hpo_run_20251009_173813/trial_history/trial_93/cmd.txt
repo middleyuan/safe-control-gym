@@ -1,1 +1,0 @@
-/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/mb_experiment.py --algo mpc_acados --task quadrotor --overrides ./config_overrides/quadrotor_3D_attitude_tracking_delay.yaml ./config_overrides/mpc_acados_quadrotor_3D_attitude_tracking_100.yaml --seed 1 --use_gpu True --output_dir ./mpc_acados/results

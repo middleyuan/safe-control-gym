@@ -80,6 +80,7 @@ class PPO_MPC(BaseController):
             critic_lr=self.critic_lr,
             opt_epochs=self.opt_epochs,
             mini_batch_size=self.mini_batch_size,
+            rollout_batch_size=self.rollout_batch_size,
         )
         self.agent.to(self.device)
 

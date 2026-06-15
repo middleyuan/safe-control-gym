@@ -14,7 +14,7 @@ algo_config:
     mpc_config:
       horizon: 20
       warmstart: True
-      n_parallel_solver: 20
+      n_parallel_solver: 10
       n_train_solver: 16
       jit: True
       jit_options:
@@ -38,15 +38,15 @@ algo_config:
   critic_lr: 0.0001
 
   # runner args
-  max_env_steps: 660000
-  rollout_batch_size: 20
+  max_env_steps: 1980000
+  rollout_batch_size: 40
   rollout_steps: 330
-  eval_batch_size: 10
+  eval_batch_size: 20
 
   # misc
-  log_interval: 6600
-  save_interval: 660000
+  log_interval: 13200
+  save_interval: 1980000
   num_checkpoints: 0
-  eval_interval: 6600
+  eval_interval: 13200
   eval_save_best: True
   tensorboard: True

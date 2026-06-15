@@ -40,21 +40,17 @@ class SHAC(BaseController):
             # Training and testing.
             self.env = make_vec_envs(env_func, None, self.rollout_batch_size, self.num_workers, seed)
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
-            self.eval_env = env_func(seed=seed+110)
+            self.eval_env = env_func(simulator_diff=False, seed=seed+110)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
             self.model = self.get_prior(self.eval_env, self.prior_info)
         else:
             # Testing only.
-            self.env = env_func()
+            self.env = env_func(simulator_diff=False, seed=seed+110)
             self.env = RecordEpisodeStatistics(self.env)
         # Agent.
         self.agent = SHACAgent(self.env.observation_space,
                               self.env.action_space,
                               hidden_dim=self.hidden_dim,
-                              use_clipped_value=self.use_clipped_value,
-                              clip_param=self.clip_param,
-                              target_kl=self.target_kl,
-                              entropy_coef=self.entropy_coef,
                               exploration_init=self.exploration_init,
                               actor_lr=self.actor_lr,
                               critic_lr=self.critic_lr,
@@ -91,6 +87,7 @@ class SHAC(BaseController):
             self.total_steps = 0
             obs, _ = self.env.reset()
             self.obs = self.obs_normalizer(obs)
+            self.state_dim = self.env.envs[0].state_space.shape[0]
         else:
             # Add episodic stats to be tracked.
             self.env.add_tracker('constraint_violation', 0, mode='queue')
@@ -211,24 +208,29 @@ class SHAC(BaseController):
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
             start = time.time()
-            action, v = self.agent.ac.act(obs, True)
+            action = self.agent.ac.act(obs)
             self.results_dict['inference_time'].append(time.time() - start)
         if extra_info:
-            return action, v
+            return action, {}
         return action
 
     def train_step(self):
         """Performs a training/fine-tuning step."""
         self.agent.train()
         self.obs_normalizer.unset_read_only()
-        rollouts = SHACBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
-        obs = self.obs
+        rollouts = SHACBuffer(
+            self.env.observation_space,
+            self.env.action_space,
+            self.rollout_steps,
+            self.rollout_batch_size,
+            device=self.device,
+        )
+        obs = torch.FloatTensor(self.obs).to(self.device)
         start = time.time()
-        act_v_list = []
+        diff_sim = []
         
         for _ in range(self.rollout_steps):
-            obs_th = torch.FloatTensor(obs).to(self.device)
-            action, v = self.agent.ac.step(obs_th)
+            action = self.agent.ac.step(obs)
             next_obs, rew, done, info = self.env.step(action.detach().cpu().numpy())
             
             next_obs = self.obs_normalizer(next_obs)
@@ -236,43 +238,59 @@ class SHAC(BaseController):
             mask = 1 - done.astype(float)
             
             # Time truncation is not the same as true termination.
-            terminal_v = torch.zeros_like(v)
-            terminal_v_grad = torch.zeros_like(obs_th)
-            diff_info = []
+            terminal_v = torch.zeros(obs.shape[0], 1, device=self.device)
+            terminal_v_grad = torch.zeros_like(obs[:, :self.state_dim]).unsqueeze(1)
+            # rew_x, rew_u, nx_x, nx_u = [], [], [], []
+            state, x_r, u_r = [], [], []
             for idx, inf in enumerate(info['n']):
                 if 'terminal_info' not in inf:
-                    diff_info.append(inf['diff_sim_info'])
+                    state.append(inf["state"])
+                    x_r.append(inf["state_reference"])
+                    u_r.append(inf["action_reference"])
+                    # rew_x.append(inf['diff_sim_info']['rew_x'])
+                    # rew_u.append(inf['diff_sim_info']['rew_u'])
+                    # nx_x.append(inf['diff_sim_info']['nx_x'])
+                    # nx_u.append(inf['diff_sim_info']['nx_u'])
                     continue
                 inff = inf['terminal_info']
-                diff_info.append(inff['diff_sim_info'])
+                state.append(inff["state"])
+                x_r.append(inff["state_reference"])
+                u_r.append(inff["action_reference"])
+                # rew_x.append(inff['diff_sim_info']['rew_x'])
+                # rew_u.append(inff['diff_sim_info']['rew_u'])
+                # nx_x.append(inff['diff_sim_info']['nx_x'])
+                # nx_u.append(inff['diff_sim_info']['nx_u'])
                 if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
                     terminal_obs = inf['terminal_observation']
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val, terminal_val_grad = self.agent.ac.critic(terminal_obs_tensor, return_grad=True)
-                    terminal_v[idx] = terminal_val
-                    terminal_v_grad[idx] = terminal_val_grad
+                    terminal_v[idx] = terminal_val.squeeze().detach()
+                    terminal_v_grad[idx] = terminal_val_grad[:, :self.state_dim]
             
-            act_v_list.append([action, terminal_v_grad, diff_info])
-            rollouts.push({'obs': obs, 'act': action.detach().cpu().numpy(), 'rew': rew, 'mask': mask, 
-                           'v': v.detach().cpu().numpy(), 'terminal_v': terminal_v.cpu().numpy()})
-            obs = next_obs
-        self.obs = obs
+            # rew_x = torch.FloatTensor(np.array(rew_x)).to(self.device)
+            # rew_u = torch.FloatTensor(np.array(rew_u)).to(self.device)
+            # nx_x = torch.FloatTensor(np.array(nx_x)).to(self.device)
+            # nx_u = torch.FloatTensor(np.array(nx_u)).to(self.device)
+            diff_sim.append([state, obs, action, x_r, u_r, terminal_v_grad])
+            rollouts.push({'obs': obs, 'act': action.detach(), 'rew': rew, 'mask': mask, 'terminal_v': terminal_v})
+            obs = torch.FloatTensor(next_obs).to(self.device)
+        self.obs = obs.cpu().numpy()
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
-        last_val, last_val_grad = self.agent.ac.critic(torch.FloatTensor(obs).to(self.device), return_grad=True)
+        last_val, last_val_grad = self.agent.ac.critic(obs, return_grad=True)
         ret, actor_loss = compute_shac_returns_and_actor_loss(
-            self.env.action_space.shape[0],
-            act_v_list,
+            self.env.envs[0],
+            diff_sim,
             rollouts.rew,
-            rollouts.v,
             rollouts.mask,
             rollouts.terminal_v,
-            last_val.cpu().numpy(),
-            last_val_grad,
+            last_val,
+            last_val_grad[:, :self.state_dim].unsqueeze(1),
             gamma=self.gamma,
+            actor_vjp_fn=self.agent.ac.actor_vjp_state,
             device=self.device,
         )
-        rollouts.ret = ret
+        rollouts.ret.copy_(torch.as_tensor(ret, dtype=torch.float32, device=self.device))
         results = self.agent.update(rollouts, actor_loss, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
