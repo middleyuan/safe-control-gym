@@ -534,8 +534,8 @@ if __name__ == "__main__":
     # Section 1: Randomized obstacles + waypoints
     section1 = TrajectoryBuilder()
     section1_wps = [
-        (1.4, 0.5, 1.0), #1
-        (1.4, 0.5, 1.05, 1.8), #2
+        (1.4, 1.0, 1.0), #1
+        (1.4, 1.0, 1.05, 1.8), #2
         (1.1, 0.9, 1.075, 1.8), #3
         (1.0, 0.9, 1.1, 1.8), #4
         (0.6, 0.85, 1.125), #5
@@ -668,44 +668,33 @@ if __name__ == "__main__":
         shrink_factor_z=shrink_factor_z
     )
 
-    # Export to YAML config
+    # Export to YAML config in data/<time>/config and warmstart images in data/<time>/warmstart_data.
     config_str = final_trajectory.to_yaml_config()
+    episode_len_sec = float(final_trajectory.waypoints[-1].t) if final_trajectory.waypoints else 20.0
+    rounded_len = round(episode_len_sec, 6)
+    time_folder = str(int(rounded_len)) if float(rounded_len).is_integer() else str(rounded_len).replace('.', '_')
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_root = os.path.join(script_dir, "..", "data", time_folder)
+    config_dir = os.path.join(data_root, "config")
+    warmstart_dir = os.path.join(data_root, "warmstart_data")
+    os.makedirs(config_dir, exist_ok=True)
+    os.makedirs(warmstart_dir, exist_ok=True)
 
     file_name = f"final_trajectory_prototype_{float(section1_total_time)}_{float(section2_total_time)}_{float(section3_total_time)}.yaml"
-    
-    # Ensure the output directory exists
-    output_dir = "trajectory_configs"
-    os.makedirs(output_dir, exist_ok=True)
-    file_path = os.path.join(output_dir, file_name)
-
-    plot_trajectory_3d(final_trajectory, save_path="trajectory_configs/trajectory_3d_plot.png", show=True)
-
+    file_path = os.path.join(config_dir, file_name)
     with open(file_path, "w") as f:
         f.write(config_str)
 
-    print("✅ Config with multiple sections written to", file_path)
-    print("✅ Config with multiple sections written to", file_name)
-    
-    # --- New saving logic ---
-    timings_str = f"{float(section1_total_time)}_{float(section2_total_time)}_{float(section3_total_time)}"
-    base_dir = "obstacle_course_warmstart_data"
-    sub_dir = os.path.join(base_dir, f"trajectory_{timings_str}")
-    os.makedirs(sub_dir, exist_ok=True)
-
-    # Save config yaml
-    config_str = final_trajectory.to_yaml_config()
-    yaml_path = os.path.join(sub_dir, "config.yaml")
-    with open(yaml_path, "w") as f:
+    canonical_yaml_path = os.path.join(config_dir, "config.yaml")
+    with open(canonical_yaml_path, "w") as f:
         f.write(config_str)
 
-    # Save XY plot
-    plot_waypoints_2d(final_trajectory, plane='xy', save_path=os.path.join(sub_dir, "waypoints_xy.png"))
-    # Save XZ plot
-    plot_waypoints_2d(final_trajectory, plane='xz', save_path=os.path.join(sub_dir, "waypoints_xz.png"))
-    # Save XYZ plot
-    plot_trajectory_3d(final_trajectory, save_path=os.path.join(sub_dir, "waypoints_xyz.png"))
-    # plot_trajectory_3d_multi_angles(final_trajectory, sub_dir, angles=[(30, 45), (30, 90), (30, 135), (30, 180), (30, 225), (30, 270), (30, 315),
-    #     (60, 45), (60, 90), (60, 135), (60, 180), (60, 225), (60, 270), (60, 315),
-    #     (75, 45), (75, 90), (75, 135), (75, 180), (75, 225), (75, 270), (75, 315)
-    # ], show=False)
-    print("✅ Data saved in", sub_dir)
+    plot_trajectory_3d(final_trajectory, save_path=os.path.join(warmstart_dir, "trajectory_3d_plot.png"), show=True)
+
+    # Save warmstart visualizations.
+    plot_waypoints_2d(final_trajectory, plane='xy', save_path=os.path.join(warmstart_dir, "waypoints_xy.png"))
+    plot_waypoints_2d(final_trajectory, plane='xz', save_path=os.path.join(warmstart_dir, "waypoints_xz.png"))
+    plot_trajectory_3d(final_trajectory, save_path=os.path.join(warmstart_dir, "waypoints_xyz.png"))
+    print("✅ Config saved in", config_dir)
+    print("✅ Warmstart data saved in", warmstart_dir)

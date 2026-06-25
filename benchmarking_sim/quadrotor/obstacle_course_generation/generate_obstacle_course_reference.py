@@ -31,7 +31,50 @@ DEFAULT_WARMSTART_STEPS = 60
 CONFIG_STEM_PREFIX = "final_trajectory_prototype_"
 
 
+def format_time_folder(value: float) -> str:
+    rounded = round(value, 6)
+    if float(rounded).is_integer():
+        return str(int(rounded))
+    return str(rounded).replace(".", "_")
+
+
+def find_latest_data_config_path(base_dir: Path) -> Path | None:
+    data_dir = base_dir / "data"
+    if not data_dir.exists():
+        return None
+
+    config_candidates = sorted(
+        data_dir.glob("*/config/*.yaml"),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    if config_candidates:
+        return config_candidates[-1]
+    return None
+
+
+def infer_time_folder_from_config_path(config_path: Path, base_dir: Path) -> str:
+    data_dir = base_dir / "data"
+    try:
+        rel = config_path.resolve().relative_to(data_dir.resolve())
+        parts = rel.parts
+        if len(parts) >= 3 and parts[1] == "config":
+            return parts[0]
+    except ValueError:
+        pass
+
+    config = load_config(config_path)
+    task_config = config.get("task_config", {})
+    episode_len_sec = task_config.get("episode_len_sec")
+    if episode_len_sec is not None:
+        return format_time_folder(float(episode_len_sec))
+    return config_suffix(config_path)
+
+
 def find_default_config_path(base_dir: Path) -> Path:
+    latest_data_config = find_latest_data_config_path(base_dir)
+    if latest_data_config is not None:
+        return latest_data_config
+
     trajectory_configs_dir = base_dir / "trajectory_configs"
     config_candidates = sorted(trajectory_configs_dir.glob("*.yaml"), key=lambda path: (path.stat().st_mtime, path.name))
     if config_candidates:
@@ -49,7 +92,9 @@ def config_suffix(config_path: Path) -> str:
 
 
 def default_output_path(config_path: Path) -> Path:
-    return config_path.with_name(f"custom_snap_ref_traj_{config_suffix(config_path)}.npy")
+    base_dir = Path(__file__).resolve().parent
+    time_folder = infer_time_folder_from_config_path(config_path, base_dir)
+    return base_dir / "data" / time_folder / "trajectory" / f"custom_snap_ref_traj_{time_folder}.npy"
 
 
 def load_config(config_path: Path) -> dict:
@@ -72,6 +117,19 @@ def validate_waypoints(waypoints: list[dict]) -> None:
         position = wp.get("position")
         if not isinstance(position, list) or len(position) != 3:
             raise ValueError(f"Waypoint {idx} must contain a 3D position list")
+
+
+def enforce_strictly_increasing_waypoint_times(waypoints: list[dict], min_delta: float = 1e-6) -> bool:
+    adjusted = False
+    prev_time: float | None = None
+    for wp in waypoints:
+        curr_time = float(wp["time"])
+        if prev_time is not None and curr_time <= prev_time:
+            curr_time = prev_time + min_delta
+            wp["time"] = curr_time
+            adjusted = True
+        prev_time = curr_time
+    return adjusted
 
 
 def init_custom_waypoints(waypoints: list[dict]) -> list[Waypoint]:
@@ -159,6 +217,10 @@ def build_reference(config: dict, planner_steps: int | None = None) -> dict[str,
     strings = task_info.get("strings", [])
     if not waypoints:
         raise ValueError("No waypoints found in task_config.task_info.waypoints")
+
+    if enforce_strictly_increasing_waypoint_times(waypoints):
+        print("Adjusted non-increasing waypoint timestamps to be strictly increasing.")
+
     validate_waypoints(waypoints)
 
     ctrl_freq = float(task_config.get("ctrl_freq", 60))

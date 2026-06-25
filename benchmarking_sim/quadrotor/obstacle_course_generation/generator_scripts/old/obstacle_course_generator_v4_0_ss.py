@@ -184,9 +184,9 @@ class TrajectoryBuilder:
                 "physics": "dyn_si_3d_delay",
                 "quad_type": 9,
                 "init_state": {
-                    "init_x": 1.4,
+                    "init_x": 1.3,
                     "init_x_dot": 0,
-                    "init_y": 1.0,
+                    "init_y": 0.5,
                     "init_y_dot": 0,
                     # "init_x": 2.75,
                     # "init_x_dot": 0,
@@ -194,7 +194,6 @@ class TrajectoryBuilder:
                     # "init_y_dot": 0,
                     "init_z": 1.1,
                     "init_z_dot": 0,
-                    "init_tau": 0.36
                 },
                 "task": "traj_tracking",
                 "task_info": {
@@ -337,51 +336,8 @@ class TrajectoryBuilder:
 
         if translation != (0.0, 0.0, 0.0):
             self.apply_translation(translation)
-def plot_waypoints_2d(builder: TrajectoryBuilder, plane='xy', save_path=None):
-    xs = [wp.x for wp in builder.waypoints]
-    ys = [wp.y for wp in builder.waypoints]
-    zs = [wp.z for wp in builder.waypoints]
-    num_wps = len(builder.waypoints)
-    colors = plt.cm.viridis(np.linspace(0, 1, num_wps))
-    plt.figure(figsize=(10, 7))
-    # Plot trajectory and waypoints
-    if plane == 'xy':
-        plt.plot(xs, ys, color='gray', linestyle='--', label='Trajectory')
-        for i, (x, y) in enumerate(zip(xs, ys)):
-            plt.scatter(x, y, color=colors[i], s=60)
-            plt.text(x, y, f"{i+1}", color='black', fontsize=10, ha='center', va='center')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('XY Waypoints')
-        # Plot strings
-        for s in builder.strings:
-            # If string is perpendicular to XY plane (i.e., z changes, x/y fixed)
-            if np.isclose(s.start[0], s.end[0]) and np.isclose(s.start[1], s.end[1]) and not np.isclose(s.start[2], s.end[2]):
-                plt.scatter(s.start[0], s.start[1], color='red', s=120, marker='o', label='Vertical String')
-            else:
-                plt.plot([s.start[0], s.end[0]], [s.start[1], s.end[1]], color='red', linewidth=2, label='String')
-    elif plane == 'xz':
-        plt.plot(xs, zs, color='gray', linestyle='--', label='Trajectory')
-        for i, (x, z) in enumerate(zip(xs, zs)):
-            plt.scatter(x, z, color=colors[i], s=60)
-            plt.text(x, z, f"{i+1}", color='black', fontsize=10, ha='center', va='center')
-        plt.xlabel('X')
-        plt.ylabel('Z')
-        plt.title('XZ Waypoints')
-        # Plot strings
-        for s in builder.strings:
-            # If string is perpendicular to XZ plane (i.e., y changes, x/z fixed)
-            if np.isclose(s.start[0], s.end[0]) and np.isclose(s.start[2], s.end[2]) and not np.isclose(s.start[1], s.end[1]):
-                plt.scatter(s.start[0], s.start[2], color='red', s=120, marker='o', label='Vertical String')
-            else:
-                plt.plot([s.start[0], s.end[0]], [s.start[2], s.end[2]], color='red', linewidth=2, label='String')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path)
-    plt.close()
-def plot_trajectory_3d(builder: TrajectoryBuilder, save_path=None, show=True):
+
+def plot_trajectory_3d(builder: TrajectoryBuilder, show=True, save_path=None):
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection='3d')
 
@@ -419,58 +375,17 @@ def plot_trajectory_3d(builder: TrajectoryBuilder, save_path=None, show=True):
     else:
         plt.close(fig)
 
-def plot_trajectory_3d_multi_angles(builder: TrajectoryBuilder, save_dir, angles=[(30, 45), (90, 0), (0, 90)], show=False):
-    """
-    Plots and saves the 3D trajectory and obstacles at multiple viewing angles.
-
-    Args:
-        builder: TrajectoryBuilder object.
-        save_dir: Directory to save the plots.
-        angles: List of (elev, azim) tuples for viewing angles.
-        show: If True, show the plot interactively.
-    """
-    xs = [wp.x for wp in builder.waypoints]
-    ys = [wp.y for wp in builder.waypoints]
-    zs = [wp.z for wp in builder.waypoints]
-    num_wps = len(builder.waypoints)
-    colors = plt.cm.viridis(np.linspace(0, 1, num_wps))
-
-    for idx, (elev, azim) in enumerate(angles):
-        fig = plt.figure(figsize=(10, 7))
-        ax = fig.add_subplot(111, projection='3d')
-        for i, (x, y, z) in enumerate(zip(xs, ys, zs)):
-            ax.scatter(x, y, z, color=colors[i], s=60)
-            ax.text(x, y, z, f"{i+1}", color='black', fontsize=10, ha='center', va='center')
-        ax.plot(xs, ys, zs, color='gray', linestyle='--', label='Trajectory')
-        # Plot strings
-        for s in builder.strings:
-            x = [s.start[0], s.end[0]]
-            y = [s.start[1], s.end[1]]
-            z = [s.start[2], s.end[2]]
-            ax.plot(x, y, z, color='red', linewidth=2, label='String' if 'String' not in ax.get_legend_handles_labels()[1] else "")
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.set_title(f'Trajectory and Obstacles (elev={elev}, azim={azim})')
-        ax.view_init(elev=elev, azim=azim)
-        ax.legend()
-        ax.grid(True)
-        ax.set_box_aspect([1,1,0.7])
-        angle_dir = os.path.join(save_dir, "waypoints_xyz_angle")
-        os.makedirs(angle_dir, exist_ok=True)
-        save_path = os.path.join(angle_dir, f"waypoints_xyz_angle_{elev}_{azim}.png")
-        plt.tight_layout()
-        plt.savefig(save_path)
-        if show:
-            plt.show()
-        else:
-            plt.close(fig)
-
+   
 if __name__ == "__main__":
       # obstacle course should be within
         # x: [-3, 3]
         # y: [-2, 2]
         # z: [0, 2.5]
+    # set_time_step = 1.0
+    # set_time_step = 0.8
+    set_time_step = 0.6
+    # fixed_z = 1.0
+    fixed_z = 0.8
 
     # vs11 = [1.0, 0.5]
     # vs12 = [1.0, -0.5]
@@ -479,51 +394,12 @@ if __name__ == "__main__":
     # vs31 = [-1.0, 0.5]
     # vs32 = [-1.0, -0.5]
 
-    # vs_original = {
-    #     'vs11': [1.040841, 0.454537, 1.538180],
-    #     'vs12': [1.040190, 0.453161, 1.537588],
-    #     'vs21': [1.018375, -0.431456, 1.604106],
-    #     'vs22': [1.012686, -0.439619, 0.629949],
-    #     'vs31': [-0.000318, 0.482983, 1.548338],
-    #     'vs32': [0.003129, 0.497312, 0.608895],
-    #     'vs41': [0.010323, -0.508408, 1.530859],
-    #     'vs42': [0.008381, -0.503233, 0.583155],
-    #     'vs51': [-0.947238, 0.491893, 1.517015],
-    #     'vs52': [-0.954391, 0.498141, 1.131038],
-    #     'vs61': [-0.980758, -0.493244, 1.532733],
-    #     'vs62': [-0.989345, -0.510164, 0.679069]
-    # }
-
-    vs_original = {
-        'vs11': [1.0, 0.5, 1.5],
-        'vs12': [1.0, 0.5, 1.5],
-        'vs21': [1.0, -0.5, 1.5],
-        'vs22': [1.0, -0.5, 0.5],
-        'vs31': [0.0, 0.5, 1.5],
-        'vs32': [0.0, 0.5, 0.5],
-        'vs41': [0.0, -0.5, 1.5],
-        'vs42': [0.0, -0.5, 1.5],
-        'vs51': [-1.0, 0.5, 1.5],
-        'vs52': [-1.0, 0.5, 0.5],
-        'vs61': [-1.0, -0.5, 1.5],
-        'vs62': [-1.0, -0.5, 0.5]
-    }
-
-    # Subtract 0.05 from z-coordinate (third value) of each vs
-    # z_adjustment = -0.1
-    z_adjustment = 0.0
-    vs11 = [vs_original['vs11'][0], vs_original['vs11'][1], vs_original['vs11'][2] + z_adjustment]
-    vs12 = [vs_original['vs12'][0], vs_original['vs12'][1], vs_original['vs12'][2] + z_adjustment]
-    vs21 = [vs_original['vs21'][0], vs_original['vs21'][1], vs_original['vs21'][2] + z_adjustment]
-    vs22 = [vs_original['vs22'][0], vs_original['vs22'][1], vs_original['vs22'][2] + z_adjustment]
-    vs31 = [vs_original['vs31'][0], vs_original['vs31'][1], vs_original['vs31'][2] + z_adjustment]
-    vs32 = [vs_original['vs32'][0], vs_original['vs32'][1], vs_original['vs32'][2] + z_adjustment]
-    vs41 = [vs_original['vs41'][0], vs_original['vs41'][1], vs_original['vs41'][2] + z_adjustment]
-    vs42 = [vs_original['vs42'][0], vs_original['vs42'][1], vs_original['vs42'][2] + z_adjustment]
-    vs51 = [vs_original['vs51'][0], vs_original['vs51'][1], vs_original['vs51'][2] + z_adjustment]
-    vs52 = [vs_original['vs52'][0], vs_original['vs52'][1], vs_original['vs52'][2] + z_adjustment]
-    vs61 = [vs_original['vs61'][0], vs_original['vs61'][1], vs_original['vs61'][2] + z_adjustment]
-    vs62 = [vs_original['vs62'][0], vs_original['vs62'][1], vs_original['vs62'][2] + z_adjustment]
+    vs11 = [1.046137, 0.465308]
+    vs12 = [1.016677, -0.437818]
+    vs21 = [0.006940, 0.483926]
+    vs22 = [0.005191, -0.513116]
+    vs31 = [-0.952175, 0.501995]
+    vs32 = [-0.968776, -0.482754]
 
     # Transformation parameters
     shrink_factor = 1.0  # Shrink to 60% of original size
@@ -534,9 +410,9 @@ if __name__ == "__main__":
     # Section 1: Randomized obstacles + waypoints
     section1 = TrajectoryBuilder()
     section1_wps = [
-        (1.4, 1.0, 1.1), #1
-        (1.4, 1.0, 1.1, 1.5), #2
-        (1.4, 1.0, 1.1125, 2.0), #3
+        (1.4, 0.5, 1.1), #1
+        (1.4, 0.5, 1.1, 1.5), #2
+        (1.4, 1.1, 1.1125, 2.0), #3
         (0.7, 1.1, 1.1125, 2.0), #4
         (0.1, 1.1, 1.125, 1.5), #5
         (0.1, 0.5, 1.125), #6
@@ -545,21 +421,20 @@ if __name__ == "__main__":
         (1.7, -0.1, 1.05, 1.3),  #9
         (1.5, -0.9, 1.00, ),  #10
         (0.0, -0.9, 1.00),  #11
-        (0.0, -0.5, 0.975),  #12
-        (0.1, 0, 0.95, 1.3), #13
-        (0.9, 0, 0.95, 1.8), #14
-        (0.9, 0.5, 0.95, 1.8), #15
-        (1.0, 0.8, 1.0, 1.3), #16
-        (0.5, 0.8, 1.0, 1.3), #17
-        (0.1, 0.8, 1.0), #18
-        (0.1, 0.5, 1.0), #19
-        (0.0, 0.0, 1.0, 1.3), #20
-        (1.0, 0.0, 1.0), #21
-        (0.9, -0.5, 1.0), #22
+        (0.1, -0.5, 0.95, 1.3), #12
+        (0.9, 0, 0.95, 1.8), #13
+        (0.9, 0.5, 0.95, 1.8), #14
+        (1.0, 0.8, 1.0, 1.3), #15
+        (0.5, 0.8, 1.0, 1.3), #16
+        (0.1, 0.8, 1.0), #17
+        (0.1, 0.5, 1.0), #18
+        (0.0, 0.0, 1.0, 1.3), #19
+        (1.0, 0.0, 1.0), #20
+        (0.9, -0.5, 1.0), #21
     ]
-    # section1_total_time = 7.0  # seconds
-    section1_total_time = 6.0  # seconds
-    # section1_total_time = 5.0  # seconds
+    # section1_total_time = 7.5  # seconds
+    # section1_total_time = 6.0  # seconds
+    section1_total_time = 5.0  # seconds
     section1.add_waypoints_scaled_time(section1_wps, section1_total_time, start_time=0.0, label="Section: Randomized String Obstacles")
 
     # section1.add_strings([
@@ -572,49 +447,49 @@ if __name__ == "__main__":
     # ])
 
     section1.add_strings([
-        StringObstacle(tuple(vs11), 
-                       tuple(vs32)),
-        StringObstacle((tuple(vs22)), 
-                       (tuple(vs41))),
-        StringObstacle(tuple(vs21), 
-                       (tuple(vs11))),
+        StringObstacle((vs11[0], vs11[1], 1.541967 - 0.1), 
+                       (vs21[0], vs21[1], 0.604812 - 0.1)),
+        StringObstacle((vs12[0], vs12[1], 0.628535  - 0.1), 
+                       (vs22[0], vs22[1], 1.529832 - 0.1)),
+        StringObstacle((vs12[0], vs12[1], 1.604549 - 0.1), 
+                       (vs11[0], vs11[1], 1.541967 - 0.1)),
     ])
     section1.add_vertical_strings(
-        [vs11[0], vs21[0], vs31[0], vs41[0]],
-        [vs11[1], vs21[1], vs31[1], vs41[1]]
+        [vs11[0], vs12[0], vs21[0], vs22[0]],
+        [vs11[1], vs12[1], vs21[1], vs22[1]]
     )
     section1.order_waypoints_by_time()
 
     # Section 2: Randomized obstacles + waypoints
     section2 = TrajectoryBuilder()
     section2_wps = [
-        (0.9, -1.1, 1.0), #23
-        (-0.1, -1.1, 1.0), #24
-        (-0.4, -0.5, 1.025, 1.2), #25
-        (-0.9, -0.05, 1.05), #26
-        (-1.4, -0.05, 1.075), #27
-        (-1.6, -0.5, 1.05), #28
-        (-1.4, -1.1, 1.025), #29
-        (-1.0, -1.0, 1.00), #30
-        (-0.6, -0.9, 0.975), #31
-        (-0.2, -0.5, 0.95), #32
-        (-0.1, -0.4, 0.95), #33
-        (0.2, 0.0, 0.975, 1.2), #34
-        (-0.3, 0.35, 1.0, 1.3), #35
-        (-0.9, 0.4, 1.0, 1.5), #36
-        (-1.2, 0.35, 1.0, 1.5), #37
-        (-1.5, 0.05, 1.0, 1.3), #38
-        (-1.5, -0.2, 1.0, 1.2), #39
-        (-1.0, -0.4, 1.05, 1.2), #40
-        (-0.25, -0.25, 1.1), #41
-        (0.45, 0.1, 1.15), #42
-        (0.5, 0.5, 1.1), #43
-        (0.5, 1.0, 1.05), #44
-        (0.5, 1.0, 1.0)  #45
+        (1.0, -1.1, 1.0), #22
+        (-0.1, -1.1, 1.0), #23
+        (-0.4, -0.5, 1.025, 1.2), #24
+        (-0.9, 0.1, 1.05), #25
+        (-1.4, 0.1, 1.075), #26
+        (-1.6, -0.5, 1.1), #27
+        (-1.4, -1.1, 1.1), #28
+        (-1.0, -1.0, 1.075), #29
+        (-0.6, -0.9, 1.05), #30
+        (-0.2, -0.5, 1.0), #31
+        (-0.1, -0.4, 0.95), #32
+        (0.2, 0.0, 0.85, 1.2), #33
+        (-0.3, 0.35, 0.8, 1.3), #34
+        (-0.9, 0.4, 0.75, 1.5), #35
+        (-1.2, 0.35, 0.8, 1.5), #36
+        (-1.4, 0.05, 0.85, 1.3), #37
+        (-1.4, -0.2, 0.95, 1.1), #38
+        (-1.0, -0.4, 1.1, 1.1), #39
+        (-0.25, -0.25, 1.15), #40
+        (0.6, 0.1, 1.1), #41
+        (0.6, 0.5, 1.1), #42
+        (0.6, 1.0, 1.0), #43
+        (0.0, 1.0, 1.0)  #44
     ]
     # section2_total_time = 7.0  # seconds
-    section2_total_time = 6.0  # seconds
-    # section2_total_time = 5.0  # seconds
+    # section2_total_time = 5.5  # seconds
+    section2_total_time = 4.5  # seconds
     section2.add_waypoints_scaled_time(section2_wps, section2_total_time, start_time=0.0, label="Section 2: Fixed Strings")
 
     # section2.add_strings([
@@ -627,34 +502,34 @@ if __name__ == "__main__":
     # ])
 
     section2.add_strings([
-        StringObstacle((tuple(vs31)), 
-                       (tuple(vs61))),
-        StringObstacle((tuple(vs42)), 
-                       (tuple(vs52))),
-        StringObstacle((tuple(vs51)), 
-                       (tuple(vs62))),
+        StringObstacle((vs21[0], vs21[1], 1.542964 - 0.1), 
+                       (vs32[0], vs32[1], 1.559067 - 0.1)),
+        StringObstacle((vs22[0], vs22[1], 0.580875 - 0.1), 
+                       (vs31[0], vs31[1], 1.131438 - 0.1)),
+        StringObstacle((vs31[0], vs31[1], 1.516416 - 0.1), 
+                       (vs32[0], vs32[1], 0.671682 - 0.1)),
     ])
 
     section2.add_vertical_strings(
-        [vs51[0], vs61[0]],
-        [vs51[1], vs61[1]]
+        [vs31[0], vs32[0]],
+        [vs31[1], vs32[1]]
     )
     section2.order_waypoints_by_time()
 
     # Section 3: Speed Test
     section3 = TrajectoryBuilder()
     section3_wps = [
-        (-1.1, 1.1, 1.0), #46
-        (-1.6, 0.6, 1.0), #47
-        (-1.6, -0.6, 1.0), #48
-        (-1.1, -1.1, 1.0), #49
-        (1.1, -1.1, 1.0), #50
-        (1.6, -0.6, 1.0), #51
-        (1.6, 0.6, 1.0), #52
+        (-1.0, 1.0, 1.0),
+        (-1.6, 0.6, 1.0),
+        (-1.6, -0.6, 1.0),
+        (-1.0, -1.0, 1.0),
+        (1.0, -1.0, 1.0),
+        (1.6, -0.6, 1.0),
+        (1.6, 0.6, 1.0),
     ]
     # section3_total_time = 4.0  # seconds
-    section3_total_time = 3.0  # seconds
-    # section3_total_time = 2.0  # seconds
+    # section3_total_time = 3.0  # seconds
+    section3_total_time = 2.5  # seconds
     section3.add_waypoints_scaled_time(section3_wps, section3_total_time, start_time=0.0, label="Section 3: Disturbance Obstacles")
 
     # Build final trajectory
@@ -679,33 +554,20 @@ if __name__ == "__main__":
         shrink_factor_z=shrink_factor_z
     )
 
-    # Export to YAML config in data/<time>/config and warmstart images in data/<time>/warmstart_data.
+    # Export to YAML config
     config_str = final_trajectory.to_yaml_config()
-    episode_len_sec = float(final_trajectory.waypoints[-1].t) if final_trajectory.waypoints else 20.0
-    rounded_len = round(episode_len_sec, 6)
-    time_folder = str(int(rounded_len)) if float(rounded_len).is_integer() else str(rounded_len).replace('.', '_')
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_root = os.path.join(script_dir, "..", "data", time_folder)
-    config_dir = os.path.join(data_root, "config")
-    warmstart_dir = os.path.join(data_root, "warmstart_data")
-    os.makedirs(config_dir, exist_ok=True)
-    os.makedirs(warmstart_dir, exist_ok=True)
 
     file_name = f"final_trajectory_prototype_{float(section1_total_time)}_{float(section2_total_time)}_{float(section3_total_time)}.yaml"
-    file_path = os.path.join(config_dir, file_name)
+    
+    # Ensure the output directory exists
+    output_dir = "trajectory_configs"
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, file_name)
+
+    plot_trajectory_3d(final_trajectory, show=True, save_path="trajectory_configs/trajectory_3d_plot.png")
+
     with open(file_path, "w") as f:
         f.write(config_str)
 
-    canonical_yaml_path = os.path.join(config_dir, "config.yaml")
-    with open(canonical_yaml_path, "w") as f:
-        f.write(config_str)
-
-    plot_trajectory_3d(final_trajectory, save_path=os.path.join(warmstart_dir, "trajectory_3d_plot.png"), show=True)
-
-    # Save warmstart visualizations.
-    plot_waypoints_2d(final_trajectory, plane='xy', save_path=os.path.join(warmstart_dir, "waypoints_xy.png"))
-    plot_waypoints_2d(final_trajectory, plane='xz', save_path=os.path.join(warmstart_dir, "waypoints_xz.png"))
-    plot_trajectory_3d(final_trajectory, save_path=os.path.join(warmstart_dir, "waypoints_xyz.png"))
-    print("✅ Config saved in", config_dir)
-    print("✅ Warmstart data saved in", warmstart_dir)
+    print("✅ Config with multiple sections written to", file_path)
+    print("✅ Config with multiple sections written to", file_name)

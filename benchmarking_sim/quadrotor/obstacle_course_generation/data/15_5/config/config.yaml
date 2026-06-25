@@ -1,0 +1,166 @@
+task_config:
+  info_in_reset: true
+  ctrl_freq: 60
+  pyb_freq: 60
+  physics: dyn_si_3d_delay
+  quad_type: 9
+  init_state:
+    init_x: 1.4
+    init_x_dot: 0
+    init_y: 1.0
+    init_y_dot: 0
+    init_z: 1.1
+    init_z_dot: 0
+    init_tau: 0.36
+  task: traj_tracking
+  task_info:
+    trajectory_type: snap_custom
+    num_cycles: 1
+    trajectory_plane: xy
+    trajectory_position_offset: [0.0, 0.0, 0.0]
+    trajectory_scale: 1.0
+    strings:
+      # === Section: Randomized String Obstacles ===
+      - start: [1.0, 0.5, 1.5]
+        end: [0.0, 0.5, 0.5]
+      - start: [1.0, -0.5, 0.5]
+        end: [0.0, -0.5, 1.5]
+      - start: [1.0, -0.5, 1.5]
+        end: [1.0, 0.5, 1.5]
+      - start: [1.0, 0.5, 0.0]
+        end: [1.0, 0.5, 1.5]
+      - start: [1.0, -0.5, 0.0]
+        end: [1.0, -0.5, 1.5]
+      - start: [0.0, 0.5, 0.0]
+        end: [0.0, 0.5, 1.5]
+      - start: [0.0, -0.5, 0.0]
+        end: [0.0, -0.5, 1.5]
+      # === Section 2: Fixed Strings ===
+      - start: [0.0, 0.5, 1.5]
+        end: [-1.0, -0.5, 1.5]
+      - start: [0.0, -0.5, 1.5]
+        end: [-1.0, 0.5, 0.5]
+      - start: [-1.0, 0.5, 1.5]
+        end: [-1.0, -0.5, 0.5]
+      - start: [-1.0, 0.5, 0.0]
+        end: [-1.0, 0.5, 1.5]
+      - start: [-1.0, -0.5, 0.0]
+        end: [-1.0, -0.5, 1.5]
+    waypoints:
+      # === Section: Randomized String Obstacles ===
+      - time: 0.0
+        position: [1.4, 1.0, 1.1]
+      - time: 0.0
+        position: [1.4, 1.0, 1.1]
+      - time: 0.01
+        position: [1.4, 1.0, 1.113]
+      - time: 0.55
+        position: [0.7, 1.1, 1.113]
+      - time: 1.01
+        position: [0.1, 1.1, 1.125]
+      - time: 1.36
+        position: [0.1, 0.5, 1.125]
+      - time: 1.55
+        position: [0.1, 0.0, 1.1]
+      - time: 1.9
+        position: [1.0, 0.0, 1.1]
+      - time: 2.23
+        position: [1.7, -0.1, 1.05]
+      - time: 2.64
+        position: [1.5, -0.9, 1.0]
+      - time: 3.22
+        position: [0.0, -0.9, 1.0]
+      - time: 3.37
+        position: [0.0, -0.5, 0.975]
+      - time: 3.57
+        position: [0.1, 0.0, 0.95]
+      - time: 3.97
+        position: [0.9, 0.0, 0.95]
+      - time: 4.32
+        position: [0.9, 0.5, 0.95]
+      - time: 4.54
+        position: [1.0, 0.8, 1.0]
+      - time: 4.79
+        position: [0.5, 0.8, 1.0]
+      - time: 4.99
+        position: [0.1, 0.8, 1.0]
+      - time: 5.11
+        position: [0.1, 0.5, 1.0]
+      - time: 5.3
+        position: [0.0, 0.0, 1.0]
+      - time: 5.8
+        position: [1.0, 0.0, 1.0]
+      - time: 6.0
+        position: [0.9, -0.5, 1.0]
+      # === Section 2: Fixed Strings ===
+      - time: 6.25
+        position: [0.9, -1.1, 1.0]
+      - time: 6.73
+        position: [-0.1, -1.1, 1.0]
+      - time: 7.06
+        position: [-0.4, -0.5, 1.025]
+      - time: 7.45
+        position: [-0.9, -0.05, 1.05]
+      - time: 7.69
+        position: [-1.4, -0.05, 1.075]
+      - time: 7.93
+        position: [-1.6, -0.5, 1.05]
+      - time: 8.24
+        position: [-1.4, -1.1, 1.025]
+      - time: 8.44
+        position: [-1.0, -1.0, 1.0]
+      - time: 8.64
+        position: [-0.6, -0.9, 0.975]
+      - time: 8.91
+        position: [-0.2, -0.5, 0.95]
+      - time: 8.98
+        position: [-0.1, -0.4, 0.95]
+      - time: 9.22
+        position: [0.2, 0.0, 0.975]
+      - time: 9.58
+        position: [-0.3, 0.35, 1.0]
+      - time: 9.96
+        position: [-0.9, 0.4, 1.0]
+      - time: 10.18
+        position: [-1.2, 0.35, 1.0]
+      - time: 10.49
+        position: [-1.5, 0.05, 1.0]
+      - time: 10.65
+        position: [-1.5, -0.2, 1.0]
+      - time: 10.96
+        position: [-1.0, -0.4, 1.05]
+      - time: 11.41
+        position: [-0.25, -0.25, 1.1]
+      - time: 11.79
+        position: [0.45, 0.1, 1.15]
+      - time: 11.98
+        position: [0.5, 0.5, 1.1]
+      - time: 12.23
+        position: [0.5, 1.0, 1.05]
+      - time: 12.25
+        position: [0.5, 1.0, 1.0]
+      # === Section 3: Disturbance Obstacles ===
+      - time: 12.5
+        position: [-1.1, 1.1, 1.0]
+      - time: 12.82
+        position: [-1.6, 0.6, 1.0]
+      - time: 13.35
+        position: [-1.6, -0.6, 1.0]
+      - time: 13.67
+        position: [-1.1, -1.1, 1.0]
+      - time: 14.65
+        position: [1.1, -1.1, 1.0]
+      - time: 14.96
+        position: [1.6, -0.6, 1.0]
+      - time: 15.5
+        position: [1.6, 0.6, 1.0]
+  inertial_prop:
+    M: 0.037
+  episode_len_sec: 15.500000000000002
+  cost: quadratic
+  constraints:
+  - constraint_form: default_constraint
+    constrained_variable: state
+  - constraint_form: default_constraint
+    constrained_variable: input
+  done_on_violation: false

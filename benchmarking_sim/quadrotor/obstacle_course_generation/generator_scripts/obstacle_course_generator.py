@@ -1,6 +1,7 @@
 import yaml
 from dataclasses import dataclass
 from typing import List, Tuple
+import os
 
 # Custom Dumper: Force inline lists like [x, y, z], but multiline dicts
 class InlineListDumper(yaml.SafeDumper):
@@ -277,10 +278,21 @@ if __name__ == "__main__":
     # Export to YAML config
     config_str = final_trajectory.to_yaml_config()
 
+    episode_len_sec = float(final_trajectory.waypoints[-1].t) if final_trajectory.waypoints else 20.0
+    rounded_len = round(episode_len_sec, 6)
+    time_folder = str(int(rounded_len)) if float(rounded_len).is_integer() else str(rounded_len).replace('.', '_')
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_dir = os.path.join(script_dir, "..", "data", time_folder, "config")
+    os.makedirs(config_dir, exist_ok=True)
+
     file_name = f"quadrotor_3D_attitude_tracking_{int(set_time_step)}.yaml"
-    # file_name = f"quadrotor_3D_attitude_tracking_offset_{int(set_time_step)}.yaml"    
-    
-    with open(file_name, "w") as f:
+    file_path = os.path.join(config_dir, file_name)
+    with open(file_path, "w") as f:
         f.write(config_str)
 
-    print("✅ Config with multiple sections written to", file_name)
+    canonical_yaml_path = os.path.join(config_dir, "config.yaml")
+    with open(canonical_yaml_path, "w") as f:
+        f.write(config_str)
+
+    print("✅ Config with multiple sections written to", file_path)
