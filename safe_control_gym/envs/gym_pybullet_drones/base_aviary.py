@@ -235,7 +235,7 @@ class BaseAviary(BenchmarkEnv):
         self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
         self.motor_forces = np.zeros((self.NUM_DRONES, 1)) 
         # Differential dynamic and cost symbolic model.
-        if self.PHYSICS in [Physics.DYN_SI]:
+        if self.PHYSICS in [Physics.DYN_SI, Physics.DYN_SI_3D_DELAY]:
             self.dnxdx = 0.0
             self.dnxdu = 0.0
         else:
@@ -1473,7 +1473,11 @@ class BaseAviary(BenchmarkEnv):
                 params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
                 (f_max - f_min)/2 * df_dot
             )
-            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])     
+            self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
+        self.fd_func = cs.integrator('fd', 'rk', {'x': X, 'p': cs.vertcat(U, d), 'ode': X_dot}, 0.0, self.PYB_TIMESTEP)
+        X_next = self.fd_func(x0=X, p=cs.vertcat(U, d))['xf']
+        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)], ['X', 'U', 'd'], ['dnxdx']) 
+        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)], ['X', 'U', 'd'], ['dnxdu'])     
 
     def _show_drone_local_axes(self, nth_drone):
         '''Draws the local frame of the n-th drone in PyBullet's GUI.

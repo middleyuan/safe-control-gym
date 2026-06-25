@@ -2,9 +2,9 @@
 
 # SYS='cartpole'
 # SYS='quadrotor_2D'
-SYS='quadrotor_2D_attitude'
+# SYS='quadrotor_2D_attitude'
 # SYS='quadrotor_3D'
-# SYS='quadrotor_3D_attitude'
+SYS='quadrotor_3D_attitude'
 
 # TASK='stab'
 TASK='track'
@@ -16,6 +16,7 @@ TASK='track'
 ALGO='shac'
 
 EXP_NAME='test'
+TAG="${SYS}_${ALGO}_data_00"
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -46,11 +47,9 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
     rm -r -f ./unsafe_rl_temp_data/
 fi
 
-# Train the unsafe controller/agent.
-SEEDS=(11)
-
 # Loop through each SEED
-for SEED in "${SEEDS[@]}"; do
+for SEED in {0..2} 
+do
     echo "Running ${ALGO} on ${SYS_NAME} with seed ${SEED}"
     python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         --algo ${ALGO} \
@@ -59,14 +58,17 @@ for SEED in "${SEEDS[@]}"; do
             ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
             ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./Results/${EXP_NAME} \
-        --tag ${SYS}_${ALGO}_data \
+        --tag ${TAG} \
         --seed ${SEED} \
         --use_gpu \
         --kv_overrides \
             task_config.randomized_init=True \
             task_config.normalized_rl_action_space=False \
+            task_config.obs_goal_horizon=1 \
             task_config.simulator_diff=True
 done
+wait
+# tb-reducer ./Results/${EXP_NAME}/${TAG}/seed* -o ./Results/${EXP_NAME}/${TAG}/ -r mean
 
 # Move the newly trained unsafe model.
 # mv ./unsafe_rl_temp_data/model_best.pt ./models/${ALGO}/${ALGO}_model_${SYS}_${TASK}.pt

@@ -8,6 +8,7 @@ clip_reward: 10
 
 # Loss args
 gamma: 0.99
+entropy_coef: 0.0
 exploration_init: -0.5
 
 # Optim args
@@ -20,6 +21,7 @@ max_grad_norm: 0.5
 # Runner args
 max_env_steps: 1000000
 num_workers: 1
+cs_workers: 1
 rollout_batch_size: 4
 rollout_steps: 100
 deque_size: 10
