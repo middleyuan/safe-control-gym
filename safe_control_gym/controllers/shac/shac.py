@@ -51,6 +51,7 @@ class SHAC(BaseController):
         self.agent = SHACAgent(self.env.observation_space,
                               self.env.action_space,
                               hidden_dim=self.hidden_dim,
+                              entropy_coef=self.entropy_coef,
                               exploration_init=self.exploration_init,
                               actor_lr=self.actor_lr,
                               critic_lr=self.critic_lr,
@@ -230,7 +231,7 @@ class SHAC(BaseController):
         diff_sim = []
         
         for _ in range(self.rollout_steps):
-            action = self.agent.ac.step(obs)
+            action, logp = self.agent.ac.step(obs, extra_info=True)
             next_obs, rew, done, info = self.env.step(action.detach().cpu().numpy())
             
             next_obs = self.obs_normalizer(next_obs)
@@ -271,14 +272,14 @@ class SHAC(BaseController):
             # rew_u = torch.FloatTensor(np.array(rew_u)).to(self.device)
             # nx_x = torch.FloatTensor(np.array(nx_x)).to(self.device)
             # nx_u = torch.FloatTensor(np.array(nx_u)).to(self.device)
-            diff_sim.append([state, obs, action, x_r, u_r, terminal_v_grad])
+            diff_sim.append([state, obs, action, x_r, u_r, terminal_v_grad, logp])
             rollouts.push({'obs': obs, 'act': action.detach(), 'rew': rew, 'mask': mask, 'terminal_v': terminal_v})
             obs = torch.FloatTensor(next_obs).to(self.device)
         self.obs = obs.cpu().numpy()
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
         last_val, last_val_grad = self.agent.ac.critic(obs, return_grad=True)
-        ret, actor_loss = compute_shac_returns_and_actor_loss(
+        ret, actor_loss, entropy_loss = compute_shac_returns_and_actor_loss(
             self.env.envs[0],
             diff_sim,
             rollouts.rew,
@@ -289,9 +290,11 @@ class SHAC(BaseController):
             gamma=self.gamma,
             actor_vjp_fn=self.agent.ac.actor_vjp_state,
             device=self.device,
+            cs_workers=self.cs_workers,
+            entropy_coef=self.agent.entropy_coef
         )
         rollouts.ret.copy_(torch.as_tensor(ret, dtype=torch.float32, device=self.device))
-        results = self.agent.update(rollouts, actor_loss, self.device)
+        results = self.agent.update(rollouts, actor_loss, entropy_loss, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
@@ -366,7 +369,7 @@ class SHAC(BaseController):
         self.logger.add_scalars(
             {
                 k: results[k]
-                for k in ['actor_loss', 'value_loss']
+                for k in ['actor_loss', 'value_loss', 'entropy_loss']
             },
             step,
             prefix='loss')
