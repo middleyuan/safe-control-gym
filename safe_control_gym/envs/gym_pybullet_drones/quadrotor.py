@@ -421,6 +421,7 @@ class Quadrotor(BaseAviary):
             self._setup_symbolic()
         else:
             self._setup_symbolic(inertial_prop)
+        self.NOMINAL_INERTIAL_PROP_VALUES = self._get_current_inertial_prop_values()
 
         # initialize disturbance model
         if 'downwash' in self.disturbances:
@@ -823,6 +824,54 @@ class Quadrotor(BaseAviary):
                     np.zeros(VEL_REF.shape[0]),
                 ]).transpose()
 
+    def _get_current_inertial_prop_values(self):
+        """Returns the current inertial and identified dynamics parameters."""
+        prop_values = {
+            'M': self.MASS,
+            'Ixx': self.J[0, 0],
+            'Iyy': self.J[1, 1],
+            'Izz': self.J[2, 2]
+        }
+        if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
+            prop_values.update({
+                'beta_1': self.beta_1,
+                'beta_2': self.beta_2,
+                'alpha_1': self.alpha_1,
+                'alpha_2': self.alpha_2,
+                'alpha_3': self.alpha_3
+            })
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+            prop_values.update({
+                'beta_1': self.beta_1,
+                'beta_2': self.beta_2,
+                'alpha_1': self.alpha_1,
+                'alpha_2': self.alpha_2,
+                'alpha_3': self.alpha_3,
+                'alpha_4': self.alpha_4,
+                'alpha_5': self.alpha_5,
+                'alpha_6': self.alpha_6,
+                'alpha_7': self.alpha_7,
+                'alpha_8': self.alpha_8,
+                'alpha_9': self.alpha_9
+            })
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_HIST,
+                                QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE,
+                                QuadType.THREE_D_ATTITUDE_DELAY_REL, QuadType.THREE_D_ATTITUDE_DELAY_REL_IR]:
+            prop_values.update({
+                'alpha_1': self.alpha_1,
+                'alpha_2': self.alpha_2,
+                'alpha_3': self.alpha_3,
+                'alpha_4': self.alpha_4,
+                'alpha_5': self.alpha_5,
+                'beta_1': self.beta_1,
+                'beta_2': self.beta_2,
+                'beta_3': self.beta_3,
+                'beta_4': self.beta_4,
+                'beta_5': self.beta_5,
+                'beta_6': self.beta_6
+            })
+        return prop_values
+
     def reset(self, seed=None):
         """(Re-)initializes the environment to start an episode.
 
@@ -840,44 +889,7 @@ class Quadrotor(BaseAviary):
         super()._reset_simulation()
 
         # Choose randomized or deterministic inertial properties.
-        prop_values = {
-            'M': self.MASS,
-            'Ixx': self.J[0, 0],
-            'Iyy': self.J[1, 1],
-            'Izz': self.J[2, 2]
-        }
-        if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
-            prop_values['beta_1'] = self.beta_1
-            prop_values['beta_2'] = self.beta_2
-            prop_values['alpha_1'] = self.alpha_1
-            prop_values['alpha_2'] = self.alpha_2
-            prop_values['alpha_3'] = self.alpha_3
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-            prop_values['beta_1'] = self.beta_1
-            prop_values['beta_2'] = self.beta_2
-            prop_values['alpha_1'] = self.alpha_1
-            prop_values['alpha_2'] = self.alpha_2
-            prop_values['alpha_3'] = self.alpha_3
-            prop_values['alpha_4'] = self.alpha_4
-            prop_values['alpha_5'] = self.alpha_5
-            prop_values['alpha_6'] = self.alpha_6
-            prop_values['alpha_7'] = self.alpha_7
-            prop_values['alpha_8'] = self.alpha_8
-            prop_values['alpha_9'] = self.alpha_9
-        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY, QuadType.THREE_D_ATTITUDE_DELAY_HIST, 
-                                QuadType.THREE_D_ATTITUDE_DELAY_INPUT_RATE, 
-                                QuadType.THREE_D_ATTITUDE_DELAY_REL, QuadType.THREE_D_ATTITUDE_DELAY_REL_IR]:
-            prop_values['alpha_1'] = self.alpha_1
-            prop_values['alpha_2'] = self.alpha_2
-            prop_values['alpha_3'] = self.alpha_3
-            prop_values['alpha_4'] = self.alpha_4
-            prop_values['alpha_5'] = self.alpha_5
-            prop_values['beta_1'] = self.beta_1
-            prop_values['beta_2'] = self.beta_2
-            prop_values['beta_3'] = self.beta_3
-            prop_values['beta_4'] = self.beta_4
-            prop_values['beta_5'] = self.beta_5
-            prop_values['beta_6'] = self.beta_6
+        prop_values = deepcopy(self.NOMINAL_INERTIAL_PROP_VALUES)
         if self.RANDOMIZED_INERTIAL_PROP:
             prop_values = self._randomize_values_by_info(prop_values, self.INERTIAL_PROP_RAND_INFO)
             if any(phy_quantity < 0 for phy_quantity in prop_values.values()):
