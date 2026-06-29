@@ -79,10 +79,10 @@ def _create_semi_definite_matrix(n):
 
 def update_initial_guess(x_prev, u_prev, sigma_prev, sigma_u0, opt_vars_fn):
     # shift previous solutions by 1 step
-    u_guess = deepcopy(u_prev)
-    x_guess = deepcopy(x_prev)
-    sigma_guess = deepcopy(sigma_prev)
-    sigma_u0_guess = deepcopy(sigma_u0)
+    u_guess = u_prev.copy()
+    x_guess = x_prev.copy()
+    sigma_guess = sigma_prev.copy()
+    sigma_u0_guess = sigma_u0.copy()
     u_guess[:, :-1] = u_guess[:, 1:]
     x_guess[:, :-1] = x_guess[:, 1:]
     sigma_guess[:, :-1] = sigma_guess[:, 1:]
@@ -278,7 +278,9 @@ class MPCFunction:
         opt_vars = cs.vcat(opt_vars)
         x_var, u_var, sigma_var = cs.hcat(x_var), cs.hcat(u_var), cs.hcat(sigma_var)
         # function definitions for conversion
-        opt_vars_fn = cs.Function("opt_vars_fun", [x_var, u_var, sigma_var, sigma_u0], [opt_vars])
+        opt_vars_fn = cs.Function(
+            "opt_vars_fun", [x_var, u_var, sigma_var, sigma_u0], [opt_vars]
+        )
         xus_fn = cs.Function("xus_fun", [opt_vars], [x_var, u_var, sigma_var, sigma_u0])
         opt_act_fn = cs.Function("opt_act_fun", [opt_vars], [u_var[:, 0]])
 
@@ -305,7 +307,9 @@ class MPCFunction:
 
         # cost (cumulative)
         cost = 0
-        w, wu0 = 1e3 * np.ones((1, nx)), 1e3 * np.ones((1, nu))  # weights for constraint violation penalties
+        w, wu0 = 1e3 * np.ones((1, nx)), 1e-1 * np.ones(
+            (1, nu)
+        )  # weights for constraint violation penalties
         cost_func = self.model.loss
         for i in range(T):
             cost += (
@@ -354,6 +358,17 @@ class MPCFunction:
         mult.append(lm)
         lamb.append(lm)
         qH_eq.append(x_var[:, 0] - x_init)
+        qmult.append(lm)
+        qlamb.append(lm)
+
+        # initial action condition constraints
+        qcon_list.append(u_var[:, 0] - a_init)
+        qcon_lbg.append(cs.DM.zeros(nu, 1))
+        qcon_ubg.append(cs.DM.zeros(nu, 1))
+        qcon_eq += [True] * nu
+
+        lm = cs.MX.sym("lm", nu)
+        qH_eq.append(u_var[:, 0] - a_init)
         qmult.append(lm)
         qlamb.append(lm)
 
@@ -406,52 +421,44 @@ class MPCFunction:
 
             # Action bounds
             for ic_i, input_constraint in enumerate(self.input_constraints_sym):
-                constraint = [
-                    input_constraint(u_var[:, i])[:nu] + self.constraint_tol,
-                    input_constraint(u_var[:, i])[nu:] + self.constraint_tol,
-                ]
-                con_list += constraint
-                con_lbg.append(-cs.DM.inf(len(constraint)*nu, 1))
-                con_ubg.append(cs.DM.zeros(len(constraint)*nu, 1))
-                con_eq += [False] * len(constraint)*nu
-                qcon_list += constraint
-                qcon_lbg.append(-cs.DM.inf(len(constraint)*nu, 1))
-                qcon_ubg.append(cs.DM.zeros(len(constraint)*nu, 1))
-                qcon_eq += [False] * len(constraint)*nu
-
-                H_ieq += constraint
-                lm = cs.MX.sym("lm", len(constraint)*nu)
-                mult.append(lm)
-                mu.append(lm)
-                qH_ieq += constraint
-                qmult.append(lm)
-                qmu.append(lm)
-
-                if i == 0:  # additional constraints for initial action condition
+                if i == 0:  # additional cost for initial action constraint violation
                     cost += wu0 @ sigma_u0
-                    constraint = [-sigma_u0]
-                    con_list += constraint
-                    con_lbg.append(-cs.DM.inf(nu, 1))
-                    con_ubg.append(cs.DM.zeros(nu, 1))
-                    con_eq += [False] * nu
-                    lm = cs.MX.sym("lm", nu)
-                    H_ieq += constraint
-                    mult.append(lm)
-                    mu.append(lm)
-
                     constraint = [
-                        u_var[:, i] - a_init - sigma_u0,
-                        -u_var[:, i] + a_init - sigma_u0,
+                        input_constraint(u_var[:, i])[:nu] + self.constraint_tol,
+                        input_constraint(u_var[:, i])[nu:] + self.constraint_tol,
                         -sigma_u0,
                     ]
-                    qcon_list += constraint
-                    qcon_lbg.append(-cs.DM.inf(3*nu, 1))
-                    qcon_ubg.append(cs.DM.zeros(3*nu, 1))
-                    qcon_eq += [False] * 3*nu
-                    lm = cs.MX.sym("lm", 3*nu)
-                    qH_ieq += constraint
-                    qmult.append(lm)
-                    qmu.append(lm)
+                    qconstraint = [
+                        input_constraint(u_var[:, i])[:nu]
+                        + self.constraint_tol
+                        - sigma_u0,
+                        input_constraint(u_var[:, i])[nu:]
+                        + self.constraint_tol
+                        - sigma_u0,
+                        -sigma_u0,
+                    ]
+                else:
+                    constraint = [
+                        input_constraint(u_var[:, i])[:nu] + self.constraint_tol,
+                        input_constraint(u_var[:, i])[nu:] + self.constraint_tol,
+                    ]
+                    qconstraint = constraint
+                con_list += constraint
+                con_lbg.append(-cs.DM.inf(len(constraint) * nu, 1))
+                con_ubg.append(cs.DM.zeros(len(constraint) * nu, 1))
+                con_eq += [False] * len(constraint) * nu
+                qcon_list += qconstraint
+                qcon_lbg.append(-cs.DM.inf(len(qconstraint) * nu, 1))
+                qcon_ubg.append(cs.DM.zeros(len(qconstraint) * nu, 1))
+                qcon_eq += [False] * len(qconstraint) * nu
+
+                H_ieq += constraint
+                lm = cs.MX.sym("lm", len(constraint) * nu)
+                mult.append(lm)
+                mu.append(lm)
+                qH_ieq += qconstraint
+                qmult.append(lm)
+                qmu.append(lm)
         # Final state constraints.
         for sc_i, state_constraint in enumerate(self.state_constraints_sym):
             cost += w @ sigma_var[:, -1]
@@ -512,15 +519,13 @@ class MPCFunction:
         vnlp_prob = {
             "f": cost,
             "x": opt_vars,
-            "p": cs.vertcat(
-                fixed_param, ref_param, cost_param, model_param
-            ),
+            "p": cs.vertcat(fixed_param, ref_param, cost_param, model_param),
             "g": con_list,
         }
         pisolver = cs.nlpsol("pisolver", "fatrop", vnlp_prob, opts_setting)
 
         # Q function
-        qcost = cost # + wu0 @ sigma_u0  # + 0.5 * wu0 * cs.sumsqr(u_var[:, 0] - a_init)
+        qcost = cost
         qopts_setting = deepcopy(opts_setting)
         qopts_setting.update({"equality": qcon_eq})
         qnlp_prob = deepcopy(vnlp_prob)
@@ -707,7 +712,11 @@ class MPCFunction:
         if self.warmstart and self.x_prev is not None and self.u_prev is not None:
             # shift previous solutions by 1 step
             opt_vars_init = update_initial_guess(
-                self.x_prev, self.u_prev, self.sigma_prev, self.sigma_u0_prev, opt_vars_fn
+                self.x_prev,
+                self.u_prev,
+                self.sigma_prev,
+                self.sigma_u0_prev,
+                opt_vars_fn,
             )
 
         # Solve the optimization problem.
@@ -727,9 +736,11 @@ class MPCFunction:
         self.sigma_prev = sigma_val.full()
         self.sigma_u0_prev = sigma_u0_val.full()
         results_dict = {
-            "horizon_states": deepcopy(self.x_prev),
-            "horizon_inputs": deepcopy(self.u_prev),
-            "goal_states": deepcopy(ref_param),
+            "horizon_states": self.x_prev.copy(),
+            "horizon_inputs": self.u_prev.copy(),
+            "horizon_sigma": self.sigma_prev.copy(),
+            "horizon_sigma_u0": self.sigma_u0_prev.copy(),
+            "goal_states": ref_param.copy(),
             "t_wall": solver.stats()["t_wall_total"],
         }
 
@@ -742,9 +753,9 @@ class MPCFunction:
         # additional info
         info = {
             "success": optimal,
-            "soln": deepcopy(soln),
-            "fixed_param": deepcopy(fixed_param),
-            "ref_param": deepcopy(ref_param),
-            "theta_param": deepcopy(theta),
+            "soln": soln.copy(),
+            "fixed_param": fixed_param.copy(),
+            "ref_param": ref_param.copy(),
+            "theta_param": theta.copy(),
         }
         return action, info, results_dict, optimal

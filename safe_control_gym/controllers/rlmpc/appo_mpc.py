@@ -81,6 +81,7 @@ class APPO_MPC(BaseController):
             actor_lr=self.actor_lr,
             critic_lr=self.critic_lr,
             opt_epochs=self.opt_epochs,
+            rollout_batch_size=self.rollout_batch_size,
             mini_batch_size=self.mini_batch_size,
         )
         self.agent.to(self.device)
@@ -124,6 +125,15 @@ class APPO_MPC(BaseController):
             self.total_steps = 0
             obs, _ = self.venv.reset()
             self.obs = self.obs_normalizer(obs)
+            self.agent_info = []
+            for env in self.venv.envs:
+                self.agent_info.append(
+                    {
+                        "current_step": env.ctrl_step_counter,
+                        "x_ref": env.X_GOAL,
+                        "soln_info": None,
+                    }
+                )
         else:
             # Add episodic stats to be tracked.
             self.env.add_tracker("constraint_violation", 0, mode="queue")
@@ -268,7 +278,7 @@ class APPO_MPC(BaseController):
         """
 
         with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
+            obs = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
             action = self.agent.ac.act(obs, info=info)
         return action
 
@@ -280,21 +290,26 @@ class APPO_MPC(BaseController):
         rollouts = APPOBuffer(
             self.venv.observation_space,
             self.venv.action_space,
-            self.agent.ac.actor.mpc_param.shape[0],
+            self.agent.ac.actor._build_mpc_param().shape[0],
             self.rollout_steps,
             self.rollout_batch_size,
         )
         obs = self.obs
         start = time.time()
-        agent_info = []
-        for env in self.venv.envs:
-            agent_info.append(
-                {"current_step": env.ctrl_step_counter, "x_ref": env.X_GOAL}
-            )
         for _ in range(self.rollout_steps):
             with torch.no_grad():
-                act, v, logp, mpc_act, nabla_pi_theta, optimal = self.agent.ac.step(
-                    torch.FloatTensor(obs).to(self.device), info=agent_info
+                (
+                    act,
+                    v,
+                    logp,
+                    soln_info,
+                    _results_dict,
+                    mpc_act,
+                    nabla_pi_theta,
+                    optimal,
+                ) = self.agent.ac.step(
+                    torch.as_tensor(obs, dtype=torch.float32, device=self.device),
+                    info=self.agent_info,
                 )
             next_obs, rew, done, info = self.venv.step(act)
             next_obs = self.obs_normalizer(next_obs)
@@ -304,20 +319,22 @@ class APPO_MPC(BaseController):
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
             for idx, inf in enumerate(info["n"]):
-                agent_info[idx] = {
+                self.agent_info[idx] = {
                     "current_step": inf["current_step"],
                     "x_ref": self.venv.envs[idx].X_GOAL,
+                    "soln_info": soln_info[idx],
                 }
                 if done[idx]:
                     self.agent.reset(idx)
+                    self.agent_info[idx]["soln_info"] = None
                 if "terminal_info" not in inf:
                     continue
                 inff = inf["terminal_info"]
                 if "TimeLimit.truncated" in inff and inff["TimeLimit.truncated"]:
                     terminal_obs = inf["terminal_observation"]
-                    terminal_obs_tensor = (
-                        torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
-                    )
+                    terminal_obs_tensor = torch.as_tensor(
+                        terminal_obs, dtype=torch.float32, device=self.device
+                    ).unsqueeze(0)
                     terminal_val = (
                         self.agent.ac.critic(terminal_obs_tensor)
                         .squeeze()
@@ -346,7 +363,9 @@ class APPO_MPC(BaseController):
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
         last_val = (
-            self.agent.ac.critic(torch.FloatTensor(obs).to(self.device))
+            self.agent.ac.critic(
+                torch.as_tensor(obs, dtype=torch.float32, device=self.device)
+            )
             .detach()
             .cpu()
             .numpy()
@@ -385,9 +404,11 @@ class APPO_MPC(BaseController):
         if hasattr(env, "envs"):
             agent_info = []
             for e in env.envs:
-                agent_info.append({"current_step": 0, "x_ref": e.X_GOAL})
+                agent_info.append(
+                    {"current_step": 0, "x_ref": e.X_GOAL, "soln_info": None}
+                )
         else:
-            agent_info = [{"current_step": 0, "x_ref": env.X_GOAL}]
+            agent_info = [{"current_step": 0, "x_ref": env.X_GOAL, "soln_info": None}]
 
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=agent_info)
@@ -411,6 +432,7 @@ class APPO_MPC(BaseController):
                     agent_info[idx] = {
                         "current_step": inf["current_step"],
                         "x_ref": env.envs[idx].X_GOAL,
+                        "soln_info": None,
                     }
             else:
                 if done:
@@ -426,6 +448,7 @@ class APPO_MPC(BaseController):
                 agent_info[0] = {
                     "current_step": info["current_step"],
                     "x_ref": env.X_GOAL,
+                    "soln_info": None,
                 }
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
@@ -466,7 +489,6 @@ class APPO_MPC(BaseController):
                         "entropy_loss",
                         "approx_kl",
                         "theta_loss",
-                        "ref_loss",
                     ]
                 },
                 step,

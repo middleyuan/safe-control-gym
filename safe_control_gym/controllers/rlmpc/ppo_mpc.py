@@ -79,8 +79,8 @@ class PPO_MPC(BaseController):
             actor_lr=self.actor_lr,
             critic_lr=self.critic_lr,
             opt_epochs=self.opt_epochs,
-            mini_batch_size=self.mini_batch_size,
             rollout_batch_size=self.rollout_batch_size,
+            mini_batch_size=self.mini_batch_size,
         )
         self.agent.to(self.device)
 
@@ -293,11 +293,7 @@ class PPO_MPC(BaseController):
         )
         obs = self.obs
         start = time.time()
-        # agent_info = []
-        # for env in self.venv.envs:
-        #     agent_info.append(
-        #         {"current_step": env.ctrl_step_counter, "x_ref": env.X_GOAL}
-        #     )
+        
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 act, v, logp, soln_info, results_dict, optimal = self.agent.ac.step(

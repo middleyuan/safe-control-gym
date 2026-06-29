@@ -1,7 +1,9 @@
 """This script tests the RL implementation."""
 
 import shutil
+import os
 from functools import partial
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +14,71 @@ from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
+
+
+def _atomic_save(path, data):
+    """Write numpy data without leaving a half-written target file behind."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    np.save(tmp_path, data, allow_pickle=True)
+    tmp_path.with_suffix(tmp_path.suffix + ".npy").replace(path)
+
+
+def _trajectory_file_name(config):
+    return f"traj_results_{config.algo}_{config.task_config.episode_len_sec}.npy"
+
+
+def _combine_seed_trajectories(result_dir, file_name):
+    """Combine per-seed trajectory exports into result_dir/file_name."""
+    result_dir = Path(result_dir)
+    seed_files = sorted(result_dir.glob(f"seed*/{file_name}"))
+    seed_data = []
+    for seed_file in seed_files:
+        try:
+            seed_data.append(np.load(seed_file, allow_pickle=True).item())
+        except (EOFError, ValueError, OSError) as exc:
+            print(f"Skipping incomplete trajectory file {seed_file}: {exc}")
+
+    if not seed_data:
+        return None
+
+    obs = np.concatenate([np.asarray(data["obs"]) for data in seed_data], axis=0)
+    timestamps = np.concatenate([np.asarray(data["timestamp"]) for data in seed_data], axis=0)
+    data = {
+        "n_rollouts": int(sum(data["n_rollouts"] for data in seed_data)),
+        "n_seeds": len(seed_data),
+        "seeds": [data.get("seed") for data in seed_data],
+        "obs": obs,
+        "timestamp": timestamps,
+        "mean_obs": np.mean(obs, axis=0),
+        "std_obs": np.std(obs, axis=0),
+    }
+
+    output_path = result_dir / file_name
+    _atomic_save(output_path, data)
+    return output_path
+
+
+def _save_trajectory_data(config, results, metrics, n_episodes):
+    file_name = _trajectory_file_name(config)
+    data_storage_path = Path(config.pretrain_path) if "pretrain_path" in config.keys() else Path(".")
+    seed = config.seed - 150
+    data = {
+        "n_rollouts": n_episodes,
+        "seed": seed,
+        "metrics": metrics,
+        "obs": np.asarray(results["obs"]),
+        "timestamp": np.asarray(results["timestamp"]),
+    }
+
+    seed_path = data_storage_path / file_name
+    _atomic_save(seed_path, data)
+
+    if "pretrain_path" in config.keys():
+        combined_path = _combine_seed_trajectories(data_storage_path.parent, file_name)
+        if combined_path is not None:
+            print(f"Combined trajectory data saved to {combined_path}")
 
 
 def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
@@ -56,7 +123,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
             config.task_config.inertial_prop_randomization_info[p]['scale'] *= config.task_config.external_param
     elif config.experiment_type == 'robustness_dw':
         config.task_config.disturbances.downwash[0].pos[2] = config.task_config.external_param
-    elif config.experiment_type == 'generalization':
+    elif config.experiment_type in ['generalization', 'traj_data']:
         config.task_config.episode_len_sec = config.task_config.external_param
         config.task_config.task_info.pop('ilqr_traj_data', None)
 
@@ -118,17 +185,7 @@ def run(gui=False, plot=True, n_episodes=10, n_steps=None, curr_path='.'):
         temp = config.pretrain_path+"/robust_metric_dw_"+str(config.task_config.external_param)+".npy"
         np.save(temp, metrics, allow_pickle=True)
     elif config.experiment_type == "traj_data":
-        temp = f"./traj_results_{config.algo}_{config.task_config.episode_len_sec}.npy"
-        if config.seed-150 == 0:  # os.path.isfile(temp):
-            data = {'n_rollouts': n_episodes,
-                    'obs': np.array(results['obs']),
-                    'timestamp': np.array(results['timestamp'])}
-        else:
-            data = np.load(temp, allow_pickle=True).item()
-            data['n_rollouts'] += n_episodes
-            data['obs'] = np.concatenate((data['obs'], np.array(results['obs'])), axis=0)
-            data['timestamp'] = np.concatenate((data['timestamp'], np.array(results['timestamp'])), axis=0)
-        np.save(temp, data, allow_pickle=True)
+        _save_trajectory_data(config, results, metrics, n_episodes)
     print(metrics)
     # with open(f'./ppo_mpc_safety_config_results.pkl', 'wb') as f:
     #     pickle.dump(results, f)

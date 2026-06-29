@@ -7,6 +7,7 @@ clip_obs: 10.
 clip_reward: 10.
 
 # actor config
+tanh_squash: False
 actor_config:
   q_mpc: [ 1.0 ]
   r_mpc: [ 1.0 ]
@@ -15,8 +16,7 @@ actor_config:
   mpc_config:
     horizon: 20
     warmstart: True
-    n_parallel_solver: 1
-    n_train_solver: 1
+    cs_workers: 1
 
 # loss args
 gamma: 0.99

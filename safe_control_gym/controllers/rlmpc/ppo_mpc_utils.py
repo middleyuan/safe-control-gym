@@ -37,8 +37,8 @@ class PPO_MPC_Agent:
         actor_lr=0.001,
         critic_lr=0.001,
         opt_epochs=10,
-        mini_batch_size=64,
         rollout_batch_size=10,
+        mini_batch_size=32,
         **kwargs,
     ):
 
@@ -52,9 +52,9 @@ class PPO_MPC_Agent:
         self.entropy_coef = entropy_coef
         self.exploration_init = exploration_init
         self.opt_epochs = opt_epochs
-        self.mini_batch_size = mini_batch_size
-        self.rollout_batch_size = rollout_batch_size
         self.activation = activation
+        self.rollout_batch_size = rollout_batch_size
+        self.mini_batch_size = mini_batch_size
 
         # Model.
         self.ac = MLPActorCritic(
@@ -67,7 +67,8 @@ class PPO_MPC_Agent:
             exploration_init=self.exploration_init,
             activation=self.activation,
             actor_config=actor_config,
-            parallel_workers=rollout_batch_size,
+            rollout_batch_size=self.rollout_batch_size,
+            mini_batch_size=self.mini_batch_size,
         )
 
         # Optimizers.
@@ -160,9 +161,10 @@ class PPO_MPC_Agent:
         )
         # assert if num_mini_batch is 0
         assert num_mini_batch != 0, "num_mini_batch is 0"
+
         for _ in range(self.opt_epochs):
             p_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0
-            v_loss_epoch, theta_loss_epoch, n_actor_updates = 0, 0, 0
+            v_loss_epoch, theta_loss_epoch, n_updates = 0, 0, 0
             for batch, batch_th in rollouts.sampler(self.mini_batch_size, device):
                 # Actor update.
                 (
@@ -191,7 +193,6 @@ class PPO_MPC_Agent:
                     # traj_ref = self.ac.actor.get_ref_param(batch['info'])
                     # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
                     theta_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
                     self.actor_opt.step()
                     with torch.no_grad():
                         self.ac.actor.q_param.clamp_(1e-5, 100.0)
@@ -209,7 +210,7 @@ class PPO_MPC_Agent:
                     kl_epoch += approx_kl.item()
                     theta_loss_epoch += theta_loss.item()
                     # ref_loss_epoch += ref_loss.sum().item()
-                    n_actor_updates += 1
+                    n_updates += 1
                 else:
                     break
 
@@ -219,11 +220,11 @@ class PPO_MPC_Agent:
                 value_loss.backward()
                 self.critic_opt.step()
                 v_loss_epoch += value_loss.item()
-            results["policy_loss"].append(p_loss_epoch / max(n_actor_updates, 1))
-            results["value_loss"].append(v_loss_epoch / num_mini_batch)
-            results["entropy_loss"].append(e_loss_epoch / max(n_actor_updates, 1))
-            results["approx_kl"].append(kl_epoch / max(n_actor_updates, 1))
-            results["theta_loss"].append(theta_loss_epoch / max(n_actor_updates, 1))
+            results["policy_loss"].append(p_loss_epoch / max(n_updates, 1))
+            results["value_loss"].append(v_loss_epoch / max(n_updates, 1))
+            results["entropy_loss"].append(e_loss_epoch / max(n_updates, 1))
+            results["approx_kl"].append(kl_epoch / max(n_updates, 1))
+            results["theta_loss"].append(theta_loss_epoch / max(n_updates, 1))
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -252,7 +253,8 @@ class MLPActorCritic(nn.Module):
         exploration_init=-1.0,
         activation="tanh",
         actor_config=None,
-        parallel_workers=10,
+        rollout_batch_size=10,
+        mini_batch_size=32,
     ):
         super().__init__()
         obs_dim = obs_space.shape[0]
@@ -273,7 +275,8 @@ class MLPActorCritic(nn.Module):
             model,
             exploration_init,
             actor_config,
-            parallel_workers=parallel_workers,
+            rollout_batch_size=rollout_batch_size,
+            mini_batch_size=mini_batch_size,
         )
         # Value function.
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
@@ -328,11 +331,19 @@ class MPCActor(nn.Module):
         model,
         exploration_init,
         actor_config,
-        parallel_workers=10,
+        rollout_batch_size=10,
+        mini_batch_size=32,
     ):
         super().__init__()
         # mpc actor
-        self.mpc = MPCPolicyFunction(env, gamma, model, parallel_workers=parallel_workers, **actor_config["mpc_config"])
+        self.mpc = MPCPolicyFunction(
+            env,
+            gamma,
+            model,
+            **actor_config["mpc_config"],
+            n_rollout_solver=rollout_batch_size,
+            n_train_solver=mini_batch_size,
+        )
 
         # Parameters
         self.q_init = actor_config["q_mpc"]
@@ -356,7 +367,7 @@ class MPCActor(nn.Module):
         # Construct output action distribution.
         self.logstd = nn.Parameter(exploration_init * torch.ones(act_dim))
         self.dist_fn = lambda x: Normal(x, self.logstd.exp())
-        self.log_std_min = -10
+        self.log_std_min = -4
         self.log_std_max = 2
 
     def forward(self, obs, act=None, actor_info=None):
@@ -450,11 +461,11 @@ class MPCPolicyFunction(MPCFunction):
         soft_constraints: bool = True,
         constraint_tol: float = 1e-6,
         additional_constraints: list = None,
-        n_parallel_solver: int = 1,
-        n_train_solver: int = 1,
+        cs_workers: int = 1,
         jit: bool = False,
         jit_options: dict = None,
-        parallel_workers: int = 10,
+        n_rollout_solver: int = 1,
+        n_train_solver: int = 1,
     ):
         super().__init__(
             env_fun,
@@ -468,17 +479,17 @@ class MPCPolicyFunction(MPCFunction):
             jit=jit,
             jit_options=jit_options,
         )
-        self.parallel_workers = parallel_workers
-        self.n_parallel_solver = n_parallel_solver
+        self.cs_workers = cs_workers
+        self.n_parallel_solver = n_rollout_solver
         self.n_train_solver = n_train_solver
-        self.infos = [None] * self.parallel_workers
+        self.infos = [None] * self.n_parallel_solver
 
         # Parallel solvers
         self.pi_solvers, self.rkkt_norm_fns, _ = self.get_parallel_solver(
-            self.n_parallel_solver
+            self.n_parallel_solver, self.cs_workers
         )
         self.pi_solvers_train, _, self.all_solvers_train = self.get_parallel_solver(
-            self.n_train_solver
+            self.n_train_solver, self.cs_workers
         )
 
     def reset(self, idx=None):
@@ -486,7 +497,7 @@ class MPCPolicyFunction(MPCFunction):
         if idx is not None:
             self.infos[idx] = None
         else:
-            self.infos = [None] * self.parallel_workers
+            self.infos = [None] * self.n_parallel_solver
 
     def select_action_batch(self, obs_batch, theta, traj_ref, agent_info):
         if not obs_batch.ndim > 1:
@@ -537,22 +548,23 @@ class MPCPolicyFunction(MPCFunction):
         z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
         rkkt_norm_batch = self.rkkt_norm_fns(z, fixed_p, ref_p, theta.T)
         optimal_batch = rkkt_norm_batch.full() < 1e-3
+        soln_x = soln_batch["x"].full()
 
         # Post-processing the solution
         action_batch, results_dict_batch, info_batch = [], [], []
         for i, obs in enumerate(obs_batch):
-            opt_vars = soln_batch["x"].full()[:, i]
+            opt_vars = soln_x[:, i]
             x_val, u_val, sigma_val, sigma_u0_val = xus_fn(opt_vars)
             x_prev = x_val.full()
             u_prev = u_val.full()
             sigma_prev = sigma_val.full()
             sigma_u0_prev = sigma_u0_val.full()
             results_dict = {
-                "horizon_states": deepcopy(x_prev),
-                "horizon_inputs": deepcopy(u_prev),
-                "horizon_slacks": deepcopy(sigma_prev),
-                "horizon_u0_slacks": deepcopy(sigma_u0_prev),
-                "goal_states": deepcopy(ref_p[:, i]),
+                "horizon_states": x_prev.copy(),
+                "horizon_inputs": u_prev.copy(),
+                "horizon_slacks": sigma_prev.copy(),
+                "horizon_u0_slacks": sigma_u0_prev.copy(),
+                "goal_states": ref_p[:, i].copy(),
             }
             # results_dict['t_wall'].append(opti.stats()['t_wall_total'])
 
@@ -566,18 +578,18 @@ class MPCPolicyFunction(MPCFunction):
             info = {
                 "success": optimal_batch[0, i],
                 "opt_var": opt_vars,
-                "fixed_param": deepcopy(fixed_p[:, i]),
-                "ref_param": deepcopy(ref_p[:, i]),
-                "theta_param": deepcopy(theta[i, :]),
-                "traj_step": deepcopy(agent_info[i]["current_step"]),
-                "x_ref": deepcopy(agent_info[i]["x_ref"]),
+                "fixed_param": fixed_p[:, i].copy(),
+                "ref_param": ref_p[:, i].copy(),
+                "theta_param": theta[i, :].copy(),
+                "traj_step": agent_info[i]["current_step"],
+                "x_ref": agent_info[i]["x_ref"].copy(),
             }
 
             # result batch
             action_batch.append(action)
             results_dict_batch.append(results_dict)
             info_batch.append(info)
-        self.infos = deepcopy(info_batch)
+        self.infos = [info.copy() for info in info_batch]
         return action_batch, info_batch, results_dict_batch, optimal_batch
 
     def select_action_batch_train(self, obs_batch, theta, info_batch):
@@ -605,8 +617,10 @@ class MPCPolicyFunction(MPCFunction):
 
         # Forward pass through solver
         soln_batch = self.pi_solvers_train(x0=x0, p=p, lbg=lbg, ubg=ubg)
-        z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
-        action_batch = opt_act_fn(soln_batch["x"]).full().T
+        soln_x_cs = soln_batch["x"]
+        z = cs.vertcat(soln_x_cs, soln_batch["lam_g"])
+        soln_x = soln_x_cs.full()
+        action_batch = opt_act_fn(soln_x).full().T
 
         # Post-processing the solution
         rkkt_norm_batch, dpi_cs = self.all_solvers_train(z, fixed_p, ref_p, theta.T)
@@ -629,13 +643,27 @@ class MPCPolicyFunction(MPCFunction):
         optimal_batch = torch.FloatTensor(np.array(optimal_batch)).T
         return action_batch, nabla_pi_ref_batch, nabla_pi_theta_batch, optimal_batch
 
-    def get_parallel_solver(self, n_solvers):
-        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread")
+    def get_parallel_solver(self, n_solvers, cs_workers):
+        # n_workers = min(n_solvers, cs_workers)
+        requested = min(n_solvers, cs_workers)
+        n_workers = requested
+        while n_solvers % n_workers != 0:
+            n_workers -= 1
+
+        if n_workers != requested:
+            print(
+                f"[MPC solver] Adjusting CasADi workers from {requested} to {n_workers} "
+                f"for {n_solvers} mapped solvers so batches split evenly."
+            )
+        
+        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread", n_workers)
         rkkt_norm_solvers = self.pi_sensitivity_dict["rkkt_norm_fn"].map(
-            n_solvers, "thread"
+            n_solvers, "thread", n_workers
         )
-        # dpi_solvers = self.pi_sensitivity_dict["dpi_fn"].map(n_solvers, "thread")
-        all_solvers = self.pi_sensitivity_dict["all_fn"].map(n_solvers, "thread")
+        # dpi_solvers = self.pi_sensitivity_dict["dpi_fn"].map(n_solvers, "thread", n_workers)
+        all_solvers = self.pi_sensitivity_dict["all_fn"].map(
+            n_solvers, "thread", n_workers
+        )
         return pi_solvers, rkkt_norm_solvers, all_solvers
 
 
@@ -697,7 +725,7 @@ class PPOBuffer(object):
 
             shape = self.scheme[k]["vshape"][1:]
             dtype = self.scheme[k].get("dtype", np.float32)
-            v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
+            v_ = np.asarray(v, dtype=dtype).reshape(shape)
             self.__dict__[k][self.t] = v_
         self.t += 1
         assert (
@@ -786,6 +814,6 @@ def compute_returns_and_advantages(
         else:
             td_error = rews[i] + gamma * masks[i] * vals[i + 1] - vals[i]
             adv = adv * gae_lambda * gamma * masks[i] + td_error
-        rets[i] = deepcopy(ret)
-        advs[i] = deepcopy(adv)
+        rets[i] = ret.copy()
+        advs[i] = adv.copy()
     return rets, advs

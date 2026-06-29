@@ -41,6 +41,8 @@ class SAC_MPC_Agent:
         sigma_network=False,
         tanh_squash=False,
         update_freq=1,
+        rollout_batch_size=10,
+        train_batch_size=32,
         **kwargs,
     ):
 
@@ -53,6 +55,8 @@ class SAC_MPC_Agent:
         self.tau = tau
         self.use_entropy_tuning = use_entropy_tuning
         self.activation = activation
+        self.rollout_batch_size = rollout_batch_size
+        self.train_batch_size = train_batch_size
 
         # Model.
         self.ac = MLPActorCritic(
@@ -67,6 +71,8 @@ class SAC_MPC_Agent:
             actor_config=actor_config,
             sigma_network=sigma_network,
             tanh_squash=tanh_squash,
+            rollout_batch_size=self.rollout_batch_size,
+            train_batch_size=self.train_batch_size,
         )
         self.log_alpha = torch.tensor(np.log(init_temperature))
 
@@ -152,9 +158,7 @@ class SAC_MPC_Agent:
             entropy_loss = torch.where(optimal > 0.9, entropy_loss, torch.nan).nanmean()
         return policy_loss, entropy_loss, logp_loss
 
-    def compute_q_loss(
-        self, batch, batch_th
-    ):  # , next_state_th, next_action_th, nabla_snext_theta, nabla_pinext_theta, optimal):
+    def compute_q_loss(self, batch, batch_th):
         """Returns q-value loss(es) given batch of data."""
         obs, act, next_obs = batch_th["obs"], batch_th["act"], batch_th["next_obs"]
         rew, mask = batch_th["rew"], batch_th["mask"]
@@ -164,7 +168,7 @@ class SAC_MPC_Agent:
         q2 = self.ac.q2(obs, act)
 
         with torch.no_grad():
-            next_act, next_logp, _, _, _, optimal = self.ac.actor.forward_train(
+            next_act, next_logp, _, _, _, _, optimal = self.ac.actor.forward_train(
                 next_obs_np,
                 info,
                 update_info=True,
@@ -202,6 +206,7 @@ class SAC_MPC_Agent:
                 act_th,
                 logp,
                 action_th,
+                log_std,
                 _,
                 nabla_pi_theta,
                 optimal,
@@ -221,6 +226,7 @@ class SAC_MPC_Agent:
             # traj_ref = self.ac.actor.get_ref_param(batch['info'])
             # ref_loss = action_th.grad.unsqueeze(1) @ nabla_pi_ref @ traj_ref.unsqueeze(2)
             theta_loss.backward()
+            # torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
             self.actor_opt.step()
             with torch.no_grad():
                 self.ac.actor.q_param.clamp_(1e-5, 100.0)
@@ -244,7 +250,6 @@ class SAC_MPC_Agent:
             results["alpha"] = self.alpha.item()
             results["theta_loss"] = theta_loss.item()
             results["logp_loss"] = logp_loss.item()
-            # results['exploration_std'] = self.ac.actor.logstd.exp().mean().item()
 
         # update target networks
         # soft_update(self.ac, self.ac_targ, self.tau)
@@ -280,6 +285,8 @@ class MLPActorCritic(nn.Module):
         actor_config=None,
         sigma_network=False,
         tanh_squash=False,
+        rollout_batch_size=10,
+        train_batch_size=32,
     ):
         super().__init__()
         obs_dim = obs_space.shape[0]
@@ -303,6 +310,8 @@ class MLPActorCritic(nn.Module):
             actor_config,
             sigma_network=sigma_network,
             tanh_squash=tanh_squash,
+            rollout_batch_size=rollout_batch_size,
+            train_batch_size=train_batch_size,
         )
         # Q functions
         self.q1 = MLPQFunction(obs_dim, act_dim, hidden_dims, activation)
@@ -347,10 +356,19 @@ class MPCActor(nn.Module):
         actor_config,
         sigma_network=False,
         tanh_squash=False,
+        rollout_batch_size=10,
+        train_batch_size=32,
     ):
         super().__init__()
         # mpc actor
-        self.mpc = MPCPolicyFunction(env, gamma, model, **actor_config["mpc_config"])
+        self.mpc = MPCPolicyFunction(
+            env,
+            gamma,
+            model,
+            **actor_config["mpc_config"],
+            n_rollout_solver=rollout_batch_size,
+            n_train_solver=train_batch_size,
+        )
 
         # Parameters
         self.q_init = actor_config["q_mpc"]
@@ -374,7 +392,7 @@ class MPCActor(nn.Module):
         # Construct output action distribution.
         self.sigma_network = sigma_network
         self.tanh_squash = tanh_squash
-        self.log_std_min = -4
+        self.log_std_min = -20
         self.log_std_max = 2
         if self.sigma_network:
             self.net = MLP(obs_dim, hidden_dims[-1], hidden_dims[:-1], activation)
@@ -384,6 +402,7 @@ class MPCActor(nn.Module):
         self.dist_fn = lambda mu, log_std: Normal(mu, log_std.exp())
 
         # action rescaling (from cleanrl)
+        self.action_space = action_space
         self.register_buffer(
             "action_scale",
             torch.tensor(
@@ -457,6 +476,7 @@ class MPCActor(nn.Module):
         if self.sigma_network:
             net_out = self.net(torch.FloatTensor(obs))
             log_std = self.log_std_layer(net_out)
+            log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
         else:
             log_std = self.logstd
         if self.tanh_squash:
@@ -470,21 +490,22 @@ class MPCActor(nn.Module):
 
         # Squash the output
         if self.tanh_squash:
-            # logp -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6).sum(
-            #     -1, keepdim=True
-            # )
-            logp -= (2 * (np.log(2) - x_t - F.softplus(-2 * x_t))).sum(
-                axis=1, keepdim=True
-            )
-            logp -= torch.log(self.action_scale).sum()
             y_t = torch.tanh(x_t)
             act = y_t * self.action_scale + self.action_bias
+            logp -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6).sum(
+                -1, keepdim=True
+            )
+            # logp -= (2 * (np.log(2) - x_t - F.softplus(-2 * x_t))).sum(
+            #     axis=1, keepdim=True
+            # )
+            # logp -= torch.log(self.action_scale).sum()
         else:
             act = x_t
         return (
             act,
             logp,
             action,
+            log_std,
             nabla_pi_ref,
             nabla_pi_theta,
             optimal_flag,
@@ -493,7 +514,7 @@ class MPCActor(nn.Module):
     def inverse_squashing(self, y):
         """Inverse of tanh squashing function."""
         y = (y - self.action_bias) / self.action_scale
-        return torch.atanh(torch.clamp(y, -1.0 + 1e-4, 1.0 - 1e-4))
+        return torch.atanh(torch.clamp(y, -1.0 + 1e-3, 1.0 - 1e-3))
 
     def reset(self, idx=None):
         self.mpc.reset(idx)
@@ -553,10 +574,11 @@ class MPCPolicyFunction(MPCFunction):
         soft_constraints: bool = True,
         constraint_tol: float = 1e-6,
         additional_constraints: list = None,
-        n_parallel_solver: int = 1,
-        n_train_solver: int = 1,
+        cs_workers: int = 1,
         jit: bool = False,
         jit_options: dict = None,
+        n_rollout_solver: int = 1,
+        n_train_solver: int = 1,
     ):
         super().__init__(
             env_fun,
@@ -570,16 +592,17 @@ class MPCPolicyFunction(MPCFunction):
             jit=jit,
             jit_options=jit_options,
         )
-        self.n_parallel_solver = n_parallel_solver
+        self.cs_workers = cs_workers
+        self.n_parallel_solver = n_rollout_solver
         self.n_train_solver = n_train_solver
         self.infos = [None] * self.n_parallel_solver
 
         # Parallel solvers
         self.pi_solvers, self.rkkt_norm_fns, _ = self.get_parallel_solver(
-            self.n_parallel_solver
+            self.n_parallel_solver, self.cs_workers
         )
         self.pi_solvers_train, self.rkkt_norm_fns_train, self.all_solvers_train = (
-            self.get_parallel_solver(self.n_train_solver)
+            self.get_parallel_solver(self.n_train_solver, self.cs_workers)
         )
 
     def reset(self, idx=None):
@@ -623,7 +646,7 @@ class MPCPolicyFunction(MPCFunction):
                 x_prev.full(),
                 u_prev.full(),
                 sigma_prev.full(),
-                sigma_u0_prev.full()
+                sigma_u0_prev.full(),
             )
             opt_vars_init = update_initial_guess(
                 x_prev, u_prev, sigma_prev, sigma_u0_prev, opt_vars_fn
@@ -640,22 +663,23 @@ class MPCPolicyFunction(MPCFunction):
         z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
         rkkt_norm_batch = self.rkkt_norm_fns(z, fixed_p, ref_p, theta.T)
         optimal_batch = rkkt_norm_batch.full() < 1e-3
+        soln_x = soln_batch["x"].full()
 
         # Post-processing the solution
         action_batch, results_dict_batch, info_batch = [], [], []
         for i, obs in enumerate(obs_batch):
-            opt_vars = soln_batch["x"].full()[:, i]
+            opt_vars = soln_x[:, i]
             x_val, u_val, sigma_val, sigma_u0_val = xus_fn(opt_vars)
             x_prev = x_val.full()
             u_prev = u_val.full()
             sigma_prev = sigma_val.full()
             sigma_u0_prev = sigma_u0_val.full()
             results_dict = {
-                "horizon_states": deepcopy(x_prev),
-                "horizon_inputs": deepcopy(u_prev),
-                "horizon_slacks": deepcopy(sigma_prev),
-                "horizon_u0_slacks": deepcopy(sigma_u0_prev),
-                "goal_states": deepcopy(ref_p[:, i]),
+                "horizon_states": x_prev.copy(),
+                "horizon_inputs": u_prev.copy(),
+                "horizon_slacks": sigma_prev.copy(),
+                "horizon_u0_slacks": sigma_u0_prev.copy(),
+                "goal_states": ref_p[:, i].copy(),
             }
             # results_dict['t_wall'].append(opti.stats()['t_wall_total'])
 
@@ -669,18 +693,18 @@ class MPCPolicyFunction(MPCFunction):
             info = {
                 "success": optimal_batch[0, i],
                 "opt_var": opt_vars,
-                "fixed_param": deepcopy(fixed_p[:, i]),
-                "ref_param": deepcopy(ref_p[:, i]),
-                "theta_param": deepcopy(theta[i, :]),
-                "traj_step": deepcopy(agent_info[i]["current_step"]),
-                "x_ref": deepcopy(agent_info[i]["x_ref"]),
+                "fixed_param": fixed_p[:, i].copy(),
+                "ref_param": ref_p[:, i].copy(),
+                "theta_param": theta[i, :].copy(),
+                "traj_step": agent_info[i]["current_step"],
+                "x_ref": agent_info[i]["x_ref"].copy(),
             }
 
             # result batch
             action_batch.append(action)
             results_dict_batch.append(results_dict)
             info_batch.append(info)
-        self.infos = deepcopy(info_batch)
+        self.infos = [info.copy() for info in info_batch]
         return action_batch, info_batch, results_dict_batch, optimal_batch
 
     def select_action_batch_train(
@@ -733,8 +757,10 @@ class MPCPolicyFunction(MPCFunction):
 
         # Forward pass through solver
         soln_batch = self.pi_solvers_train(x0=x0, p=p, lbg=lbg, ubg=ubg)
-        z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
-        action_batch = opt_act_fn(soln_batch["x"]).full().T
+        soln_x_cs = soln_batch["x"]
+        z = cs.vertcat(soln_x_cs, soln_batch["lam_g"])
+        soln_x = soln_x_cs.full()
+        action_batch = opt_act_fn(soln_x).full().T
 
         # Post-processing the solution
         nabla_pi_ref_batch, nabla_pi_theta_batch, optimal_batch = [], [], []
@@ -748,10 +774,7 @@ class MPCPolicyFunction(MPCFunction):
             for i in range(obs_batch.shape[0]):
                 nabla_pi_theta_batch.append(
                     int(optimal_batch[0, i])
-                    * dpi_cs[
-                        :,
-                        npl * i : npl * (i + 1),
-                    ]
+                    * dpi_cs[ :, npl * i : npl * (i + 1)]
                 )
         else:
             rkkt_norm_batch = self.rkkt_norm_fns_train(z, fixed_p, ref_p, theta.T)
@@ -766,12 +789,13 @@ class MPCPolicyFunction(MPCFunction):
             optimal_batch,
         )
 
-    def get_parallel_solver(self, n_solvers):
-        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread")
+    def get_parallel_solver(self, n_solvers, cs_workers):
+        n_workers = min(n_solvers, cs_workers)
+        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread", n_workers)
         rkkt_norm_fns = self.pi_sensitivity_dict["rkkt_norm_fn"].map(
-            n_solvers, "thread"
+            n_solvers, "thread", n_workers
         )
-        all_fns = self.pi_sensitivity_dict["all_fn"].map(n_solvers, "thread")
+        all_fns = self.pi_sensitivity_dict["all_fn"].map(n_solvers, "thread", n_workers)
         return pi_solvers, rkkt_norm_fns, all_fns
 
 

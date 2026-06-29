@@ -23,7 +23,7 @@ declare -A MAX_PARALLEL_SEEDS=(
 )
 
 EXP_NAME='Final_july/h_1'
-# TRAIN_LIST=('nominal' 'generalization' 'robustness_pm' 'robustness_ob5' 'robustness_ps3' 'robustness_combo')
+# TRAIN_LIST=('nominal' 'generalization' 'robustness_combo')
 TRAIN_LIST=('nominal' 'generalization' 'robustness_combo')
 EVAL_LIST=('performance' 'generalization' 'traj_data' 'robustness_ob' 'robustness_ps' 'robustness_pm')
 # EVAL_LIST=('traj_data')

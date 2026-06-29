@@ -14,8 +14,7 @@ algo_config:
     mpc_config:
       horizon: 20
       warmstart: True
-      n_parallel_solver: 10
-      n_train_solver: 16
+      cs_workers: 16
       jit: True
       jit_options:
         # compiler: "clang"  # gcc, ccache gcc, clang
@@ -38,14 +37,14 @@ algo_config:
   critic_lr: 0.0003
 
   # runner args
-  max_env_steps: 660000
+  max_env_steps: 1320000
   rollout_batch_size: 10
   rollout_steps: 330
   eval_batch_size: 10
 
   # misc
   log_interval: 6600
-  save_interval: 660000
+  save_interval: 1320000
   num_checkpoints: 0
   eval_interval: 6600
   eval_save_best: True

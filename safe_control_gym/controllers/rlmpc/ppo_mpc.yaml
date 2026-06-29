@@ -15,8 +15,7 @@ actor_config:
   mpc_config:
     horizon: 20
     warmstart: True
-    n_parallel_solver: 1
-    n_train_solver: 1
+    cs_workers: 1
 
 # Loss args
 gamma: 0.99

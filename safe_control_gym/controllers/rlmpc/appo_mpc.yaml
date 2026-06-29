@@ -11,8 +11,12 @@ actor_config:
   q_mpc: [ 1.]
   r_mpc: [ 1.]
   qt_mpc: [ 1.]
+  back_off: [ 0.]
   model_param: [ 12.1432, 1.8118, 0.0, 72.08, 7.5755, 39.8653, 0.0 ]
-  warmstart: True
+  mpc_config:
+    horizon: 20
+    warmstart: True
+    cs_workers: 1
 
 # Loss args
 gamma: 0.99
@@ -27,7 +31,7 @@ entropy_coef: 0.01
 opt_epochs: 10
 mini_batch_size: 64
 actor_lr: 0.0003
-critic_lr: 0.001
+critic_lr: 0.0003
 max_grad_norm: 0.5
 
 # Runner args

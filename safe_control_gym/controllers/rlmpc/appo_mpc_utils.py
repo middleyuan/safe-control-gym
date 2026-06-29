@@ -1,7 +1,6 @@
 """PPO utilities."""
 
 from collections import defaultdict
-from copy import deepcopy
 import time
 
 import casadi as cs
@@ -40,6 +39,7 @@ class APPO_MPC_Agent:
         actor_lr=0.001,
         critic_lr=0.001,
         opt_epochs=10,
+        rollout_batch_size=10,
         mini_batch_size=64,
         **kwargs,
     ):
@@ -56,6 +56,7 @@ class APPO_MPC_Agent:
         self.opt_epochs = opt_epochs
         self.mini_batch_size = mini_batch_size
         self.activation = activation
+        self.rollout_batch_size = rollout_batch_size
 
         # Model.
         self.ac = MLPActorCritic(
@@ -68,6 +69,8 @@ class APPO_MPC_Agent:
             exploration_init=self.exploration_init,
             activation=self.activation,
             actor_config=actor_config,
+            rollout_batch_size=self.rollout_batch_size,
+            mini_batch_size=self.mini_batch_size,
         )
 
         # Optimizers.
@@ -157,10 +160,10 @@ class APPO_MPC_Agent:
         )
         # assert if num_mini_batch is 0
         assert num_mini_batch != 0, "num_mini_batch is 0"
-        theta_old = self.ac.actor.mpc_param.detach().clone()
+        theta_old = self.ac.actor._build_mpc_param().detach().clone()
         for _ in range(self.opt_epochs):
             p_loss_epoch, v_loss_epoch, e_loss_epoch, kl_epoch = 0, 0, 0, 0
-            theta_loss_epoch, ref_loss_epoch = 0, 0
+            theta_loss_epoch, n_updates = 0, 0
             for batch in rollouts.sampler(self.mini_batch_size, device):
                 # Actor update.
                 policy_loss, entropy_loss, approx_kl = self.compute_policy_loss(
@@ -174,11 +177,20 @@ class APPO_MPC_Agent:
                     (policy_loss + self.entropy_coef * entropy_loss).backward()
                     self.actor_opt.step()
                     with torch.no_grad():
-                        self.ac.actor.mpc_param.clamp_(1e-5, 100.0)
+                        self.ac.actor.q_param.clamp_(1e-5, 100.0)
+                        self.ac.actor.r_param.clamp_(1e-5, 100.0)
+                        self.ac.actor.qt_param.clamp_(1e-5, 100.0)
+                        self.ac.actor.model_param.clamp_(1e-5, 100.0)
+                        self.ac.actor.log_std.clamp_(
+                            self.ac.actor.log_std_min, self.ac.actor.log_std_max
+                        )
 
                     p_loss_epoch += policy_loss.item()
                     e_loss_epoch += entropy_loss.item()
                     kl_epoch += approx_kl.item()
+                    n_updates += 1
+                else:
+                    break
 
                 # Critic update.
                 value_loss = self.compute_value_loss(batch)
@@ -186,12 +198,11 @@ class APPO_MPC_Agent:
                 value_loss.backward()
                 self.critic_opt.step()
                 v_loss_epoch += value_loss.item()
-            results["policy_loss"].append(p_loss_epoch / num_mini_batch)
-            results["value_loss"].append(v_loss_epoch / num_mini_batch)
-            results["entropy_loss"].append(e_loss_epoch / num_mini_batch)
-            results["approx_kl"].append(kl_epoch / num_mini_batch)
-            results["theta_loss"].append(theta_loss_epoch / num_mini_batch)
-            results["ref_loss"].append(ref_loss_epoch / num_mini_batch)
+            results["policy_loss"].append(p_loss_epoch / max(n_updates, 1))
+            results["value_loss"].append(v_loss_epoch / max(n_updates, 1))
+            results["entropy_loss"].append(e_loss_epoch / max(n_updates, 1))
+            results["approx_kl"].append(kl_epoch / max(n_updates, 1))
+            results["theta_loss"].append(theta_loss_epoch / max(n_updates, 1))
         results = {k: sum(v) / len(v) for k, v in results.items()}
         return results
 
@@ -220,6 +231,8 @@ class MLPActorCritic(nn.Module):
         exploration_init=-1.0,
         activation="tanh",
         actor_config=None,
+        rollout_batch_size=10,
+        mini_batch_size=64,
     ):
         super().__init__()
         obs_dim = obs_space.shape[0]
@@ -240,12 +253,14 @@ class MLPActorCritic(nn.Module):
             model,
             exploration_init,
             actor_config,
+            rollout_batch_size,
+            mini_batch_size,
         )
         # Value function.
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
     def step(self, obs, info=None):
-        dist, _, mpc_act, nabla_pi_theta, optimal_flag = self.actor(
+        dist, _, mpc_act, nabla_pi_theta, soln_info, results_dict, optimal_flag = self.actor(
             obs, actor_info=info
         )
         mpc_act = np.array(mpc_act)
@@ -257,13 +272,15 @@ class MLPActorCritic(nn.Module):
             a.cpu().numpy(),
             v.cpu().numpy(),
             logp_a.cpu().numpy(),
+            soln_info,
+            results_dict,
             mpc_act,
             nabla_pi_theta,
             optimal_flag,
         )
 
     def act(self, obs, info=None):
-        dist, _, _, _, _ = self.actor(obs, actor_info=info)
+        dist, _, _, _, _, _, _ = self.actor(obs, actor_info=info)
         a = dist.mode()
         return a.cpu().numpy()
 
@@ -296,10 +313,19 @@ class MPCActor(nn.Module):
         model,
         exploration_init,
         actor_config,
+        rollout_batch_size=10,
+        mini_batch_size=64,
     ):
         super().__init__()
         # mpc actor
-        self.mpc = MPCPolicyFunction(env, gamma, model, **actor_config["mpc_config"])
+        self.mpc = MPCPolicyFunction(
+            env,
+            gamma,
+            model,
+            **actor_config["mpc_config"],
+            n_rollout_solver=rollout_batch_size,
+            n_train_solver=mini_batch_size,
+        )
 
         # Parameters
         self.q_init = actor_config["q_mpc"]
@@ -316,11 +342,10 @@ class MPCActor(nn.Module):
         # self.back_off_param = nn.Parameter(
         #     torch.tensor(self.back_off_init, dtype=torch.float32)
         # )
-        self.register_buffer(
-            "back_off_fixed",
-            torch.tensor(self.back_off_init, dtype=torch.float32)
-        )
-        self.mpc_param = self._build_mpc_param()
+        # self.register_buffer(
+        #     "back_off_fixed",
+        #     torch.tensor(self.back_off_init, dtype=torch.float32)
+        # )
 
         # Construct output action distribution.
         # self.net = MLP(obs_dim, hidden_dims[-1], hidden_dims[:-1], activation)
@@ -333,16 +358,26 @@ class MPCActor(nn.Module):
     def forward(self, obs, act=None, actor_info=None):
         theta = self.get_theta_param(obs)
         traj_param = self.get_references(actor_info)
+        obs_np = obs.detach().cpu().numpy()
+        theta_np = theta.detach().cpu().numpy()
         if obs.ndim > 1:
-            mpc_act, nabla_pi_theta, optimal_flag = self.mpc.select_action_batch(
-                obs.cpu().numpy(), theta.cpu().numpy(), traj_param, actor_info
+            (
+                mpc_act,
+                nabla_pi_theta,
+                soln_info,
+                results_dict,
+                optimal_flag,
+            ) = self.mpc.select_action_batch(
+                obs_np, theta_np, traj_param, actor_info
             )
         else:
-            mpc_act, _, _, optimal_flag = self.mpc.select_action(
-                obs.cpu().numpy(), theta.cpu().numpy(), traj_param
+            mpc_act, soln_info, results_dict, optimal_flag = self.mpc.select_action(
+                obs_np, theta_np, traj_param
             )
             nabla_pi_theta = None
-        action = torch.FloatTensor(np.array(mpc_act)).to(theta.device)
+        action = torch.as_tensor(
+            np.asarray(mpc_act), dtype=theta.dtype, device=theta.device
+        )
         # net_out = self.net(obs)
         # log_std = self.log_std_layer(net_out)
         log_std = torch.clamp(self.log_std, self.log_std_min, self.log_std_max)
@@ -350,7 +385,7 @@ class MPCActor(nn.Module):
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)
-        return dist, logp_a, mpc_act, nabla_pi_theta, optimal_flag
+        return dist, logp_a, mpc_act, nabla_pi_theta, soln_info, results_dict, optimal_flag
 
     def forward_train(self, obs, act, theta_old, mpc_act, nabla_pi_theta):
         theta = self.get_theta_param(obs)
@@ -374,7 +409,7 @@ class MPCActor(nn.Module):
                 self.q_param,
                 self.r_param,
                 self.qt_param,
-                self.back_off_fixed,
+                # self.back_off_fixed,
                 self.model_param,
             ],
             dim=0,
@@ -422,9 +457,11 @@ class MPCPolicyFunction(MPCFunction):
         soft_constraints: bool = True,
         constraint_tol: float = 1e-6,
         additional_constraints: list = None,
-        n_parallel_solver: int = 1,
+        cs_workers: int = 1,
         jit: bool = False,
         jit_options: dict = None,
+        n_rollout_solver: int = 1,
+        n_train_solver: int = 1,
     ):
         super().__init__(
             env_fun,
@@ -435,15 +472,25 @@ class MPCPolicyFunction(MPCFunction):
             soft_constraints=soft_constraints,
             constraint_tol=constraint_tol,
             additional_constraints=additional_constraints,
-            n_parallel_solver=n_parallel_solver,
             jit=jit,
             jit_options=jit_options,
         )
+        self.cs_workers = cs_workers
+        self.n_parallel_solver = n_rollout_solver
+        self.n_train_solver = n_train_solver
+        self.infos = [None] * self.n_parallel_solver
 
         # Parallel solvers
-        self.pi_solvers, _, _, self.all_solvers = self.get_parallel_solver(
-            self.n_parallel_solver
+        self.pi_solvers, self.rkkt_norm_fns, self.all_solvers = self.get_parallel_solver(
+            self.n_parallel_solver, self.cs_workers
         )
+
+    def reset(self, idx=None):
+        super().reset()
+        if idx is not None:
+            self.infos[idx] = None
+        else:
+            self.infos = [None] * self.n_parallel_solver
 
     def select_action_batch(self, obs_batch, theta, traj_ref, actor_info):
         if not obs_batch.ndim > 1:
@@ -452,10 +499,6 @@ class MPCPolicyFunction(MPCFunction):
         con_ubg = self.solver_dict["upper_bound"]
         opt_vars_fn = self.solver_dict["opt_vars_fn"]
         xus_fn = self.solver_dict["xus_fn"]
-        traj_step = self.traj_step
-        # goal_states = self.get_references(traj_step, traj_ref)
-        if self.mode == "tracking":
-            self.traj_step += 1
 
         # eval_data_batch = []
         x0, fixed_p, ref_p = [], [], []
@@ -463,24 +506,29 @@ class MPCPolicyFunction(MPCFunction):
         lbg = con_lbg.full().repeat(obs_batch.shape[0], 1)
         ubg = con_ubg.full().repeat(obs_batch.shape[0], 1)
         for i, obs in enumerate(obs_batch):
-            fixed_param = obs[: self.model.nx]
+            fixed_param = np.zeros((self.model.nx + self.model.nu))
+            fixed_param[: self.model.nx] = obs[: self.model.nx]
             ref_param = traj_ref[i].T.reshape(-1, 1)[:, 0]
             opt_vars_init = np.zeros(self.solver_dict["opt_vars"].shape)
-            if (
-                self.infos[i] is not None
-            ):  # shift previous solutions by 1 step based on last soln
+            info = actor_info[i].get("soln_info")
+            if info is not None:
+                opt_vars_init = info["opt_var"]
+            elif self.infos[i] is not None:
                 opt_vars_init = self.infos[i]["opt_var"]
-                x_prev, u_prev, sigma_prev = xus_fn(opt_vars_init)
-                x_prev, u_prev, sigma_prev = (
+            else:
+                opt_vars_init = np.zeros_like(opt_vars_init)
+
+            if opt_vars_init is not None:
+                x_prev, u_prev, sigma_prev, sigma_u0_prev = xus_fn(opt_vars_init)
+                x_prev, u_prev, sigma_prev, sigma_u0_prev = (
                     x_prev.full(),
                     u_prev.full(),
                     sigma_prev.full(),
+                    sigma_u0_prev.full(),
                 )
                 opt_vars_init = update_initial_guess(
-                    x_prev, u_prev, sigma_prev, opt_vars_fn
+                    x_prev, u_prev, sigma_prev, sigma_u0_prev, opt_vars_fn
                 )
-                if actor_info[i]["current_step"] == 0:
-                    opt_vars_init = np.zeros_like(opt_vars_init)
 
             x0.append(opt_vars_init[:, 0])
             fixed_p.append(fixed_param)
@@ -493,20 +541,24 @@ class MPCPolicyFunction(MPCFunction):
         z = cs.vertcat(soln_batch["x"], soln_batch["lam_g"])
         rkkt_norm_batch, dpidp_batch = self.all_solvers(z, fixed_p, ref_p, theta.T)
         optimal_batch = rkkt_norm_batch.full() < 1e-3
+        dpidp_batch = dpidp_batch.full()
+        soln_x = soln_batch["x"].full()
 
         # Post-processing the solution
-        action_batch, nabla_pi_theta_batch, info_batch = [], [], []
+        action_batch, nabla_pi_theta_batch, info_batch, results_dict_batch = [], [], [], []
         for i, obs in enumerate(obs_batch):
-            opt_vars = soln_batch["x"].full()[:, i]
-            x_val, u_val, sigma_val = xus_fn(opt_vars)
+            opt_vars = soln_x[:, i]
+            x_val, u_val, sigma_val, sigma_u0_val = xus_fn(opt_vars)
             x_prev = x_val.full()
             u_prev = u_val.full()
             sigma_prev = sigma_val.full()
+            sigma_u0_prev = sigma_u0_val.full()
             results_dict = {
-                "horizon_states": deepcopy(x_prev),
-                "horizon_inputs": deepcopy(u_prev),
-                "horizon_slacks": deepcopy(sigma_prev),
-                "goal_states": deepcopy(ref_p[:, i]),
+                "horizon_states": x_prev.copy(),
+                "horizon_inputs": u_prev.copy(),
+                "horizon_slacks": sigma_prev.copy(),
+                "horizon_u0_slacks": sigma_u0_prev.copy(),
+                "goal_states": ref_p[:, i].copy(),
             }
             # results_dict['t_wall'].append(opti.stats()['t_wall_total'])
 
@@ -520,42 +572,55 @@ class MPCPolicyFunction(MPCFunction):
             info = {
                 "success": optimal_batch[0, i],
                 "opt_var": opt_vars,
-                "action": deepcopy(action),
-                "fixed_param": deepcopy(fixed_p[:, i]),
-                "ref_param": deepcopy(ref_p[:, i]),
-                "theta_param": deepcopy(theta[i, :]),
-                "traj_step": deepcopy(actor_info[i]["current_step"]),
-                "x_ref": deepcopy(actor_info[i]["x_ref"]),
-                "dpidp": deepcopy(
-                    int(optimal_batch[0, i])
-                    * dpidp_batch[:, self.model.nu * i : self.model.nu * (i + 1)].T
-                ),
+                "action": action.copy(),
+                "fixed_param": fixed_p[:, i].copy(),
+                "ref_param": ref_p[:, i].copy(),
+                "theta_param": theta[i, :].copy(),
+                "traj_step": actor_info[i]["current_step"],
+                "x_ref": actor_info[i]["x_ref"].copy(),
             }
 
             action_batch.append(action)
+            results_dict_batch.append(results_dict)
             nabla_pi_theta_batch.append(
                 int(optimal_batch[0, i])
                 * dpidp_batch[
-                    self.model.nx : self.model.nx + self.model.nu,
+                    :,
                     self.solver_dict["theta_param"].shape[0]
                     * i : self.solver_dict["theta_param"].shape[0]
                     * (i + 1),
                 ]
             )
             info_batch.append(info)
-        self.infos = deepcopy(info_batch)
-        return action_batch, nabla_pi_theta_batch, optimal_batch.T
+        self.infos = [info.copy() for info in info_batch]
+        return (
+            action_batch,
+            nabla_pi_theta_batch,
+            info_batch,
+            results_dict_batch,
+            optimal_batch.T,
+        )
 
-    def get_parallel_solver(self, n_solvers):
-        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread")
-        rkkt_norm_solvers = self.solver_dict["rkkt_norm_fn"].map(n_solvers, "thread")
-        # rkkt_fn = cs.Function.load('rkkt_fn.casadi')
-        # rkkt_solvers = rkkt_fn.map(n_solvers, 'thread')
-        dpi_solvers = self.solver_dict["dpi_fn"].map(n_solvers, "thread")
-        # dPi_fn = cs.Function.load('dPi_fn.casadi')
-        # dpi_solvers = dPi_fn.map(n_solvers, 'thread')
-        all_solvers = self.solver_dict["all_fn"].map(n_solvers, "thread")
-        return pi_solvers, rkkt_norm_solvers, dpi_solvers, all_solvers
+    def get_parallel_solver(self, n_solvers, cs_workers):
+        requested = min(n_solvers, cs_workers)
+        n_workers = requested
+        while n_solvers % n_workers != 0:
+            n_workers -= 1
+
+        if n_workers != requested:
+            print(
+                f"[MPC solver] Adjusting CasADi workers from {requested} to {n_workers} "
+                f"for {n_solvers} mapped solvers so batches split evenly."
+            )
+
+        pi_solvers = self.solver_dict["solver"].map(n_solvers, "thread", n_workers)
+        rkkt_norm_solvers = self.pi_sensitivity_dict["rkkt_norm_fn"].map(
+            n_solvers, "thread", n_workers
+        )
+        all_solvers = self.pi_sensitivity_dict["all_fn"].map(
+            n_solvers, "thread", n_workers
+        )
+        return pi_solvers, rkkt_norm_solvers, all_solvers
 
 
 class APPOBuffer(object):
@@ -611,7 +676,7 @@ class APPOBuffer(object):
             assert k in self.keys
             shape = self.scheme[k]["vshape"][1:]
             dtype = self.scheme[k].get("dtype", np.float32)
-            v_ = np.asarray(deepcopy(v), dtype=dtype).reshape(shape)
+            v_ = np.asarray(v, dtype=dtype).reshape(shape)
             self.__dict__[k][self.t] = v_
         self.t = (self.t + 1) % self.max_length
 
@@ -684,6 +749,6 @@ def compute_returns_and_advantages(
         else:
             td_error = rews[i] + gamma * masks[i] * vals[i + 1] - vals[i]
             adv = adv * gae_lambda * gamma * masks[i] + td_error
-        rets[i] = deepcopy(ret)
-        advs[i] = deepcopy(adv)
+        rets[i] = ret.copy()
+        advs[i] = adv.copy()
     return rets, advs

@@ -36,6 +36,8 @@ for EVAL in "${EVAL_LIST[@]}"; do
         EXTERNAL_PARAM=(1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.5 4.0 4.5 5.0)
     elif [ "${EVAL}" == 'generalization' ]; then
         EXTERNAL_PARAM=(9 10 11 12 13 14 15)
+    elif [ "${EVAL}" == 'traj_data' ]; then
+        EXTERNAL_PARAM=(9 10 11 12 13 14 15)
     else
         EXTERNAL_PARAM=(1)
     fi
