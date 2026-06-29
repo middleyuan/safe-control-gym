@@ -12,15 +12,15 @@ algo_config:
   target_kl: 0.01
   entropy_coef: 0.01
   exploration_init: -0.5
-  quantile_count: 200
+  quantile_count: 300
   value_loss: 'sample_energy'
-  value_loss_kwargs: {'sample_count': 200}
+  value_loss_kwargs: {'sample_count': 128}
   risk_measure: 'wang'
   risk_measure_config: {'beta': 2.0}
 
   # optim args
-  opt_epochs: 10
-  mini_batch_size: 512
+  opt_epochs: 20
+  mini_batch_size: 256
   actor_lr: 0.0001
   critic_lr: 0.0001
 

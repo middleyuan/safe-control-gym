@@ -11,6 +11,7 @@ algo_config:
   actor_lr: 0.0001
   critic_lr: 0.0001
   entropy_lr: 0.0001
+  update_freq: 1
 
   # runner args
   max_env_steps: 1320000
