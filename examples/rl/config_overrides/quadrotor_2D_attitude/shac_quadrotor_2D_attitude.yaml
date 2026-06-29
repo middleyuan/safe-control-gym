@@ -8,16 +8,17 @@ algo_config:
   exploration_init: -0.5
 
   # optim args
-  opt_epochs: 5
-  mini_batch_size: 256
+  opt_epochs: 10
+  mini_batch_size: 64
   actor_lr: 0.0001
   critic_lr: 0.0001
 
   # runner args
   max_env_steps: 3960000
-  rollout_batch_size: 66
-  rollout_steps: 20
+  rollout_batch_size: 3
+  rollout_steps: 100
   eval_batch_size: 10
+  cs_workers: 8
 
   # misc
   log_interval: 13200

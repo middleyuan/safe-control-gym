@@ -8,7 +8,6 @@ clip_reward: 10
 
 # Loss args
 gamma: 0.99
-entropy_coef: 0.0
 exploration_init: -0.5
 
 # Optim args

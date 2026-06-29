@@ -1050,6 +1050,9 @@ class Quadrotor(BaseAviary):
 
         # Get the preprocessed rpm for each motor
         action = super().before_step(action)
+        if self.simulator_diff:
+            self.diff_sim_prev_state = self._get_state().copy()
+            self.diff_sim_action = np.asarray(action).copy()
 
         # Determine disturbance force.
         disturb_force = None
@@ -1539,7 +1542,7 @@ class Quadrotor(BaseAviary):
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            model_choice = "drag"  # options: linear, quadratic, quartic
+            model_choice = "linear"  # options: linear, quadratic, quartic
             
             if model_choice == "quartic":
                 #Quartic Model
@@ -1609,7 +1612,7 @@ class Quadrotor(BaseAviary):
                 # Define observation.
                 Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
 
-            elif model_choice == "drag":
+            elif model_choice == "linear":
                 # params_acc = prior_prop.get('params_acc', [0.1052, 0.8, 0.120])  # from the identified model
                 # params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
                 # params_acc = prior_prop.get('param_acc', [0.09, 0.77, 0.0814])
@@ -2607,6 +2610,9 @@ class Quadrotor(BaseAviary):
             wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[0] - 1)  
             info["state_reference"] = self.X_GOAL[wp_idx].copy()
             info["action_reference"] = self.U_GOAL.copy()
+            info["dyn_params"] = self.dyn_params.copy()
+            info["prev_state"] = self.diff_sim_prev_state.copy()
+            info["dynamics_action"] = self.diff_sim_action.copy()
             # +1 because state has already advanced but counter not incremented.
             # rew_x, rew_u = self._get_additional_reward_info()
             # nx_x, nx_u = self._get_diff_simulator_info()

@@ -862,9 +862,6 @@ class BaseAviary(BenchmarkEnv):
         next_state = state + (self.PYB_TIMESTEP / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
         # next state with Casadi's fixed step integrator
         # next_state = self.fd_func(x0=state, p=np.hstack([action, d]))['xf'].full()[:, 0]
-        # if self.simulator_diff:
-        #     dnxdx = self.dnxdx_func(state, action, d).full()
-        #     dnxdu = self.dnxdu_func(state, action, d).full()
 
         # Updated information
         pos = np.array([next_state[0], 0, next_state[2]])
@@ -877,9 +874,6 @@ class BaseAviary(BenchmarkEnv):
         self.vel[nth_drone, :] = vel.copy()
         self.rpy_rates[nth_drone, :] = rpy_rates.copy()
         self.ang_v[nth_drone, :] = get_angularvelocity_rpy(self.rpy[nth_drone, :], self.rpy_rates[nth_drone, :])
-        # if self.simulator_diff:
-        #     self.dnxdx = dnxdx.copy()
-        #     self.dnxdu = dnxdu.copy()
 
     def setup_dynamics_si_expression(self, prop_values=None):
         # Casadi states
@@ -895,29 +889,58 @@ class BaseAviary(BenchmarkEnv):
 
         # Define inputs.
         T = cs.MX.sym('T')  # normlized thrust [N]
-        P = cs.MX.sym('P')  # desired pitch angle [rad]
-        U = cs.vertcat(T, P)
+        P_cmd = cs.MX.sym('P')  # desired pitch angle [rad]
+        U = cs.vertcat(T, P_cmd)
+        dyn_params = cs.MX.sym('dyn_params', 6, 1)
+        beta_1, beta_2 = dyn_params[0], dyn_params[1]
+        alpha_1, alpha_2, alpha_3 = dyn_params[2], dyn_params[3], dyn_params[4]
+        mass = dyn_params[5]
         if prop_values is None:
+            param_values = {
+                'beta_1': 17.7903,
+                'beta_2': 4.2209,
+                'alpha_1': -149.740766,
+                'alpha_2': -16.755920,
+                'alpha_3': 129.041538,
+                'M': self.MASS,
+            }
             X_dot = cs.vertcat(x_dot,
                                (17.7903* T + 4.2209) * cs.sin(theta) + d[0] / self.MASS,
                                z_dot,
                                (17.7903 * T + 4.2209) * cs.cos(theta) - g + d[1] / self.MASS,
                                theta_dot,
-                               -149.740766 * theta - 16.755920 * theta_dot + 129.041538 * P)
+                               -149.740766 * theta - 16.755920 * theta_dot + 129.041538 * P_cmd)
         else:
+            param_values = {
+                'beta_1': prop_values['beta_1'],
+                'beta_2': prop_values['beta_2'],
+                'alpha_1': prop_values['alpha_1'],
+                'alpha_2': prop_values['alpha_2'],
+                'alpha_3': prop_values['alpha_3'],
+                'M': prop_values.get('M', self.MASS),
+            }
             X_dot = cs.vertcat(x_dot,
-                               (prop_values['beta_1'] * T + prop_values['beta_2']) * cs.sin(theta) + d[0] / self.MASS,
+                               (prop_values['beta_1'] * T + prop_values['beta_2']) * cs.sin(theta) + d[0] / param_values['M'],
                                z_dot,
                                (prop_values['beta_1'] * T + prop_values['beta_2']) * cs.cos(theta) - g + d[
-                                   1] / self.MASS,
+                                   1] / param_values['M'],
                                theta_dot,
                                prop_values['alpha_1'] * theta + prop_values['alpha_2'] * theta_dot + prop_values[
-                                   'alpha_3'] * P)
+                                   'alpha_3'] * P_cmd)
+        X_dot_param = cs.vertcat(x_dot,
+                                 (beta_1 * T + beta_2) * cs.sin(theta) + d[0] / mass,
+                                 z_dot,
+                                 (beta_1 * T + beta_2) * cs.cos(theta) - g + d[1] / mass,
+                                 theta_dot,
+                                 alpha_1 * theta + alpha_2 * theta_dot + alpha_3 * P_cmd)
+        self.dyn_param_names = ['beta_1', 'beta_2', 'alpha_1', 'alpha_2', 'alpha_3', 'M']
+        self.dyn_params = np.array([param_values[name] for name in self.dyn_param_names], dtype=np.float64)
         self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
         self.fd_func = cs.integrator('fd', 'rk', {'x': X, 'p': cs.vertcat(U, d), 'ode': X_dot}, 0.0, self.PYB_TIMESTEP)
-        X_next = self.fd_func(x0=X, p=cs.vertcat(U, d))['xf']
-        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)], ['X', 'U', 'd'], ['dnxdx']) 
-        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)], ['X', 'U', 'd'], ['dnxdu'])
+        fd_param = cs.integrator('fd_param', 'rk', {'x': X, 'p': cs.vertcat(U, d, dyn_params), 'ode': X_dot_param}, 0.0, self.PYB_TIMESTEP)
+        X_next = fd_param(x0=X, p=cs.vertcat(U, d, dyn_params))['xf']
+        self.dnxdx_func = cs.Function("dnxdx", [X, U, d, dyn_params], [cs.jacobian(X_next, X)], ['X', 'U', 'd', 'dyn_params'], ['dnxdx']) 
+        self.dnxdu_func = cs.Function("dnxdu", [X, U, d, dyn_params], [cs.jacobian(X_next, U)], ['X', 'U', 'd', 'dyn_params'], ['dnxdu'])
 
     def _dynamics_si_3d(self, action, nth_drone, disturbance_force=None):
         '''Explicit dynamics implementation from the identified model.
@@ -1279,6 +1302,7 @@ class BaseAviary(BenchmarkEnv):
         P_c = cs.MX.sym('P')  # desired pitch angle [rad]
         Y_c = cs.MX.sym('Y')  # desired yaw angle [rad]
         U = cs.vertcat(T_c, R_c, P_c, Y_c)
+        dyn_params = cs.MX.sym('dyn_params', 12, 1)
         model_choice = "drag"  # options: linear, quadratic, quartic, drag
 
         if model_choice == "quartic":
@@ -1411,11 +1435,39 @@ class BaseAviary(BenchmarkEnv):
                 params_roll_rate = [-238.1, -21.35, 179.65]
                 params_pitch_rate = [-238.1, -21.35, 179.65]
                 params_yaw_rate = [-170.4, -22.22, 280]
+                param_values = {
+                    'alpha_1': params_acc[0],
+                    'alpha_2': params_acc[1],
+                    'alpha_3': params_acc[2],
+                    'alpha_4': params_acc[3],
+                    'alpha_5': params_acc[4],
+                    'beta_1': params_roll_rate[0],
+                    'beta_2': params_roll_rate[1],
+                    'beta_3': params_roll_rate[2],
+                    'beta_4': params_yaw_rate[0],
+                    'beta_5': params_yaw_rate[1],
+                    'beta_6': params_yaw_rate[2],
+                    'M': overridden_mass,
+                }
             else:
                 params_acc = [prop_values['alpha_1'], prop_values['alpha_2'], prop_values['alpha_3'], prop_values['alpha_4'], prop_values['alpha_5']]
                 params_roll_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
                 params_pitch_rate = [prop_values['beta_1'], prop_values['beta_2'], prop_values['beta_3']]
                 params_yaw_rate = [prop_values['beta_4'], prop_values['beta_5'], prop_values['beta_6']]
+                param_values = {
+                    'alpha_1': prop_values['alpha_1'],
+                    'alpha_2': prop_values['alpha_2'],
+                    'alpha_3': prop_values['alpha_3'],
+                    'alpha_4': prop_values['alpha_4'],
+                    'alpha_5': prop_values['alpha_5'],
+                    'beta_1': prop_values['beta_1'],
+                    'beta_2': prop_values['beta_2'],
+                    'beta_3': prop_values['beta_3'],
+                    'beta_4': prop_values['beta_4'],
+                    'beta_5': prop_values['beta_5'],
+                    'beta_6': prop_values['beta_6'],
+                    'M': overridden_mass,
+                }
             # Drag coefficients
             drag_coeff_x = params_acc[3]
             drag_coeff_y = params_acc[3]
@@ -1473,11 +1525,46 @@ class BaseAviary(BenchmarkEnv):
                 params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
                 (f_max - f_min)/2 * df_dot
             )
+            alpha_1, alpha_2, alpha_3, alpha_4, alpha_5 = dyn_params[0], dyn_params[1], dyn_params[2], dyn_params[3], dyn_params[4]
+            beta_1, beta_2, beta_3 = dyn_params[5], dyn_params[6], dyn_params[7]
+            beta_4, beta_5, beta_6 = dyn_params[8], dyn_params[9], dyn_params[10]
+            mass = dyn_params[11]
+            df_dot_param = (alpha_2 * (dT_c + alpha_1) - df) / alpha_3
+            drag_matrix_param = cs.diag(cs.vertcat(alpha_4, alpha_4, alpha_5))
+            drag_body_param = drag_matrix_param @ vel_body
+            drag_world_param = Rob @ drag_body_param
+            thrust_force_world_param = 1 / mass * forces_motor * cs.vertcat(
+                cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi),
+                cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi),
+                cs.cos(phi) * cs.cos(theta)
+            )
+            X_dot_param = cs.vertcat(
+                x_dot,
+                thrust_force_world_param[0] + 1 / mass * drag_world_param[0],
+                y_dot,
+                thrust_force_world_param[1] + 1 / mass * drag_world_param[1],
+                z_dot,
+                thrust_force_world_param[2] + 1 / mass * drag_world_param[2] - g,
+                phi_dot,
+                theta_dot,
+                psi_dot,
+                beta_1 * phi + beta_2 * phi_dot + beta_3 * R_c,
+                beta_1 * theta + beta_2 * theta_dot + beta_3 * P_c,
+                beta_4 * psi + beta_5 * psi_dot + beta_6 * Y_c,
+                (f_max - f_min) / 2 * df_dot_param
+            )
+            self.dyn_param_names = [
+                'alpha_1', 'alpha_2', 'alpha_3', 'alpha_4', 'alpha_5',
+                'beta_1', 'beta_2', 'beta_3', 'beta_4', 'beta_5', 'beta_6',
+                'M'
+            ]
+            self.dyn_params = np.array([param_values[name] for name in self.dyn_param_names], dtype=np.float64)
             self.X_dot_fun = cs.Function("X_dot", [X, U, d], [X_dot])
         self.fd_func = cs.integrator('fd', 'rk', {'x': X, 'p': cs.vertcat(U, d), 'ode': X_dot}, 0.0, self.PYB_TIMESTEP)
-        X_next = self.fd_func(x0=X, p=cs.vertcat(U, d))['xf']
-        self.dnxdx_func = cs.Function("dnxdx", [X, U, d], [cs.jacobian(X_next, X)], ['X', 'U', 'd'], ['dnxdx']) 
-        self.dnxdu_func = cs.Function("dnxdu", [X, U, d], [cs.jacobian(X_next, U)], ['X', 'U', 'd'], ['dnxdu'])     
+        fd_param = cs.integrator('fd_param', 'rk', {'x': X, 'p': cs.vertcat(U, d, dyn_params), 'ode': X_dot_param}, 0.0, self.PYB_TIMESTEP)
+        X_next = fd_param(x0=X, p=cs.vertcat(U, d, dyn_params))['xf']
+        self.dnxdx_func = cs.Function("dnxdx", [X, U, d, dyn_params], [cs.jacobian(X_next, X)], ['X', 'U', 'd', 'dyn_params'], ['dnxdx']) 
+        self.dnxdu_func = cs.Function("dnxdu", [X, U, d, dyn_params], [cs.jacobian(X_next, U)], ['X', 'U', 'd', 'dyn_params'], ['dnxdu'])      
 
     def _show_drone_local_axes(self, nth_drone):
         '''Draws the local frame of the n-th drone in PyBullet's GUI.

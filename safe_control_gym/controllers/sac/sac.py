@@ -68,7 +68,8 @@ class SAC(BaseController):
                               actor_lr=self.actor_lr,
                               critic_lr=self.critic_lr,
                               entropy_lr=self.entropy_lr,
-                              activation=self.activation)
+                              activation=self.activation,
+                              update_freq=self.update_freq)
         self.agent.to(self.device)
 
         # pre-/post-processing

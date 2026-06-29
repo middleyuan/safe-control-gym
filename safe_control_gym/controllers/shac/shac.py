@@ -51,7 +51,6 @@ class SHAC(BaseController):
         self.agent = SHACAgent(self.env.observation_space,
                               self.env.action_space,
                               hidden_dim=self.hidden_dim,
-                              entropy_coef=self.entropy_coef,
                               exploration_init=self.exploration_init,
                               actor_lr=self.actor_lr,
                               critic_lr=self.critic_lr,
@@ -231,7 +230,7 @@ class SHAC(BaseController):
         diff_sim = []
         
         for _ in range(self.rollout_steps):
-            action, logp = self.agent.ac.step(obs, extra_info=True)
+            action = self.agent.ac.step(obs)
             next_obs, rew, done, info = self.env.step(action.detach().cpu().numpy())
             
             next_obs = self.obs_normalizer(next_obs)
@@ -241,26 +240,23 @@ class SHAC(BaseController):
             # Time truncation is not the same as true termination.
             terminal_v = torch.zeros(obs.shape[0], 1, device=self.device)
             terminal_v_grad = torch.zeros_like(obs[:, :self.state_dim]).unsqueeze(1)
-            # rew_x, rew_u, nx_x, nx_u = [], [], [], []
-            state, x_r, u_r = [], [], []
+            state, x_r, u_r, dyn_params, prev_state, dyn_action = [], [], [], [], [], []
             for idx, inf in enumerate(info['n']):
                 if 'terminal_info' not in inf:
                     state.append(inf["state"])
                     x_r.append(inf["state_reference"])
                     u_r.append(inf["action_reference"])
-                    # rew_x.append(inf['diff_sim_info']['rew_x'])
-                    # rew_u.append(inf['diff_sim_info']['rew_u'])
-                    # nx_x.append(inf['diff_sim_info']['nx_x'])
-                    # nx_u.append(inf['diff_sim_info']['nx_u'])
+                    dyn_params.append(inf["dyn_params"])
+                    prev_state.append(inf["prev_state"])
+                    dyn_action.append(inf["dynamics_action"])
                     continue
                 inff = inf['terminal_info']
                 state.append(inff["state"])
                 x_r.append(inff["state_reference"])
                 u_r.append(inff["action_reference"])
-                # rew_x.append(inff['diff_sim_info']['rew_x'])
-                # rew_u.append(inff['diff_sim_info']['rew_u'])
-                # nx_x.append(inff['diff_sim_info']['nx_x'])
-                # nx_u.append(inff['diff_sim_info']['nx_u'])
+                dyn_params.append(inff["dyn_params"])
+                prev_state.append(inff["prev_state"])
+                dyn_action.append(inff["dynamics_action"])
                 if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
                     terminal_obs = inf['terminal_observation']
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
@@ -268,18 +264,14 @@ class SHAC(BaseController):
                     terminal_v[idx] = terminal_val.squeeze().detach()
                     terminal_v_grad[idx] = terminal_val_grad[:, :self.state_dim]
             
-            # rew_x = torch.FloatTensor(np.array(rew_x)).to(self.device)
-            # rew_u = torch.FloatTensor(np.array(rew_u)).to(self.device)
-            # nx_x = torch.FloatTensor(np.array(nx_x)).to(self.device)
-            # nx_u = torch.FloatTensor(np.array(nx_u)).to(self.device)
-            diff_sim.append([state, obs, action, x_r, u_r, terminal_v_grad, logp])
+            diff_sim.append([state, obs, action, x_r, u_r, terminal_v_grad, dyn_params, prev_state, dyn_action])
             rollouts.push({'obs': obs, 'act': action.detach(), 'rew': rew, 'mask': mask, 'terminal_v': terminal_v})
             obs = torch.FloatTensor(next_obs).to(self.device)
         self.obs = obs.cpu().numpy()
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
         last_val, last_val_grad = self.agent.ac.critic(obs, return_grad=True)
-        ret, actor_loss, entropy_loss = compute_shac_returns_and_actor_loss(
+        ret, actor_loss = compute_shac_returns_and_actor_loss(
             self.env.envs[0],
             diff_sim,
             rollouts.rew,
@@ -291,10 +283,9 @@ class SHAC(BaseController):
             actor_vjp_fn=self.agent.ac.actor_vjp_state,
             device=self.device,
             cs_workers=self.cs_workers,
-            entropy_coef=self.agent.entropy_coef
         )
         rollouts.ret.copy_(torch.as_tensor(ret, dtype=torch.float32, device=self.device))
-        results = self.agent.update(rollouts, actor_loss, entropy_loss, self.device)
+        results = self.agent.update(rollouts, actor_loss, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
         return results
 
@@ -369,7 +360,7 @@ class SHAC(BaseController):
         self.logger.add_scalars(
             {
                 k: results[k]
-                for k in ['actor_loss', 'value_loss', 'entropy_loss']
+                for k in ['actor_loss', 'value_loss']
             },
             step,
             prefix='loss')

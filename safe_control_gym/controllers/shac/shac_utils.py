@@ -20,7 +20,6 @@ class SHACAgent:
                  act_space,
                  hidden_dim=64,
                  use_clipped_value=False,
-                 entropy_coef=0.0,
                  exploration_init=-0.5,
                  actor_lr=0.0003,
                  critic_lr=0.001,
@@ -33,7 +32,6 @@ class SHACAgent:
         self.obs_space = obs_space
         self.act_space = act_space
         self.use_clipped_value = use_clipped_value
-        self.entropy_coef = entropy_coef
         self.opt_epochs = opt_epochs
         self.mini_batch_size = mini_batch_size
         self.activation = activation
@@ -89,7 +87,6 @@ class SHACAgent:
     def update(self,
                rollouts,
                actor_loss,
-               entropy_loss,
                device='cpu'
                ):
         '''Updates model parameters based on current training batch.'''
@@ -104,7 +101,6 @@ class SHACAgent:
         # torch.nn.utils.clip_grad_norm_(self.ac.actor.parameters(), max_norm=10.0)
         self.actor_opt.step()
         results['actor_loss'].append(actor_loss.item())
-        results['entropy_loss'].append(entropy_loss.item())
         
         for _ in range(self.opt_epochs):
             v_loss_epoch, n_updates = 0, 0
@@ -157,13 +153,6 @@ class MLPActor(nn.Module):
 
     def squash(self, raw_action):
         return torch.tanh(raw_action) * self.action_scale + self.action_bias
-
-    def log_prob_from_raw_action(self, dist, raw_action):
-        """Log-probability corrected for tanh squashing and action rescaling."""
-        y_t = torch.tanh(raw_action)
-        logp = dist.log_prob(raw_action)
-        logp -= torch.log(self.action_scale * (1.0 - y_t.pow(2)) + 1e-6).sum(-1, keepdim=True)
-        return logp
 
 
 class MLPCritic(nn.Module):
@@ -236,15 +225,10 @@ class MLPActorCritic(nn.Module):
         self.critic = MLPCritic(obs_dim, hidden_dims, activation)
 
     def step(self,
-             obs,
-             extra_info=False
+             obs
              ):
         dist = self.actor(obs)
-        raw_action = dist.rsample()
-        action = self.actor.squash(raw_action)
-        if extra_info:
-            logp = self.actor.log_prob_from_raw_action(dist, raw_action)
-            return action, logp
+        action = self.actor.squash(dist.rsample())
         return action
 
     def act(self,
@@ -399,8 +383,7 @@ def compute_shac_returns_and_actor_loss(
         gamma=0.99,
         actor_vjp_fn=None,
         device='cpu',
-        cs_workers=1,
-        entropy_coef=0.0
+        cs_workers=1
     ):
     '''Compute returns and the SHAC actor loss with mapped CasADi derivatives.'''
     T, N = rews.shape[:2]
@@ -410,25 +393,25 @@ def compute_shac_returns_and_actor_loss(
     lambda_next = last_val_grad
     actor_loss = 0.0
     masks_th = torch.as_tensor(masks, dtype=torch.float32, device=device).unsqueeze(-1)
-    logps = torch.stack([step[6] for step in diff_sim]).to(device)
 
     # Prepare mapped CasADi derivatives for SHAC loss computation.
     state_dim = env.state_space.shape[0]
     act_dim = env.action_space.shape[0]
     num_transitions = T * N
     reward_fn = env.symbolic.reward_func.map(num_transitions, "thread", cs_workers)
-    dnxdx_fn = env.dnxdx_func.map(num_transitions, "thread", cs_workers)
-    dnxdu_fn = env.dnxdu_func.map(num_transitions, "thread", cs_workers)
     next_states = np.asarray([step[0] for step in diff_sim], dtype=np.float64)
     obss = torch.stack([step[1] for step in diff_sim]).to(device)
-    prev_states = obss[:, :, :state_dim].detach().cpu().numpy()
+    prev_states = np.asarray([step[7] for step in diff_sim], dtype=np.float64)
     actions_np = np.asarray(
         [step[2].detach().cpu().numpy() for step in diff_sim], dtype=np.float64
     )
+    dynamics_actions_np = np.asarray([step[8] for step in diff_sim], dtype=np.float64)
     x_ref = np.asarray([step[3] for step in diff_sim], dtype=np.float64)
     u_ref = np.asarray([step[4] for step in diff_sim], dtype=np.float64)
     disturbance_dim = env.dnxdx_func.size1_in(2)
-    disturbances = np.zeros((num_transitions, disturbance_dim), dtype=np.float64)
+    dyn_param_dim = env.dnxdx_func.size1_in(3)
+    dyn_params = np.asarray([step[6] for step in diff_sim], dtype=np.float64)
+    disturbances = np.zeros((T, N, disturbance_dim), dtype=np.float64)
 
     # Reward and dynamics derivatives are independent across time and rollout
     # environments. Evaluate all T * N transitions in three mapped CasADi calls.
@@ -451,15 +434,19 @@ def compute_shac_returns_and_actor_loss(
         device=device,
     )
 
+    dnxdx_fn = env.dnxdx_func.map(num_transitions, "thread", cs_workers)
+    dnxdu_fn = env.dnxdu_func.map(num_transitions, "thread", cs_workers)
     nx_x = dnxdx_fn(
         X=prev_states.reshape(num_transitions, state_dim).T,
-        U=actions_np.reshape(num_transitions, act_dim).T,
-        d=disturbances.T,
+        U=dynamics_actions_np.reshape(num_transitions, act_dim).T,
+        d=disturbances.reshape(num_transitions, disturbance_dim).T,
+        dyn_params=dyn_params.reshape(num_transitions, dyn_param_dim).T,
     )["dnxdx"].full()
     nx_u = dnxdu_fn(
         X=prev_states.reshape(num_transitions, state_dim).T,
-        U=actions_np.reshape(num_transitions, act_dim).T,
-        d=disturbances.T,
+        U=dynamics_actions_np.reshape(num_transitions, act_dim).T,
+        d=disturbances.reshape(num_transitions, disturbance_dim).T,
+        dyn_params=dyn_params.reshape(num_transitions, dyn_param_dim).T,
     )["dnxdu"].full()
     nx_x = torch.as_tensor(
         nx_x.reshape(state_dim, num_transitions, state_dim)
@@ -497,6 +484,4 @@ def compute_shac_returns_and_actor_loss(
         lambda_next = lambda_t
 
     actor_loss = actor_loss / T
-    entropy_loss = logps.mean()
-    actor_loss = actor_loss + entropy_coef * entropy_loss
-    return rets, actor_loss, entropy_loss
+    return rets, actor_loss
