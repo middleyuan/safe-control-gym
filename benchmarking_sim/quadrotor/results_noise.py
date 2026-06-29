@@ -5,33 +5,41 @@ import munch
 from multiprocessing import Pool
 from benchmarking_sim.quadrotor.benchmark_util.utils import run_rollouts
 
-parallel = False
-# parallel = True
+parallel = True
 
 algo = sys.argv[1]
 # algo = 'lqr'
 noise_type = sys.argv[2] if len(sys.argv) > 2 else 'obs_noise'
 gp_model_tag = sys.argv[3] if len(sys.argv) > 3 else ''
+output_root = sys.argv[4] if len(sys.argv) > 4 else 'Results'
 
 # noise factor test
 additional = '_11'
 if noise_type == 'obs_noise':
-    noise_factor_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,\
-                         12, 14, 16, 18, 20, 25, 30, 35, 40, \
-                         45, 50, 60, 70, 80, 90, 100]
+    noise_factor_list = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        12, 14, 16, 18, 20, 25, 30, 35, 40,
+        45, 50, 60, 70, 80, 90, 100, 110, 120,
+        130, 140, 150, 160, 170, 180, 190, 200,
+    ]
 elif noise_type == 'proc_noise':
-    noise_factor_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,\
-                         12, 14, 16, 18, 20, 25, 30, 35, 40, \
-                         45, 50, 60, 70, 80, 90, 100]
+    noise_factor_list = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        12, 14, 16, 18, 20, 25, 30, 35, 40,
+        45, 50, 60, 70, 80, 90, 100, 110, 120,
+        130, 140, 150, 160, 170, 180, 190, 200,
+    ]
 num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
+is_gp_controller = algo in ['gpmpc_acados', 'gpmpc_acados_TP', 'gpmpc_acados_TRP', 'gp_mpc']
+num_processes = 3 if is_gp_controller else 10
 
 time1 = time.perf_counter()
 for noise_factor in noise_factor_list:
     if parallel:
         results = []
-        with Pool(processes=3) as pool:
+        with Pool(processes=num_processes) as pool:
             async_results = [
                 pool.apply_async(run_rollouts, args=(munch.munchify({
                     'additional': additional,
@@ -42,6 +50,8 @@ for noise_factor in noise_factor_list:
                     'start_seed': seed,
                     'SYS': 'quadrotor_2D_attitude', 
                     'gp_model_tag': gp_model_tag,
+                    'output_root': output_root,
+                    'exp_name': noise_type,
                     }),)
                 )
                 for seed in seeds
@@ -60,8 +70,9 @@ for noise_factor in noise_factor_list:
                 # 'SYS': 'quadrotor_3D_attitude',
                 'SYS': 'quadrotor_2D_attitude', 
                 'gp_model_tag': gp_model_tag,
+                'output_root': output_root,
+                'exp_name': noise_type,
                 })
             run_rollouts(task_description)
 time2 = time.perf_counter()
 print(f'Elapsed time: {time2 - time1:.3f} sec')
-    

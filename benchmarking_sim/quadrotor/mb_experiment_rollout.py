@@ -19,6 +19,26 @@ from safe_control_gym.controllers.mpc.gpmpc_base import GPMPC
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
+def find_seed_run_dir(base_path, seed):
+    """Return the trained model run directory matching this seed."""
+    direct_root = os.path.abspath(base_path)
+    legacy_root = os.path.join(direct_root, 'temp')
+
+    for root in [direct_root, legacy_root]:
+        if not os.path.isdir(root):
+            continue
+        seed_prefix = f'seed{seed}_'
+        candidates = [
+            os.path.join(root, d)
+            for d in os.listdir(root)
+            if os.path.isdir(os.path.join(root, d)) and (d == f'seed{seed}' or d.startswith(seed_prefix))
+        ]
+        candidates.sort()
+        if candidates:
+            return candidates[-1]
+
+    return None
+
 @timing
 def run(gui=False, n_episodes=1, n_steps=None, save_data=True, 
         seed=2, Additional='', ALGO='pid', SYS='quadrotor_2D_attitude',
@@ -27,6 +47,8 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
         eval_task=None,
         gp_model_tag='',
         ctrl_tag='',
+        output_root='Results',
+        exp_name=None,
         ):
     '''The main function running experiments for model-based methods.
 
@@ -57,7 +79,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
                             f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}.yaml',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
-                        '--output_dir', f'./{ALGO}/results',
+                        '--output_dir', f'./{output_root}',
                             ]
     else:
         MPSC_COST='one_step_cost'
@@ -73,7 +95,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
                         '--kv_overrides', f'sf_config.cost_function={MPSC_COST}',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
-                        '--output_dir', f'./{ALGO}/results',
+                        '--output_dir', f'./{output_root}',
                             ]
     fac = ConfigFactory()
     fac.add_argument('--func', type=str, default='train', help='main function to run.')
@@ -82,26 +104,36 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
     config = fac.merge()
     gp_model_path = None
     if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP']:
-        gp_model_path = os.path.join(script_path, f'gpmpc_acados_TP/results/{gp_model_tag}/temp')
+        gp_model_path = os.path.join(script_path, output_root, 'gp_models', 'gpmpc_acados_TP', gp_model_tag)
+        legacy_gp_model_path = os.path.join(script_path, f'gpmpc_acados_TP/results/{gp_model_tag}')
+        if not os.path.isdir(gp_model_path) and os.path.isdir(legacy_gp_model_path):
+            gp_model_path = legacy_gp_model_path
     elif ALGO in ['gpmpc_acados_TRP']:
-        gp_model_path = os.path.join(script_path, f'gpmpc_acados_TRP/results/{gp_model_tag}/temp')
+        gp_model_path = os.path.join(script_path, output_root, 'gp_models', 'gpmpc_acados_TRP', gp_model_tag)
+        legacy_gp_model_path = os.path.join(script_path, f'gpmpc_acados_TRP/results/{gp_model_tag}')
+        if not os.path.isdir(gp_model_path) and os.path.isdir(legacy_gp_model_path):
+            gp_model_path = legacy_gp_model_path
     if gp_model_path is not None:
         # gp_model_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/gpmpc_acados/results/200_300_aggresive'
         # # get all directories in the gp_model_path
-        gp_model_dirs = [d for d in os.listdir(gp_model_path) if os.path.isdir(os.path.join(gp_model_path, d))]
-        gp_model_dirs = [os.path.join(gp_model_path, d) for d in gp_model_dirs]
-        config.output_dir = os.path.join(config.output_dir, f'_{gp_model_tag}')
-        idx = seed % len(gp_model_dirs)
-        config.algo_config.gp_model_path = gp_model_dirs[idx]
+        gp_model_dir = find_seed_run_dir(gp_model_path, seed)
+        if gp_model_dir is None:
+            raise FileNotFoundError(f'No GP model run directory matching seed{seed}_* found in {gp_model_path}')
+        config.algo_config.gp_model_path = gp_model_dir
     # else:
     if eval_task == 'rollout':
-        config.output_dir = config.output_dir + f'{ctrl_tag}_rollout_{SYS}{ADDITIONAL}'
+        exp_name = exp_name or 'generalization'
+        episode = ADDITIONAL.lstrip('_') or 'nominal'
+        config.output_dir = os.path.join(config.output_dir, exp_name, ALGO, f'episode_{episode}')
     elif eval_task in ['obs_noise', 'proc_noise', 'param', 'downwash']:
-        config.output_dir = config.output_dir + f'{ctrl_tag}_{eval_task}_{SYS}/' + f'seed_{seed}'
+        exp_name = exp_name or eval_task
+        config.output_dir = os.path.join(config.output_dir, exp_name, ALGO, f'seed_{seed}')
     else:
         raise ValueError('eval_task not recognized')
         
     # print('output_dir',  config.algo_config.output_dir)
+    if getattr(config, 'tag', '') == 'temp':
+        config.tag = ''
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)
@@ -232,6 +264,10 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True,
     metrics['noise_factor'] = noise_factor
     metrics['dw_height'] = dw_height
     metrics['dw_height_scale'] = dw_height_scale
+    metrics['exp_name'] = exp_name
+    metrics['controller'] = ALGO
+    metrics['gp_model_tag'] = gp_model_tag
+    metrics['output_root'] = output_root
     max_dw_force = None
     ctrl_params = ctrl.env.last_prop_values
     env_params = experiment.env.last_prop_values
@@ -284,4 +320,3 @@ if __name__ == '__main__':
         runtime_list.append(run.elapsed_time)
     print(f'Average runtime for {num_seed} runs: \
           {np.mean(runtime_list):.3f} sec')
-

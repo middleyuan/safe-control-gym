@@ -46,6 +46,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         gp_tag = sys.argv[2] if len(sys.argv) > 2 else None
         ADDITIONAL = sys.argv[3] if len(sys.argv) > 3 else ''
         CTRL_ADD = sys.argv[4] if len(sys.argv) > 4 else ''
+        output_root = sys.argv[5] if len(sys.argv) > 5 else 'Results'
         if generate_reference:
             TRAJ_LEN = sys.argv[2] if len(sys.argv) > 2 else None
             TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
@@ -69,6 +70,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
         ALGO = 'fmpc'
+        output_root = 'Results'
         # ALGO = 'ppo_mpc_acados'
         #ADDITIONAL = ''
         #CTRL_ADD = ''
@@ -78,14 +80,14 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # CTRL_ADD = '_param'
     # ADDITIONAL = ''
     # CTRL_ADD = '_tr'
-    # SYS = 'quadrotor_2D_attitude'
-    SYS = 'quadrotor_3D_attitude'
+    SYS = 'quadrotor_2D_attitude'
+    # SYS = 'quadrotor_3D_attitude'
     TASK = 'tracking'
     # ADDITIONAL = '_10' 
-    ADDITIONAL = '_delay'
+    # ADDITIONAL = '_delay'
     # ADDITIONAL = ''
     # CTRL_ADD = ADDITIONAL
-    CTRL_ADD = '_delay'
+    # CTRL_ADD = '_delay'
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
@@ -99,6 +101,9 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
     SAFETY_FILTER = None
     # SAFETY_FILTER='linear_mpsc'
+    gp_controllers = ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP']
+    output_exp = 'gp_models' if ALGO in gp_controllers else 'training'
+    base_output_dir = f'./{output_root}/{output_exp}/{ALGO}'
 
     # check if the config file exists
     assert os.path.exists(
@@ -113,7 +118,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                         f'./config_overrides/{ALGO}_{SYS}_{TASK}_{PRIOR}{CTRL_ADD}.yaml',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
-                        '--output_dir', f'./{ALGO}/results',
+                        '--output_dir', base_output_dir,
                         ]
     else:
         MPSC_COST = 'one_step_cost'
@@ -130,19 +135,21 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
                         '--kv_overrides', f'sf_config.cost_function={MPSC_COST}',
                         '--seed', repr(seed),
                         '--use_gpu', 'True',
-                        '--output_dir', f'./{ALGO}/results',
+                        '--output_dir', base_output_dir,
                         ]
     fac = ConfigFactory()
     fac.add_argument('--func', type=str, default='train', help='main function to run.')
     fac.add_argument('--n_episodes', type=int, default=1, help='number of episodes to run.')
     # merge config and create output directory
     config = fac.merge()
-    if ALGO in ['gpmpc_acados', 'gp_mpc', 'gpmpc_acados_TP', 'gpmpc_acados_TRP']:
+    if ALGO in gp_controllers:
         num_data_max = config.algo_config.num_epochs * config.algo_config.num_samples
         gp_tag = f'{PRIOR}_{num_data_max}' if gp_tag is None else gp_tag
         config.output_dir = os.path.join(config.output_dir, gp_tag + ADDITIONAL)
     # print('output_dir',  config.algo_config.output_dir)
     target_traj_length = config.task_config.episode_len_sec
+    if getattr(config, 'tag', '') == 'temp':
+        config.tag = ''
     set_dir_from_config(config)
     config.algo_config.output_dir = config.output_dir
     mkdirs(config.output_dir)

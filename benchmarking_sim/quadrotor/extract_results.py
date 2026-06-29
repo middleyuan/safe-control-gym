@@ -10,6 +10,26 @@ print('notebook_dir', notebook_dir)
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 s = 2 # times of std
 
+def list_run_folders(data_folder_path):
+    """List run folders from either flat output or legacy temp output."""
+    direct_runs = [
+        f.path for f in os.scandir(data_folder_path)
+        if f.is_dir() and os.path.exists(os.path.join(f.path, 'metrics.txt'))
+    ]
+    direct_runs.sort()
+    if direct_runs:
+        return direct_runs
+
+    temp_path = os.path.join(data_folder_path, 'temp')
+    if os.path.isdir(temp_path):
+        temp_runs = [f.path for f in os.scandir(temp_path) if f.is_dir()]
+        temp_runs.sort()
+        return temp_runs
+
+    subfolders = [f.path for f in os.scandir(data_folder_path) if f.is_dir()]
+    subfolders.sort()
+    return subfolders
+
 
 from scipy.spatial import ConvexHull
 from matplotlib.patches import Polygon
@@ -104,14 +124,14 @@ def plot_trajectory(notebook_dir, data_folder, title, ctrl,
     controller_name = ctrl
     fmpc_data_path = os.path.join(notebook_dir, controller_name, data_folder)
     assert os.path.exists(fmpc_data_path), 'data_folder_path does not exist'
-    # fmpc_data_path = '/home/tobias/Studium/masterarbeit/code/safe-control-gym/benchmarking_sim/quadrotor/fmpc/results_rollout/temp'
-    fmpc_data_dirs = [d for d in os.listdir(fmpc_data_path) if os.path.isdir(os.path.join(fmpc_data_path, d))]
+    # fmpc_data_path = '/home/tobias/Studium/masterarbeit/code/safe-control-gym/benchmarking_sim/quadrotor/fmpc/results_rollout'
+    fmpc_data_dirs = list_run_folders(fmpc_data_path)
     fmpc_traj_data_name = f'{controller_name}_data_quadrotor_traj_tracking.pkl'
     fmpc_traj_data_name = [os.path.join(d, fmpc_traj_data_name) for d in fmpc_data_dirs]
 
     fmpc_data = []
     for d in fmpc_traj_data_name:
-        fmpc_data.append(np.load(os.path.join(fmpc_data_path, d), allow_pickle=True))
+        fmpc_data.append(np.load(d, allow_pickle=True))
     fmpc_traj_data = [d['trajs_data']['obs'][0] for d in fmpc_data]
     fmpc_traj_data = np.array(fmpc_traj_data)
     print(fmpc_traj_data.shape) # seed, time_step, obs
@@ -188,9 +208,7 @@ def extract_rollouts(notebook_dir, data_folder, controller_name, additional=''):
     assert os.path.exists(data_folder_path), f'data_folder_path {data_folder_path} does not exist'
 
     # find all the subfolders in the data_folder_path
-    subfolders = [f.path for f in os.scandir(data_folder_path) if f.is_dir()]
-    # sort the subfolders
-    subfolders.sort()
+    subfolders = list_run_folders(data_folder_path)
     # print('subfolders', subfolders)
     # load the row 'rmse in the metrics.txt
     metrics = []
@@ -255,10 +273,10 @@ results = {}
 for additional in ['9', '10', '11', '12', '13', '14', '15']:
 # for additional in ['9',]:
     additional = '_' + additional
-    data_folder = f'results_rollout_{SYS}{additional}/temp'
+    data_folder = f'results_rollout_{SYS}{additional}'
     if ctrl in ['gpmpc_acados_TP']:
         GPMPC_option = f'{gp_model_tag}'
-        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}'
     # traj_resutls, metrics = extract_rollouts(notebook_dir, data_folder, ctrl, additional)
     if additional == '_11':
         metrics, timing_data = extract_rollouts(notebook_dir, data_folder, ctrl, additional)
@@ -284,47 +302,22 @@ np.save(f'data/{ctrl}{tag}_gen_results.npy', results)
 # sp_plot_inf_time = mean_exec_time # save for later, spider plot
 
 additional = '_11'
-data_folder = f'results_rollout_{SYS}{additional}/temp'
+data_folder = f'results_rollout_{SYS}{additional}'
 if ctrl in ['gpmpc_acados_TP']:
         GPMPC_option = gp_model_tag
-        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}'
 plot_trajectory(notebook_dir, data_folder, 'Evaluation', ctrl, SYS, additional)
 
 additional = '_15'
-data_folder = f'results_rollout_{SYS}{additional}/temp'
+data_folder = f'results_rollout_{SYS}{additional}'
 if ctrl in ['gpmpc_acados_TP']:
         GPMPC_option = gp_model_tag
-        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}'
 plot_trajectory(notebook_dir, data_folder, 'Generalization (slower)', ctrl, SYS, additional)
 
 additional = '_9'
-data_folder = f'results_rollout_{SYS}{additional}/temp'
+data_folder = f'results_rollout_{SYS}{additional}'
 if ctrl in ['gpmpc_acados_TP']:
         GPMPC_option = gp_model_tag
-        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
+        data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}'
 plot_trajectory(notebook_dir, data_folder, 'Generalization (faster)', ctrl, SYS, additional)
-# additional = '_safety'
-# ctrl = 'mpc_acados'
-# data_folder = f'results_rollout_{SYS}{additional}/temp'
-# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
-
-# additional = '_safety_noiseless'
-# ctrl = 'mpc_acados'
-# data_folder = f'results_rollout_{SYS}{additional}/temp'
-# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
-
-# additional = '_safety_noiseless'
-# ctrl = 'gpmpc_acados_TP'
-# GPMPC_option = f'_handtune_safety_noiseless'
-# # results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless
-# data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
-# # data_folder = f'results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless'
-# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)
-
-# additional = '_safety'
-# ctrl = 'gpmpc_acados_TP'
-# GPMPC_option = f'_handtune_safety'
-# # results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless
-# data_folder = f'results/{GPMPC_option}_rollout_{SYS}{additional}/temp'
-# # data_folder = f'results/_handtune_safety_noiseless_rollout_quadrotor_2D_attitude_safety_noiseless'
-# plot_trajectory(notebook_dir, data_folder, 'Safety', ctrl, SYS, additional)

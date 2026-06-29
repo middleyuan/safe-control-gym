@@ -45,6 +45,16 @@ task_config:
     trajectory_scale: 1.0
     ilqr_ref: True
 
+  inertial_prop:
+    M: 0.033
+    Iyy: 1.4e-05
+    beta_1: 17.7903
+    beta_2: 4.2209
+    beta_3: 0.0
+    alpha_1: -149.740766
+    alpha_2: -16.755920
+    alpha_3: 129.041538
+    pitch_bias: 0.0 # in radian
 
   episode_len_sec: 10
   cost: quadratic

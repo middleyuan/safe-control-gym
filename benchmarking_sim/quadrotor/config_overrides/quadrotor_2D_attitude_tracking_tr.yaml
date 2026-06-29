@@ -16,6 +16,23 @@ task_config:
   randomized_init: True
   randomized_inertial_prop: False
 
+  inertial_prop_randomization_info:
+    beta_1: # Nominal: 17.7903
+      distrib: 'normal'
+      scale: 0.212
+    beta_2: # Nominal: 4.2209
+      distrib: 'normal'
+      scale: 0.071
+    alpha_1: # Nominal: -149.740766
+      distrib: 'normal'
+      scale: 4.609533
+    alpha_2: # Nominal: -16.755920
+      distrib: 'normal'
+      scale: 0.440198
+    alpha_3: # Nominal: 129.041538
+      distrib: 'normal'
+      scale: 5.823345
+
   init_state_randomization_info:
     init_x:
       distrib: 'normal'
@@ -44,6 +61,17 @@ task_config:
     trajectory_position_offset: [0, 1.]
     trajectory_scale: 1.0
     ilqr_ref: True
+
+  inertial_prop:
+    M: 0.033
+    Iyy: 1.4e-05
+    beta_1: 17.7903
+    beta_2: 4.2209
+    beta_3: 0.0
+    alpha_1: -149.740766
+    alpha_2: -16.755920
+    alpha_3: 129.041538
+    pitch_bias: 0.0 # in radian
 
   episode_len_sec: [9, 11, 15]
   cost: quadratic
