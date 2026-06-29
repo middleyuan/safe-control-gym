@@ -120,6 +120,13 @@ class iLQR(BaseController):
         '''Cleans up resources.'''
         self.env.close()
 
+    def _set_input_ff_from_action_stack(self, action_stack):
+        '''Store feedforward actions in canonical iLQR layout: (action_dim, steps).'''
+        action_stack = np.asarray(action_stack)
+        if action_stack.ndim != 2 or action_stack.shape[1] != self.model.nu:
+            raise ValueError(f'Unexpected action stack shape: {action_stack.shape}')
+        self.input_ff = action_stack.T.copy()
+
     def learn(self, env=None, **kwargs):
         '''Run iLQR to iteratively update policy for each time step.
 
@@ -161,7 +168,7 @@ class iLQR(BaseController):
                 print(colored('Warm start trajectory is used for the first rollout.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
-                self.input_ff = np.copy(self.input_stack)
+                self._set_input_ff_from_action_stack(self.input_stack)
 
             self.traj_step = 0
             self.run(env=env, max_steps=self.max_steps, training=True)
@@ -175,7 +182,7 @@ class iLQR(BaseController):
                 print(colored('Warm-start trajectory is used for first iteration of iterative optimization.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
-                self.input_ff = np.copy(self.input_stack)
+                self._set_input_ff_from_action_stack(self.input_stack)
                 # self.total_cost = self.optimization_log['warmstart_return']
 
             print(colored(f'Iteration: {self.ite_counter}, Cost: {self.total_cost}', 'green'))
@@ -398,9 +405,13 @@ class iLQR(BaseController):
                     self.gains_fb = np.append(self.gains_fb, gains_fb.reshape((1, self.model.nu, self.model.nx)), axis=0)
                     self.input_ff = np.append(self.input_ff, input_ff.reshape(self.model.nu, 1), axis=1)
             else:
-                action = self.gains_fb[self.traj_step].dot(obs) + self.input_ff[:, self.traj_step]
+                gain_step = min(self.traj_step, self.gains_fb.shape[0] - 1)
+                if gain_step != self.traj_step:
+                    self.update_unstable = True
+                action = self.gains_fb[gain_step].dot(obs) + self.input_ff[:, gain_step]
         elif self.gains_fb_best is not None:
-            action = self.gains_fb_best[self.traj_step].dot(obs) + self.input_ff_best[:, self.traj_step]
+            gain_step = min(self.traj_step, self.gains_fb_best.shape[0] - 1)
+            action = self.gains_fb_best[gain_step].dot(obs) + self.input_ff_best[:, gain_step]
         else:
             action, _, _ = self.calculate_lqr_action(obs, self.traj_step)
         time_after = time.perf_counter()
