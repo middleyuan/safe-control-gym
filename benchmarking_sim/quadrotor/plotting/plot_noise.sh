@@ -1,5 +1,7 @@
-
 #!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 # Plot model-based controller OOD robustness test
 for noise in 'obs_noise' 'proc_noise' 'param'
@@ -43,4 +45,3 @@ do
     python3 plot_noise_all.py $noise
     echo ""
 done
-

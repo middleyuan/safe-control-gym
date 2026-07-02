@@ -36,21 +36,28 @@ python process_experiment_data.py domain-randomization --controller=sac
 python process_experiment_data.py all --controller=linear_mpc_acados
 
 COMMAND LINE SYNTAX:
-python process_experiment_data.py <analysis_type> [noise_type] [method_filter] [--controller=<name>]
+python process_experiment_data.py <analysis_type> [noise_type] [method_filter] [--controller=<name>] [--input-data-root=<path>]
 
 ARGUMENTS:
 analysis_type:  'robustness', 'trajectory', 'generalization', 'domain-randomization', 'all'
 noise_type:     'obs_noise', 'proc_noise', 'param' (required for robustness analysis)
 method_filter:  'control', 'rl', 'all' (default: 'all')
 --controller:   Process specific controller only (optional)
+--input-data-root:
+                Root for curated plotting inputs. This directory should contain
+                folders such as obs_noise, proc_noise, param, generalization,
+                nominal, and robustness_combo. Defaults to
+                ./data/Final_june when present, otherwise ./data. Can also be
+                set with SCG_PLOTTING_INPUT_ROOT.
 
 OUTPUT:
-Processed data files are saved to ../data/ directory in .npy format for use by plotting scripts.
+Processed data files are saved to ./data/ directory in .npy format for use by plotting scripts.
 """
 
 import os
 import sys
 from pathlib import Path
+import ast
 import numpy as np
 import json
 from benchmarking_sim.quadrotor.benchmark_util.utils import tag_ctrl_list
@@ -61,8 +68,10 @@ from benchmarking_sim.quadrotor.benchmark_util.utils import tag_ctrl_list
 
 # Script directory setup
 SCRIPT_DIR = Path(__file__).parent.resolve()
-QUADROTOR_DIR = SCRIPT_DIR.parent
-DATA_DIR = SCRIPT_DIR / '../data'
+DATA_DIR = SCRIPT_DIR / 'data'
+DEFAULT_INPUT_DATA_ROOT = DATA_DIR
+DEFAULT_NAMED_INPUT_DATA_ROOT = DATA_DIR / 'Final_june'
+INPUT_DATA_ROOT = None
 
 # Experiment configuration
 MAX_SEED = 10
@@ -92,16 +101,34 @@ RL_CONTROLLERS = {
 
 ALL_CONTROLLERS = {**MODEL_BASED_CONTROLLERS, **RL_CONTROLLERS}
 
+RL_DATA_FOLDERS = {
+    'ppo': 'quadrotor_2D_attitude_ppo_data',
+    'sac': 'quadrotor_2D_attitude_sac_data',
+    'dppo': 'quadrotor_2D_attitude_dppo_data',
+    'ppo_mpc': 'quadrotor_2D_attitude_ppo_mpc_data',
+}
+
 # Noise scales for different analysis types
 NOISE_SCALES = {
-    'obs_noise': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 
-                  25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
-    'proc_noise': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 
-                   25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100],
+    'obs_noise': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+                12, 14, 16, 18, 20, 25, 30, 35, 40,
+                45, 50, 60, 70, 80, 90, 100, 110, 120,
+                130, 140, 150, 160, 170, 180, 190, 200,],
+    'proc_noise': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+                12, 14, 16, 18, 20, 25, 30, 35, 40,
+                45, 50, 60, 70, 80, 90, 100, 110, 120,
+                130, 140, 150, 160, 170, 180, 190, 200,],
     'param': {
-        'control': [0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 
-                   1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.5, 4.0, 4.5, 5.0],
-        'rl': [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+        'control': [0, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0,
+                     2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0,
+                     7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0,
+                     14.0, 15.0, 16.0, 17.0, 18.0, 19.0,
+                     20.0, 21.0, 22.0, 23.0, 24.0, 25.0],
+        'rl': [0, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0,
+                     2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0,
+                     7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0,
+                     14.0, 15.0, 16.0, 17.0, 18.0, 19.0,
+                     20.0, 21.0, 22.0, 23.0, 24.0, 25.0]
     }
 }
 
@@ -148,6 +175,75 @@ def print_summary(analysis_type, processed_count, details=None):
         for key, value in details.items():
             print(f"{key}: {value}")
 
+def normalize_input_data_root(input_data_root):
+    """Resolve an input root from an absolute or plotting-data-relative path."""
+    root = Path(input_data_root).expanduser()
+    if not root.is_absolute():
+        root = DATA_DIR / root
+    return root.resolve()
+
+def default_input_data_root():
+    """Return the default curated plotting input root for this workspace."""
+    env_root = os.environ.get('SCG_PLOTTING_INPUT_ROOT')
+    if env_root:
+        return normalize_input_data_root(env_root)
+    if DEFAULT_NAMED_INPUT_DATA_ROOT.exists():
+        return DEFAULT_NAMED_INPUT_DATA_ROOT.resolve()
+    return DEFAULT_INPUT_DATA_ROOT.resolve()
+
+def set_input_data_root(input_data_root=None):
+    """Set the curated plotting input root used by processing helpers."""
+    global INPUT_DATA_ROOT
+    INPUT_DATA_ROOT = (
+        normalize_input_data_root(input_data_root)
+        if input_data_root
+        else default_input_data_root()
+    )
+
+def get_input_data_root():
+    """Return the active curated plotting input root."""
+    if INPUT_DATA_ROOT is None:
+        set_input_data_root()
+    return INPUT_DATA_ROOT
+
+def resolve_input_data_path(*parts):
+    """Resolve curated plotting inputs from the active input data root."""
+    return get_input_data_root().joinpath(*parts)
+
+def resolve_input_data_candidates(*parts):
+    """Return input-root first, then data-root fallback when they differ."""
+    candidates = [resolve_input_data_path(*parts)]
+    data_dir_candidate = DATA_DIR.joinpath(*parts)
+    if data_dir_candidate != candidates[0]:
+        candidates.append(data_dir_candidate)
+    return candidates
+
+def resolve_model_based_results_path(controller_name, data_folder_name, noise_type=None):
+    """Resolve curated model-based rollout inputs for a controller."""
+    exp_name = noise_type or data_folder_name
+    return get_input_data_root() / exp_name / controller_name
+
+def list_run_folders(data_folder_path):
+    """List run folders from either flat output or legacy temp output."""
+    data_folder_path = Path(data_folder_path)
+    direct_runs = [
+        f for f in data_folder_path.iterdir()
+        if f.is_dir() and (f / METRIC_FILE).exists()
+    ]
+    direct_runs.sort()
+    if direct_runs:
+        return direct_runs
+
+    temp_dir = data_folder_path / 'temp'
+    if temp_dir.exists():
+        temp_runs = [f for f in temp_dir.iterdir() if f.is_dir()]
+        temp_runs.sort()
+        return temp_runs
+
+    subfolders = [f for f in data_folder_path.iterdir() if f.is_dir()]
+    subfolders.sort()
+    return subfolders
+
 # ==========================================
 # DATA EXTRACTION FUNCTIONS
 # ==========================================
@@ -160,72 +256,31 @@ def extract_rollouts(data_folder_path, controller_name):
         print(f"    Warning: Data folder does not exist: {data_folder_path}")
         return None, None, None
 
-    # Handle nested structure: seed_X/temp/seedX_timestamp/metrics.txt
+    # Handle flat seed_timestamp folders and legacy temp/seed_timestamp folders.
     metrics = []
     traj_results = []
     timing_data = []
     
-    # Check if this is a seed directory with temp subdirectory
-    if data_folder_path.name.startswith('seed_'):
-        temp_dir = data_folder_path / 'temp'
-        if temp_dir.exists():
-            # Find all experiment run folders in temp directory
-            run_folders = [f for f in temp_dir.iterdir() if f.is_dir()]
-            run_folders.sort()
-            
-            for run_folder in run_folders:
-                # Extract metrics
-                metrics_file = run_folder / METRIC_FILE
-                if metrics_file.exists():
-                    with open(metrics_file, 'r') as f:
-                        lines = f.readlines()
-                        for line in lines:
-                            if line.startswith('rmse:'):  # Exact match for rmse, not exponentiated_rmse
-                                rmse = float(line.split(': ')[1])
-                                metrics.append(rmse)
-                                break
-                
-                # Extract trajectory data
-                traj_files = [f for f in run_folder.iterdir() if f.name.startswith('traj_') and f.name.endswith('.npy')]
-                if traj_files:
-                    traj_data = np.load(traj_files[0], allow_pickle=True)
-                    traj_results.append(traj_data)
-                
-                # Extract timing data
-                timing_files = [f for f in run_folder.iterdir() if 'timing' in f.name and f.name.endswith('.npy')]
-                if timing_files:
-                    timing = np.load(timing_files[0], allow_pickle=True)
-                    timing_data.append(timing)
-    else:
-        # Original logic for flat structure
-        subfolders = [f.path for f in os.scandir(data_folder_path) if f.is_dir()]
-        subfolders.sort()
+    for run_folder in list_run_folders(data_folder_path):
+        metrics_file = run_folder / METRIC_FILE
+        if metrics_file.exists():
+            with open(metrics_file, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith('rmse:'):  # Exact match for rmse, not exponentiated_rmse
+                        rmse = float(line.split(': ')[1])
+                        metrics.append(rmse)
+                        break
         
-        for subfolder in subfolders:
-            # Extract metrics
-            file_path = os.path.join(subfolder, METRIC_FILE)
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    lines = f.readlines()
-                    for line in lines:
-                        if line.startswith('rmse:'):  # Exact match for rmse, not exponentiated_rmse
-                            rmse = float(line.split(': ')[1])
-                            metrics.append(rmse)
-                            break
-            
-            # Extract trajectory data
-            traj_files = [f for f in os.listdir(subfolder) if f.startswith('traj_') and f.endswith('.npy')]
-            if traj_files:
-                traj_path = os.path.join(subfolder, traj_files[0])
-                traj_data = np.load(traj_path, allow_pickle=True)
-                traj_results.append(traj_data)
-            
-            # Extract timing data
-            timing_files = [f for f in os.listdir(subfolder) if 'timing' in f and f.endswith('.npy')]
-            if timing_files:
-                timing_path = os.path.join(subfolder, timing_files[0])
-                timing = np.load(timing_path, allow_pickle=True)
-                timing_data.append(timing)
+        traj_files = [f for f in run_folder.iterdir() if f.name.startswith('traj_') and f.name.endswith('.npy')]
+        if traj_files:
+            traj_data = np.load(traj_files[0], allow_pickle=True)
+            traj_results.append(traj_data)
+
+        timing_files = [f for f in run_folder.iterdir() if 'timing' in f.name and f.name.endswith('.npy')]
+        if timing_files:
+            timing = np.load(timing_files[0], allow_pickle=True)
+            timing_data.append(timing)
     
     return metrics, traj_results, timing_data
 
@@ -239,33 +294,24 @@ def extract_noise_level_data(data_folder_path, controller_name):
 
     noise_data = {}
     
-    # Check if this is a seed directory with temp subdirectory
-    if data_folder_path.name.startswith('seed_'):
-        temp_dir = data_folder_path / 'temp'
-        if temp_dir.exists():
-            # Find all experiment run folders in temp directory
-            run_folders = [f for f in temp_dir.iterdir() if f.is_dir()]
-            run_folders.sort()
-            
-            for run_folder in run_folders:
-                # Extract metrics and noise factor
-                metrics_file = run_folder / METRIC_FILE
-                if metrics_file.exists():
-                    with open(metrics_file, 'r') as f:
-                        lines = f.readlines()
-                        rmse = None
-                        noise_factor = None
-                        
-                        for line in lines:
-                            if line.startswith('rmse:'):  # Exact match for rmse, not exponentiated_rmse
-                                rmse = float(line.split(': ')[1])
-                            elif 'noise_factor:' in line:
-                                noise_factor = float(line.split(': ')[1])
-                        
-                        if rmse is not None and noise_factor is not None:
-                            if noise_factor not in noise_data:
-                                noise_data[noise_factor] = []
-                            noise_data[noise_factor].append(rmse)
+    for run_folder in list_run_folders(data_folder_path):
+        metrics_file = run_folder / METRIC_FILE
+        if metrics_file.exists():
+            with open(metrics_file, 'r') as f:
+                lines = f.readlines()
+                rmse = None
+                noise_factor = None
+
+                for line in lines:
+                    if line.startswith('rmse:'):  # Exact match for rmse, not exponentiated_rmse
+                        rmse = float(line.split(': ')[1])
+                    elif 'noise_factor:' in line:
+                        noise_factor = float(line.split(': ')[1])
+
+                if rmse is not None and noise_factor is not None:
+                    if noise_factor not in noise_data:
+                        noise_data[noise_factor] = []
+                    noise_data[noise_factor].append(rmse)
     
     return noise_data
 
@@ -292,7 +338,9 @@ def process_model_based_robustness_data(controller_name, noise_type):
     else:
         data_folder_name = f"results_{noise_type}_quadrotor_2D_attitude"
     
-    data_folder_path = QUADROTOR_DIR / controller_name / data_folder_name
+    data_folder_path = resolve_model_based_results_path(
+        controller_name, data_folder_name, noise_type
+    )
     
     if not data_folder_path.exists():
         print(f"    Warning: Data folder does not exist: {data_folder_path}")
@@ -380,7 +428,7 @@ def process_rl_robustness_data(controller_name, noise_type, use_domain_randomiza
     
     if use_domain_randomization:
         print(f"    Processing RL controller using domain randomization data structure")
-        data_source = 'robustness_pm'
+        data_source = 'robustness_combo'
     else:
         print(f"    Processing RL controller using nominal data structure")
         data_source = 'nominal'
@@ -388,7 +436,7 @@ def process_rl_robustness_data(controller_name, noise_type, use_domain_randomiza
     # Map controller names to data folder names
     folder_mapping = {
         'ppo': 'quadrotor_2D_attitude_ppo_data',
-        'sac': 'quadrotor_2D_attitude_sac_data' if use_domain_randomization else 'quadrotor_2D_attitude_sac_data2',
+        'sac': 'quadrotor_2D_attitude_sac_data',
         'dppo': 'quadrotor_2D_attitude_dppo_data',
         'ppo_mpc': 'quadrotor_2D_attitude_ppo_mpc_data'  # if it exists
     }
@@ -398,7 +446,7 @@ def process_rl_robustness_data(controller_name, noise_type, use_domain_randomiza
         return None
     
     controller_folder = folder_mapping[controller_name]
-    data_path = QUADROTOR_DIR / 'data' / data_source / controller_folder
+    data_path = resolve_input_data_path(data_source, controller_folder)
     
     print(f"    Looking in: {data_path}")
     
@@ -836,6 +884,86 @@ def save_domain_randomization_robustness_data(controller_name, rob_dr_data):
     
     print(f"    Consolidated domain randomization robustness updated: {consolidated_dr_file}")
 
+def get_common_testing_range_for_noise(noise_type, dr_data):
+    """Return the common testing range across processed nominal and DR data."""
+    max_testing_range = float('inf')
+
+    for controller_name in ALL_CONTROLLERS.values():
+        processed_file = DATA_DIR / f'{controller_name}_{noise_type}_results.npy'
+        if not processed_file.exists():
+            continue
+
+        try:
+            processed_data = np.load(processed_file, allow_pickle=True).item()
+            noise_factors = processed_data.get('noise_factor', [])
+            if len(noise_factors) > 0:
+                max_testing_range = min(max_testing_range, float(np.max(noise_factors)))
+        except Exception as e:
+            print(f"    Warning: Could not read {processed_file} for range calculation: {e}")
+
+    for controller_data in dr_data.values():
+        noise_data = controller_data.get(noise_type, {})
+        if noise_data:
+            dr_max_range = max(float(scale) for scale in noise_data.keys())
+            max_testing_range = min(max_testing_range, dr_max_range)
+
+    if max_testing_range == float('inf'):
+        return 0.0
+    return max_testing_range
+
+def refresh_domain_randomization_failure_results(noise_types=None):
+    """Refresh DR failure sections in robustness_failure_points.json."""
+    if noise_types is None:
+        noise_types = ['obs_noise', 'proc_noise', 'param']
+
+    consolidated_dr_file = DATA_DIR / 'domain_randomization_robustness.json'
+    if not consolidated_dr_file.exists():
+        print(f"    No consolidated DR robustness file found: {consolidated_dr_file}")
+        return
+
+    with open(consolidated_dr_file, 'r') as f:
+        dr_data = json.load(f)
+
+    consolidated_file = DATA_DIR / 'robustness_failure_points.json'
+    if consolidated_file.exists():
+        with open(consolidated_file, 'r') as f:
+            consolidated_data = json.load(f)
+    else:
+        consolidated_data = {
+            'relative_failures': {'obs_noise': {}, 'proc_noise': {}, 'param': {}},
+            'absolute_failures': {'obs_noise': {}, 'proc_noise': {}, 'param': {}},
+            'domain_randomization_relative_failures': {'obs_noise': {}, 'proc_noise': {}, 'param': {}},
+            'domain_randomization_absolute_failures': {'obs_noise': {}, 'proc_noise': {}, 'param': {}}
+        }
+
+    consolidated_data.setdefault(
+        'domain_randomization_relative_failures',
+        {'obs_noise': {}, 'proc_noise': {}, 'param': {}}
+    )
+    consolidated_data.setdefault(
+        'domain_randomization_absolute_failures',
+        {'obs_noise': {}, 'proc_noise': {}, 'param': {}}
+    )
+
+    for noise_type in noise_types:
+        max_testing_range = get_common_testing_range_for_noise(noise_type, dr_data)
+        print_header(f"Refreshing Domain Randomization Failures for {noise_type}", level=3)
+        dr_failures = extract_domain_randomization_failure_points(
+            dr_data, noise_type, max_testing_range
+        )
+
+        consolidated_data['domain_randomization_relative_failures'][noise_type] = (
+            convert_numpy_types(dr_failures['relative'])
+        )
+        consolidated_data['domain_randomization_absolute_failures'][noise_type] = (
+            convert_numpy_types(dr_failures['absolute'])
+        )
+
+    with open(consolidated_file, 'w') as f:
+        json.dump(consolidated_data, f, indent=2)
+
+    print(f"    Refreshed DR failure results in: {consolidated_file}")
+
 # ==========================================
 # TRAJECTORY ANALYSIS FUNCTIONS
 # ==========================================
@@ -869,8 +997,8 @@ def process_trajectory_controller(controller_name, episode_lengths=None):
     for episode_length in episode_lengths:
         # Try multiple potential file locations
         potential_files = [
-            DATA_DIR / 'trajectory' / 'nominal' / f'traj_results_{file_prefix}_{episode_length}.npy',
-            DATA_DIR / f'traj_results_{file_prefix}_{episode_length}.npy'
+            *resolve_input_data_candidates('trajectory', 'nominal', f'traj_results_{file_prefix}_{episode_length}.npy'),
+            *resolve_input_data_candidates(f'traj_results_{file_prefix}_{episode_length}.npy')
         ]
         
         trajectory_loaded = False
@@ -959,6 +1087,217 @@ def process_trajectory_analysis(method_filter='all', controller=None):
 # GENERALIZATION ANALYSIS FUNCTIONS
 # ==========================================
 
+def get_metric_value(metric_data, keys, default=np.nan):
+    """Return the first available metric value from a list of possible keys."""
+    for key in keys:
+        if key in metric_data:
+            return metric_data[key]
+    return default
+
+def as_scalar(value, default=np.nan):
+    """Convert numpy/list scalar-like values to a float."""
+    try:
+        arr = np.asarray(value)
+        if arr.size == 0:
+            return default
+        return float(arr.reshape(-1)[0])
+    except (TypeError, ValueError):
+        return default
+
+def parse_metric_file(metric_file):
+    """Parse key/value metrics files emitted by model-based rollouts."""
+    metrics = {}
+    with metric_file.open('r') as f:
+        for line in f:
+            if ': ' not in line:
+                continue
+            key, value = line.rstrip('\n').split(': ', 1)
+            metrics[key] = value
+    return metrics
+
+def metric_float(metrics, key, default=np.nan):
+    try:
+        return float(metrics[key])
+    except (KeyError, TypeError, ValueError):
+        return default
+
+def metric_scalar(metrics, key, default=np.nan):
+    try:
+        value = ast.literal_eval(metrics[key])
+        return as_scalar(value, default=default)
+    except (KeyError, TypeError, ValueError, SyntaxError):
+        return default
+
+def aggregate_model_based_generalization_results(controller_name, episode_lengths=None):
+    """Build *_gen_results.npy from model-based rollout metrics in Results/generalization."""
+    if episode_lengths is None:
+        episode_lengths = EPISODE_LENGTHS
+
+    results_root = resolve_model_based_results_path(
+        controller_name, 'generalization', 'generalization'
+    )
+    if not results_root.exists():
+        print(f"    Model-based generalization folder not found: {results_root}")
+        return None
+
+    results = {}
+    inference_time_values = []
+
+    for episode_length in episode_lengths:
+        results_dir = results_root / f'episode_{episode_length}'
+        if not results_dir.exists():
+            print(f"    {controller_name} episode {episode_length}: rollout folder not found")
+            return None
+
+        rmse_values = []
+
+        for run_folder in list_run_folders(results_dir):
+            metrics_file = run_folder / METRIC_FILE
+            if not metrics_file.exists():
+                continue
+
+            metrics = parse_metric_file(metrics_file)
+            rmse = metric_float(metrics, 'rmse')
+            inference_time = metric_scalar(metrics, 'avarage_inference_time')
+
+            if not np.isnan(rmse):
+                rmse_values.append(rmse)
+            if not np.isnan(inference_time):
+                inference_time_values.append(inference_time)
+
+        if not rmse_values:
+            print(f"    {controller_name} episode {episode_length}: no metrics found in {results_dir}")
+            return None
+
+        episode_key = f'_{episode_length}'
+        results[episode_key] = {
+            'mean_rmse': float(np.mean(rmse_values)),
+            'std_rmse': float(np.std(rmse_values)),
+            'num_seeds': len(rmse_values),
+        }
+        print(
+            f"    {controller_name} episode {episode_length}: aggregated {len(rmse_values)} seeds, "
+            f"RMSE = {results[episode_key]['mean_rmse']:.4f} ± {results[episode_key]['std_rmse']:.4f}"
+        )
+
+    results['inference_time'] = float(np.mean(inference_time_values)) if inference_time_values else 0.0
+    results['inference_time_std'] = float(np.std(inference_time_values)) if inference_time_values else 0.0
+    return results
+
+def aggregate_gpmpc_generalization_results(episode_lengths=None, tag='hpo'):
+    """Build gpmpc_acados_TP_gen_results.npy from GP-MPC rollout metrics."""
+    return aggregate_model_based_generalization_results('gpmpc_acados_TP', episode_lengths)
+
+def aggregate_rl_generalization_results(controller_name, episode_lengths=None, exp_names=None):
+    """Build *_gen_results.npy for nominal RL controllers from transfer_metric files."""
+    if episode_lengths is None:
+        episode_lengths = EPISODE_LENGTHS
+    if exp_names is None:
+        exp_names = ['nominal']
+
+    if controller_name not in RL_CONTROLLERS.values():
+        return None
+
+    controller_folder = RL_DATA_FOLDERS.get(controller_name)
+    if controller_folder is None:
+        print(f"    No RL data folder mapping for {controller_name}")
+        return None
+
+    data_path = None
+    for exp_name in exp_names:
+        candidate_path = resolve_input_data_path(exp_name, controller_folder)
+        if candidate_path.exists():
+            data_path = candidate_path
+            break
+
+    if data_path is None:
+        data_path = resolve_input_data_path(exp_names[0], controller_folder)
+
+    print(f"    Looking for nominal RL generalization-evaluation data in: {data_path}")
+
+    if not data_path.exists():
+        print(f"    Nominal RL data folder not found: {data_path}")
+        return None
+
+    seed_dirs = sorted(d for d in data_path.iterdir() if d.is_dir() and d.name.startswith('seed'))
+    if not seed_dirs:
+        print(f"    No seed directories found in {data_path}")
+        return None
+
+    results = {}
+    processed_episodes = 0
+
+    for episode_length in episode_lengths:
+        rmse_values = []
+        rmse_std_values = []
+
+        for seed_dir in seed_dirs:
+            metric_file = seed_dir / f'transfer_metric_{episode_length}.npy'
+            if not metric_file.exists():
+                continue
+
+            try:
+                metric_data = np.load(metric_file, allow_pickle=True).item()
+            except Exception as e:
+                print(f"      Error loading {metric_file}: {e}")
+                continue
+
+            rmse = as_scalar(get_metric_value(metric_data, ['rmse', 'average_rmse', 'mean_rmse']))
+            rmse_std = as_scalar(get_metric_value(metric_data, ['rmse_std', 'std_rmse']))
+
+            if not np.isnan(rmse):
+                rmse_values.append(rmse)
+            if not np.isnan(rmse_std):
+                rmse_std_values.append(rmse_std)
+
+        if rmse_values:
+            episode_key = f'_{episode_length}'
+            results[episode_key] = {
+                'mean_rmse': float(np.mean(rmse_values)),
+                'std_rmse': float(np.mean(rmse_std_values)) if rmse_std_values else float(np.std(rmse_values)),
+                'num_seeds': len(rmse_values),
+            }
+            processed_episodes += 1
+            print(
+                f"    Episode {episode_length}: aggregated {len(rmse_values)} seeds, "
+                f"RMSE = {results[episode_key]['mean_rmse']:.4f} ± {results[episode_key]['std_rmse']:.4f}"
+            )
+        else:
+            print(f"    Episode {episode_length}: no raw transfer metric data found")
+
+    inference_time_values = []
+    for seed_dir in seed_dirs:
+        perf_file = seed_dir / 'perf_metric.npy'
+        if not perf_file.exists():
+            continue
+
+        try:
+            perf_data = np.load(perf_file, allow_pickle=True).item()
+        except Exception as e:
+            print(f"      Error loading {perf_file}: {e}")
+            continue
+
+        inference_time = as_scalar(
+            get_metric_value(perf_data, ['average_inference_time', 'avarage_inference_time'])
+        )
+        if not np.isnan(inference_time):
+            inference_time_values.append(inference_time)
+
+    if inference_time_values:
+        results['inference_time'] = float(np.mean(inference_time_values))
+        results['inference_time_std'] = float(np.std(inference_time_values))
+    else:
+        results['inference_time'] = 0.0
+        results['inference_time_std'] = 0.0
+
+    if processed_episodes == 0:
+        print(f"    No nominal RL generalization-evaluation data aggregated for {controller_name}")
+        return None
+
+    results['source_data_root'] = str(data_path)
+    results['source_experiment'] = data_path.parent.name
+    return results
+
 def process_generalization_controller(controller_name, episode_lengths=None):
     """Process generalization data for a specific controller."""
     if episode_lengths is None:
@@ -986,7 +1325,36 @@ def process_generalization_controller(controller_name, episode_lengths=None):
     
     gen_file = DATA_DIR / f'{ctrl_name}_gen_results.npy'
     
-    if not gen_file.exists():
+    if controller_name in MODEL_BASED_CONTROLLERS.values():
+        print(f"    Generating {gen_file.name} from model-based rollout metrics")
+        gen_results = aggregate_model_based_generalization_results(controller_name, episode_lengths)
+        if gen_results is not None:
+            try:
+                np.save(gen_file, gen_results)
+                print(f"    Saved generated generalization file: {gen_file}")
+            except Exception as e:
+                print(f"    Error saving generated generalization data: {e}")
+                return None
+        elif gen_file.exists():
+            print(f"    Raw model-based rollout data unavailable; falling back to existing file: {gen_file}")
+        else:
+            return None
+    elif controller_name in RL_CONTROLLERS.values():
+        print(f"    Generating {gen_file.name} from raw RL transfer metrics")
+        gen_results = aggregate_rl_generalization_results(controller_name, episode_lengths)
+        if gen_results is not None:
+            try:
+                np.save(gen_file, gen_results)
+                print(f"    Saved generated generalization file: {gen_file}")
+            except Exception as e:
+                print(f"    Error saving generated generalization data: {e}")
+                return None
+        else:
+            if gen_file.exists():
+                print(f"    Raw RL data unavailable; falling back to existing file: {gen_file}")
+            else:
+                return None
+    elif not gen_file.exists():
         print(f"    Generalization file not found: {gen_file}")
         return None
     
@@ -1080,12 +1448,12 @@ def process_domain_randomization_controller(controller_name, data_type='generali
     # Map controller names to folder names
     folder_mapping = {
         'ppo': 'quadrotor_2D_attitude_ppo_data',
-        'sac': 'quadrotor_2D_attitude_sac_data' if data_type == 'robustness_pm' else 'quadrotor_2D_attitude_sac_data2',
+        'sac': 'quadrotor_2D_attitude_sac_data',
         'dppo': 'quadrotor_2D_attitude_dppo_data'
     }
     
     controller_folder = folder_mapping[controller_name]
-    data_path = QUADROTOR_DIR / 'data' / data_type / controller_folder
+    data_path = resolve_input_data_path(data_type, controller_folder)
     
     print(f"    Looking in: {data_path}")
     
@@ -1118,34 +1486,33 @@ def process_domain_randomization_controller(controller_name, data_type='generali
         print(f"      Processing {seed_name}...")
         
         try:
-            # Process generalization metrics (transfer_metric files)
-            if data_type == 'generalization':
-                for metric_file in seed_dir.glob('transfer_metric_*.npy'):
-                    metric_num = metric_file.name.split('_')[-1].split('.')[0]
-                    episode_length = int(metric_num)
-                    
-                    try:
-                        metric_data = np.load(metric_file, allow_pickle=True).item()
-                        
-                        if episode_length not in domain_rand_data['generalization']:
-                            domain_rand_data['generalization'][episode_length] = {
-                                'rmse': [], 'rmse_std': [], 'failure_rate': [],
-                                'constraint_violation': [], 'rms_action_change': []
-                            }
-                        
-                        domain_rand_data['generalization'][episode_length]['rmse'].append(
-                            metric_data.get('average_rmse', np.nan))
-                        domain_rand_data['generalization'][episode_length]['rmse_std'].append(
-                            metric_data.get('rmse_std', np.nan))
-                        domain_rand_data['generalization'][episode_length]['failure_rate'].append(
-                            metric_data.get('failure_rate', np.nan))
-                        domain_rand_data['generalization'][episode_length]['constraint_violation'].append(
-                            metric_data.get('average_constraint_violation', np.nan))
-                        domain_rand_data['generalization'][episode_length]['rms_action_change'].append(
-                            metric_data.get('rms_action_change', np.nan))
-                        
-                    except Exception as e:
-                        print(f"        Error loading {metric_file}: {e}")
+            # Process generalization-evaluation metrics from staged transfer files.
+            for metric_file in seed_dir.glob('transfer_metric_*.npy'):
+                metric_num = metric_file.name.split('_')[-1].split('.')[0]
+                episode_length = int(metric_num)
+
+                try:
+                    metric_data = np.load(metric_file, allow_pickle=True).item()
+
+                    if episode_length not in domain_rand_data['generalization']:
+                        domain_rand_data['generalization'][episode_length] = {
+                            'rmse': [], 'rmse_std': [], 'failure_rate': [],
+                            'constraint_violation': [], 'rms_action_change': []
+                        }
+
+                    domain_rand_data['generalization'][episode_length]['rmse'].append(
+                        metric_data.get('average_rmse', np.nan))
+                    domain_rand_data['generalization'][episode_length]['rmse_std'].append(
+                        metric_data.get('rmse_std', np.nan))
+                    domain_rand_data['generalization'][episode_length]['failure_rate'].append(
+                        metric_data.get('failure_rate', np.nan))
+                    domain_rand_data['generalization'][episode_length]['constraint_violation'].append(
+                        metric_data.get('average_constraint_violation', np.nan))
+                    domain_rand_data['generalization'][episode_length]['rms_action_change'].append(
+                        metric_data.get('rms_action_change', np.nan))
+
+                except Exception as e:
+                    print(f"        Error loading {metric_file}: {e}")
             
             # Process robustness metrics (robust_metric files)
             for noise_type in ['ob', 'ps', 'pm']:
@@ -1210,6 +1577,8 @@ def process_domain_randomization_controller(controller_name, data_type='generali
                     'values': np.array(values)
                 }
     
+    domain_rand_data['source_experiment'] = data_type
+    domain_rand_data['source_data_root'] = str(data_path)
     print(f"    Successfully processed domain randomization data for {controller_name}")
     return domain_rand_data
 
@@ -1231,31 +1600,40 @@ def process_domain_randomization_analysis(controller=None):
     processed_count = 0
     
     for controller_name in controllers_to_process:
-        # Process generalization domain randomization
-        gen_dr_data = process_domain_randomization_controller(controller_name, 'generalization')
-        if gen_dr_data is not None:
-            output_file = DATA_DIR / f'{controller_name}_domain_rand_generalization.npy'
+        # Process generalization-trained RL variant.
+        gen_data = process_domain_randomization_controller(controller_name, 'generalization')
+        if gen_data is not None:
+            output_file = DATA_DIR / f'{controller_name}_gen_generalization.npy'
             try:
-                np.save(output_file, gen_dr_data)
-                print(f"    Saved generalization DR data: {output_file}")
+                np.save(output_file, gen_data)
+                print(f"    Saved GEN generalization data: {output_file}")
+
+                legacy_output_file = DATA_DIR / f'{controller_name}_domain_rand_generalization.npy'
+                np.save(legacy_output_file, gen_data)
+                print(f"    Saved legacy generalization data: {legacy_output_file}")
             except Exception as e:
-                print(f"    Error saving generalization DR data: {e}")
+                print(f"    Error saving GEN generalization data: {e}")
         
-        # Process robustness domain randomization  
-        rob_dr_data = process_domain_randomization_controller(controller_name, 'robustness_pm')
-        if rob_dr_data is not None:
-            # Save .npy file
-            output_file = DATA_DIR / f'{controller_name}_domain_rand_robustness.npy'
+        # Process robustness-combo/domain-randomized RL variant.
+        dr_data = process_domain_randomization_controller(controller_name, 'robustness_combo')
+        if dr_data is not None:
             try:
-                np.save(output_file, rob_dr_data)
+                generalization_output_file = DATA_DIR / f'{controller_name}_dr_generalization.npy'
+                np.save(generalization_output_file, dr_data)
+                print(f"    Saved DR generalization data: {generalization_output_file}")
+
+                output_file = DATA_DIR / f'{controller_name}_domain_rand_robustness.npy'
+                np.save(output_file, dr_data)
                 print(f"    Saved robustness DR data: {output_file}")
                 processed_count += 1
             except Exception as e:
                 print(f"    Error saving robustness DR data: {e}")
             
             # Save domain randomization robustness data to JSON
-            save_domain_randomization_robustness_data(controller_name, rob_dr_data)
-    
+            save_domain_randomization_robustness_data(controller_name, dr_data)
+
+    refresh_domain_randomization_failure_results()
+
     print_summary("Domain Randomization Analysis", processed_count, {
         'Data types': 'generalization + robustness',
         'RL controllers only': True
@@ -1310,17 +1688,24 @@ def process_single_controller(controller_name, analysis_types, noise_type=None, 
             print(f"    Saved: {save_path}")
     
     if 'domain-randomization' in analysis_types and is_rl:
-        # Process both generalization and robustness domain randomization
-        gen_dr_data = process_domain_randomization_controller(controller_name, 'generalization')
-        if gen_dr_data is not None:
-            save_path = DATA_DIR / f'{controller_name}_domain_rand_generalization.npy'
-            np.save(save_path, gen_dr_data)
+        gen_data = process_domain_randomization_controller(controller_name, 'generalization')
+        if gen_data is not None:
+            save_path = DATA_DIR / f'{controller_name}_gen_generalization.npy'
+            np.save(save_path, gen_data)
             print(f"    Saved: {save_path}")
+
+            legacy_save_path = DATA_DIR / f'{controller_name}_domain_rand_generalization.npy'
+            np.save(legacy_save_path, gen_data)
+            print(f"    Saved: {legacy_save_path}")
         
-        rob_dr_data = process_domain_randomization_controller(controller_name, 'robustness_pm')
-        if rob_dr_data is not None:
+        dr_data = process_domain_randomization_controller(controller_name, 'robustness_combo')
+        if dr_data is not None:
+            gen_save_path = DATA_DIR / f'{controller_name}_dr_generalization.npy'
+            np.save(gen_save_path, dr_data)
+            print(f"    Saved: {gen_save_path}")
+
             save_path = DATA_DIR / f'{controller_name}_domain_rand_robustness.npy'
-            np.save(save_path, rob_dr_data)
+            np.save(save_path, dr_data)
             print(f"    Saved: {save_path}")
 
 def print_usage():
@@ -1337,12 +1722,20 @@ def parse_arguments():
     
     # Extract controller if specified
     controller = None
+    input_data_root = None
     cleaned_args = []
     for arg in args:
         if arg.startswith('--controller='):
             controller = arg.split('=')[1]
+        elif arg.startswith('--input-data-root='):
+            input_data_root = arg.split('=', 1)[1]
+        elif arg.startswith('--raw-results-root='):
+            input_data_root = arg.split('=', 1)[1]
+            print("Warning: --raw-results-root is deprecated; use --input-data-root.")
         else:
             cleaned_args.append(arg)
+
+    set_input_data_root(input_data_root)
     
     if not cleaned_args:
         print("Error: No analysis type specified")
@@ -1388,10 +1781,13 @@ def main():
     """Main processing function."""
     
     # Create data directory if it doesn't exist
-    DATA_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     
     # Parse command line arguments
     analysis_type, noise_type, method_filter, controller = parse_arguments()
+
+    print(f"Curated plotting input root: {get_input_data_root()}")
+    print(f"Processed plotting output directory: {DATA_DIR}")
     
     # Validate method filter
     if method_filter not in ['control', 'rl', 'all']:

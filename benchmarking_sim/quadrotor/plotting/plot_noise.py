@@ -7,10 +7,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import plot_colors, tag_ctrl_list
+    import plot_colors, tag_ctrl_list, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 print(script_dir)
 # if the output path does not exist, create it
 output_path = script_dir / 'noise'
@@ -71,6 +72,24 @@ assert noise_type in ['obs_noise', 'proc_noise', 'param'], f'noise_type {noise_t
 assert controller in ['mpc_acados', 'linear_mpc_acados', 'fmpc',\
                       'ilqr', 'lqr', 'pid', 'gpmpc_acados_TP'], f'controller {controller} not supported'
 
+def list_run_folders(seed_dir):
+    """List runs from flat seed directories or legacy seed/temp directories."""
+    direct_runs = [
+        f for f in seed_dir.iterdir()
+        if f.is_dir() and (f / metric_name).exists()
+    ]
+    direct_runs.sort()
+    if direct_runs:
+        return direct_runs
+
+    temp_dir = seed_dir / 'temp'
+    if temp_dir.exists():
+        temp_runs = [f for f in temp_dir.iterdir() if f.is_dir()]
+        temp_runs.sort()
+        return temp_runs
+
+    return []
+
 if controller in ['gpmpc_acados_TP']:
     prior = f'_{gp_tag}{id_type}_{noise_type}_quadrotor_2D_attitude'
     data_folder_dir = script_dir.parent / controller / 'results' / prior
@@ -82,7 +101,7 @@ else:
 seed_data_folder = [f for f in data_folder_dir.iterdir() if f.is_dir()]
 seed_data_folder = sorted(seed_data_folder, key=lambda x: int(x.name.split('_')[1]))
 # print('seed_data_folder', seed_data_folder)
-seed_data_folder = [seed_data_folder[i] / 'temp' for i in range(max_seed)]
+seed_data_folder = seed_data_folder[:max_seed]
 # seed_data_folder = seed_data_folder[:9]
 # print('seed_data_folder', seed_data_folder)
 # print('max seed', max_seed)
@@ -99,7 +118,7 @@ for seed in range(0, max_seed):
     traj_steps_list = []
     # fild runs
     load_seed_dir = seed_data_folder[seed]
-    runs_data_folder = sorted(list(load_seed_dir.iterdir()))
+    runs_data_folder = list_run_folders(load_seed_dir)
     # print('runs_data_folder', runs_data_folder)
     for runs in runs_data_folder:
         # load the metric file in the folder
@@ -218,11 +237,6 @@ ax.set_title(f'RMSE of {controller_name}{id_type}')
 
 fig.tight_layout()
 fig.savefig(output_path / f'{controller}_{noise_type}_rmse.png')
-# save the plot
-# plot_file_name = f'{notebook_dir}/../data/{id_type}_rmse_{controller}.png'
-# plt.savefig(plot_file_name)
-
-
 ################################ plot rmse degradation ################################
 fig, ax = plt.subplots(figsize=(6, 2)) 
 ax.plot(noise_factor, rmse_degradation_mean, 
@@ -263,9 +277,9 @@ saved_results = {
     'early_stop': early_stop,
 }
 if controller in ['gpmpc_acados_TP']:
-    results_file_name = script_dir.parent / 'data' / f'{controller}{id_type}_{noise_type}_results.npy'
+    results_file_name = data_dir / f'{controller}{id_type}_{noise_type}_results.npy'
 else:
-    results_file_name = script_dir.parent / 'data' / f'{controller}_{noise_type}_results.npy'
+    results_file_name = data_dir / f'{controller}_{noise_type}_results.npy'
 # np.save(results_file_name, results)
 np.save(results_file_name, saved_results)
 print(f'saved to {results_file_name}')

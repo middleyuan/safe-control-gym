@@ -31,10 +31,11 @@ import matplotlib.colors as mcolors
 import seaborn as sns
 from scipy.stats import gaussian_kde
 
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 
 def create_color_gradient(base_color, n_levels, reverse=False):
     """Create a color gradient from original color to darker based on the base color."""
@@ -83,7 +84,7 @@ def load_controller_data(controller_name, noise_type, include_dr=False):
     controller_data = {}
     
     # Load regular controller data
-    file_path = script_dir / f'../data/{controller_name}_{noise_type}_results.npy'
+    file_path = data_dir / f'{controller_name}_{noise_type}_results.npy'
     if file_path.exists():
         try:
             data = np.load(file_path, allow_pickle=True).item()
@@ -97,7 +98,7 @@ def load_controller_data(controller_name, noise_type, include_dr=False):
     
     # Load domain randomization data if requested and available
     if include_dr and controller_name in ['ppo', 'sac', 'dppo']:
-        dr_file = script_dir / f'../data/{controller_name}_domain_rand_robustness.npy'
+        dr_file = data_dir / f'{controller_name}_domain_rand_robustness.npy'
         if dr_file.exists():
             try:
                 dr_data = np.load(dr_file, allow_pickle=True).item()
@@ -327,7 +328,7 @@ def create_custom_ridge_plot(noise_data, noise_type, noise_scale, selected_noise
                         
                         # Add mean value annotation in a small box
                         ax.text(global_rmse_max * 0.95, y_offset + np.max(density) * 0.5, 
-                               f'$\mu$={mean_rmse:.3f}', 
+                               rf'$\mu$={mean_rmse:.3f}',
                                fontsize=8, ha='right', va='center',
                                bbox=dict(boxstyle="round,pad=0.2", facecolor="white", 
                                         edgecolor="grey", alpha=0.8))

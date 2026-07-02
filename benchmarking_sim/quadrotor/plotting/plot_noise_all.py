@@ -24,10 +24,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import plot_colors, tag_ctrl_list
+    import plot_colors, tag_ctrl_list, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 
 max_seed = 10
 metric_name = 'metrics.txt'
@@ -59,13 +60,13 @@ noise_data = {}
 # Load model-based controller data if requested
 if method_type in ['control', 'all']:
     print("Loading model-based controller data...")
-    linear_mpc_data = np.load(script_dir / f'../data/linear_mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
-    mpc_data = np.load(script_dir / f'../data/mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
-    gpmpc_data = np.load(script_dir / f'../data/gpmpc_acados_TP_{noise_option}_results.npy', allow_pickle=True).item()
-    ilqr_data = np.load(script_dir / f'../data/ilqr_{noise_option}_results.npy', allow_pickle=True).item()
-    lqr_data = np.load(script_dir / f'../data/lqr_{noise_option}_results.npy', allow_pickle=True).item()
-    pid_data = np.load(script_dir / f'../data/pid_{noise_option}_results.npy', allow_pickle=True).item()
-    fmpc_data = np.load(script_dir / f'../data/fmpc_{noise_option}_results.npy', allow_pickle=True).item()
+    linear_mpc_data = np.load(data_dir / f'linear_mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
+    mpc_data = np.load(data_dir / f'mpc_acados_{noise_option}_results.npy', allow_pickle=True).item()
+    gpmpc_data = np.load(data_dir / f'gpmpc_acados_TP_{noise_option}_results.npy', allow_pickle=True).item()
+    ilqr_data = np.load(data_dir / f'ilqr_{noise_option}_results.npy', allow_pickle=True).item()
+    lqr_data = np.load(data_dir / f'lqr_{noise_option}_results.npy', allow_pickle=True).item()
+    pid_data = np.load(data_dir / f'pid_{noise_option}_results.npy', allow_pickle=True).item()
+    fmpc_data = np.load(data_dir / f'fmpc_{noise_option}_results.npy', allow_pickle=True).item()
     
     # Add model-based controllers to noise_data
     noise_data.update({
@@ -81,10 +82,10 @@ if method_type in ['control', 'all']:
 # Load RL method data if requested
 if method_type in ['rl', 'all']:
     print("Loading RL method data...")
-    ppo_data = np.load(script_dir / f'../data/ppo_{noise_option}_results.npy', allow_pickle=True).item()
-    sac_data = np.load(script_dir / f'../data/sac_{noise_option}_results.npy', allow_pickle=True).item()
-    dppo_data = np.load(script_dir / f'../data/dppo_{noise_option}_results.npy', allow_pickle=True).item()
-    ppo_mpc_data = np.load(script_dir / f'../data/ppo_mpc_{noise_option}_results.npy', allow_pickle=True).item()
+    ppo_data = np.load(data_dir / f'ppo_{noise_option}_results.npy', allow_pickle=True).item()
+    sac_data = np.load(data_dir / f'sac_{noise_option}_results.npy', allow_pickle=True).item()
+    dppo_data = np.load(data_dir / f'dppo_{noise_option}_results.npy', allow_pickle=True).item()
+    ppo_mpc_data = np.load(data_dir / f'ppo_mpc_{noise_option}_results.npy', allow_pickle=True).item()
     
     # Add RL controllers to noise_data
     noise_data.update({
@@ -569,7 +570,6 @@ def save_failure_results():
             return obj
     
     # Create data directory if it doesn't exist
-    data_dir = script_dir / 'data'
     data_dir.mkdir(exist_ok=True)
     
     # Prepare failure results for different noise types

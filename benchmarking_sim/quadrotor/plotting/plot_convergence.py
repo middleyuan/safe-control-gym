@@ -17,7 +17,7 @@ Examples:
     python plot_convergence.py all --include-dr       # Include domain randomization
     python plot_convergence.py sac --include-dr       # SAC with DR comparison
 
-Note: This script looks for training data in ../data/nominal/ directory structure.
+Note: This script looks for training data in ./data/nominal/ directory structure.
 """
 
 import os
@@ -28,10 +28,30 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from collections import defaultdict
 
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, STEPS_PER_SECOND
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, STEPS_PER_SECOND, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
+default_named_input_data_root = data_dir / 'Final_june'
+
+def normalize_input_data_root(input_data_root):
+    """Resolve a curated plotting input root relative to plotting/data."""
+    root = Path(input_data_root).expanduser()
+    if not root.is_absolute():
+        root = data_dir / root
+    return root.resolve()
+
+def default_input_data_root():
+    """Return the same default curated input root used by the data processor."""
+    env_root = os.environ.get('SCG_PLOTTING_INPUT_ROOT')
+    if env_root:
+        return normalize_input_data_root(env_root)
+    if default_named_input_data_root.exists():
+        return default_named_input_data_root.resolve()
+    return data_dir.resolve()
+
+input_data_root = default_input_data_root()
 
 def load_from_log_file(path):
     """Return x, y sequence data from the stat csv."""
@@ -53,19 +73,20 @@ def load_from_log_file(path):
         print(f"Error loading {path}: {e}")
         return None, np.array([]), None, np.array([])
 
-def load_rl_training_data(method_type='all'):
+def load_rl_training_data(method_type='all', input_root=None):
     """Load RL training data from log files."""
     
-    # Data directory structure
-    data_dir = script_dir.parent / 'data'
+    if input_root is None:
+        input_root = input_data_root
+
     exp_name = "nominal"
     
     # Define data paths for each method
     data_paths = {
-        "PPO": data_dir / exp_name / "quadrotor_2D_attitude_ppo_data",
-        "SAC": data_dir / exp_name / "quadrotor_2D_attitude_sac_data2",
-        "DPPO": data_dir / exp_name / "quadrotor_2D_attitude_dppo_data",
-        "PPO-MPC": data_dir / exp_name / "quadrotor_2D_attitude_ppo_mpc_data",
+        "PPO": input_root / exp_name / "quadrotor_2D_attitude_ppo_data",
+        "SAC": input_root / exp_name / "quadrotor_2D_attitude_sac_data",
+        "DPPO": input_root / exp_name / "quadrotor_2D_attitude_dppo_data",
+        "PPO-MPC": input_root / exp_name / "quadrotor_2D_attitude_ppo_mpc_data",
     }
     
     # Filter methods based on input
@@ -86,13 +107,22 @@ def load_rl_training_data(method_type='all'):
     perf_data = defaultdict(lambda: defaultdict())
     
     print("Loading RL training data...")
+    print(f"  Input root: {input_root}")
     for method in data_paths.keys():
         print(f"  Loading {method}...")
-        if not data_paths[method].exists():
-            print(f"    Warning: Data directory not found: {data_paths[method]}")
+        method_paths = data_paths[method]
+        if not isinstance(method_paths, list):
+            method_paths = [method_paths]
+        data_path = next((path for path in method_paths if path.exists()), method_paths[0])
+        if not data_path.exists():
+            print(f"    Warning: Data directory not found: {data_path}")
+            if len(method_paths) > 1:
+                print("    Checked alternatives:")
+                for path in method_paths:
+                    print(f"      {path}")
             continue
             
-        for seed_dir in data_paths[method].glob('seed*'):
+        for seed_dir in data_path.glob('seed*'):
             if seed_dir.is_dir():
                 try:
                     # Extract seed number from 'seedX_...' format
@@ -127,7 +157,6 @@ def load_rl_training_data(method_type='all'):
 
 def load_gp_mpc_data():
     """Load GP-MPC convergence data."""
-    data_dir = script_dir.parent / 'data'
     gp_file = data_dir / 'gpmpc_acados_TP_hpo_convergence_results.npy'
     
     if gp_file.exists():
@@ -259,7 +288,7 @@ def create_convergence_plot(perf_data, gp_mpc_data=None, dr_data=None, include_d
     plt.grid(True, alpha=0.3)
     
     # Set reasonable limits
-    plt.ylim(0.01, 10)
+    plt.ylim(0.005, 10)
     
     # Save plot
     convergence_dir = script_dir / 'convergence'
@@ -342,21 +371,31 @@ def main():
     # Parse command line arguments
     method_type = 'all'
     include_dr = False
+    global input_data_root
     
-    if len(sys.argv) > 1:
-        method_type = sys.argv[1].lower()
+    positional_args = [
+        arg for arg in sys.argv[1:]
+        if not arg.startswith('--')
+    ]
+
+    if positional_args:
+        method_type = positional_args[0].lower()
         if method_type not in ['ppo', 'sac', 'dppo', 'ppo_mpc', 'all']:
             print(f"Warning: Invalid method '{method_type}'. Using 'all'.")
             method_type = 'all'
     
     include_dr = '--include-dr' in sys.argv or '--domain-rand' in sys.argv
+    for arg in sys.argv[1:]:
+        if arg.startswith('--input-data-root='):
+            input_data_root = normalize_input_data_root(arg.split('=', 1)[1])
     
     print(f"Method filter: {method_type}")
     print(f"Include domain randomization: {include_dr}")
+    print(f"Input data root: {input_data_root}")
     print()
     
     # Load data
-    perf_data = load_rl_training_data(method_type)
+    perf_data = load_rl_training_data(method_type, input_data_root)
     gp_mpc_data = load_gp_mpc_data()
     
     dr_data = {}
@@ -364,9 +403,9 @@ def main():
         dr_data = load_domain_randomization_convergence(method_type)
     
     if not perf_data and not gp_mpc_data:
-        print("No training data found. Please ensure training data exists in ../data/nominal/")
+        print(f"No training data found. Please ensure training data exists in {input_data_root / 'nominal'}")
         print("Expected directory structure:")
-        print("  ../data/nominal/quadrotor_2D_attitude_<method>_data/seed<N>_*/logs/stat_eval/")
+        print("  <input-data-root>/nominal/quadrotor_2D_attitude_<method>_data/seed<N>_*/logs/stat_eval/")
         return
     
     # Create convergence plot

@@ -10,7 +10,7 @@ This script analyzes the performance of RL methods including:
 
 Results are saved to:
 - Plots: /home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/plotting/
-- Data: /home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/
+- Data: ./data/ under this plotting directory.
 """
 
 import numpy as np 
@@ -21,7 +21,13 @@ import os
 from pathlib import Path
 
 # Import utilities
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, tag_ctrl_list, load_metric, STEPS_PER_SECOND
+from benchmarking_sim.quadrotor.benchmark_util.utils import (
+    plot_colors,
+    tag_ctrl_list,
+    load_metric,
+    STEPS_PER_SECOND,
+    plotting_data_dir,
+)
 
 def moving_average(x, w):
     return np.convolve(x, np.ones(w) / w, mode='valid')
@@ -51,7 +57,7 @@ def main():
     # Setup directories
     script_dir = Path(__file__).parent
     plot_dir = script_dir
-    data_dir = script_dir.parent / 'data'
+    data_dir = plotting_data_dir(script_dir)
     convergence_dir = plot_dir / 'convergence'
     robustness_dir = plot_dir / 'robustness'
     
@@ -69,10 +75,7 @@ def main():
     legends = {
         "ref": "black",
         "PPO": "PPO",
-        "PPO3": "PPO with ilqr ref",
-        "PPO4": "PPO with ilqr state ref",
         "SAC": "SAC",
-        "TD3": "TD3",
         "DPPO": "DPPO",
         "GP-MPC": "GP-MPC",
         "PPO-MPC": "PPO-MPC"
@@ -83,7 +86,7 @@ def main():
     exp_name = "nominal"
     data_paths = {
         "PPO": data_dir_path + "/" + exp_name + "/quadrotor_2D_attitude_ppo_data",
-        "SAC": data_dir_path + "/" + exp_name + "/quadrotor_2D_attitude_sac_data2",
+        "SAC": data_dir_path + "/" + exp_name + "/quadrotor_2D_attitude_sac_data",
         "DPPO": data_dir_path + "/" + exp_name + "/quadrotor_2D_attitude_dppo_data",
         "PPO-MPC": data_dir_path + "/" + exp_name + "/quadrotor_2D_attitude_ppo_mpc_data",
     }
@@ -157,8 +160,8 @@ def main():
                 perf_data[method].update({seed: {"data": x, "ep_return": y, "ep_return_std": z, "rmse": m, "rmse_std": n, "ep_length": l}})
 
     # Load GP-MPC data
-    gp_name = '/gpmpc_acados_TP_hpo_convergence_results.npy'
-    gp_mpc_data = np.load(str(data_dir) + gp_name, allow_pickle=True).item()
+    gp_name = 'gpmpc_acados_TP_hpo_convergence_results.npy'
+    gp_mpc_data = np.load(data_dir / gp_name, allow_pickle=True).item()
     log(f"GP-MPC final RMSE: {gp_mpc_data['rmse'][:, -1].mean()}")
 
     # Create convergence plot with time conversion

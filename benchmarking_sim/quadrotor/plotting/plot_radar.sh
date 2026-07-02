@@ -1,3 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 # for algo in 'iLQR' 'PID' 'LQR' \
 #             'GP-MPC' 'Nonlinear-MPC' 'Linear-MPC' 'F-MPC' \

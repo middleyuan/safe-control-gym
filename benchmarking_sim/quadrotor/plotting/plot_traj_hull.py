@@ -2,7 +2,7 @@ import sys
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plot_xz_trajectory_with_hull, STEPS_PER_SECOND
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plot_xz_trajectory_with_hull, STEPS_PER_SECOND, plotting_data_dir
 from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
@@ -10,6 +10,7 @@ from safe_control_gym.utils.registration import make
 import seaborn as sns
 sns.set_theme(style="whitegrid")
 script_path = pathlib.Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_path)
 #############################################
 if len(sys.argv) > 1:
     if sys.argv[1] == 'rl':
@@ -63,50 +64,50 @@ X_GOAL = random_env.X_GOAL
 random_env.close()
 
 # Load Control-oriented data
-pid_data_path = script_path / f'../data/traj_results_pid_{SYS}_{additional}.npy'
+pid_data_path = data_dir / f'traj_results_pid_{SYS}_{additional}.npy'
 pid_traj_data = np.load(pid_data_path, allow_pickle=True)
 print(pid_traj_data.shape)
 
-lqr_data_path = script_path / f'../data/traj_results_lqr_{SYS}_{additional}.npy'
+lqr_data_path = data_dir / f'traj_results_lqr_{SYS}_{additional}.npy'
 lqr_traj_data = np.load(lqr_data_path, allow_pickle=True)
 print(lqr_traj_data.shape)
 
-ilqr_data_path = script_path / f'../data/traj_results_ilqr_{SYS}_{additional}.npy'
+ilqr_data_path = data_dir / f'traj_results_ilqr_{SYS}_{additional}.npy'
 ilqr_traj_data = np.load(ilqr_data_path, allow_pickle=True)
 print(ilqr_traj_data.shape)
 
-lmpc_data_path = script_path / f'../data/traj_results_linear_mpc_acados_{SYS}_{additional}.npy'
+lmpc_data_path = data_dir / f'traj_results_linear_mpc_acados_{SYS}_{additional}.npy'
 lmpc_traj_data = np.load(lmpc_data_path, allow_pickle=True)
 print(lmpc_traj_data.shape)
 
-mpc_data_path = script_path / f'../data/traj_results_mpc_acados_{SYS}_{additional}.npy'
+mpc_data_path = data_dir / f'traj_results_mpc_acados_{SYS}_{additional}.npy'
 mpc_traj_data = np.load(mpc_data_path, allow_pickle=True)
 print(mpc_traj_data.shape)
 
-fmpc_data_path = script_path / f'../data/traj_results_fmpc_{SYS}_{additional}.npy'
+fmpc_data_path = data_dir / f'traj_results_fmpc_{SYS}_{additional}.npy'
 fmpc_traj_data = np.load(fmpc_data_path, allow_pickle=True)
 print(fmpc_traj_data.shape)
 
-gpmpc_data_path = script_path / f'../data/traj_results_gpmpc_acados_TP_{SYS}_{additional}.npy'
+gpmpc_data_path = data_dir / f'traj_results_gpmpc_acados_TP_{SYS}_{additional}.npy'
 gpmpc_traj_data = np.load(gpmpc_data_path, allow_pickle=True)
 print(gpmpc_traj_data.shape)
 
-ppo_data_path = script_path / f'../data/trajectory/nominal/traj_results_ppo_{additional}.npy'
+ppo_data_path = data_dir / f'trajectory/nominal/traj_results_ppo_{additional}.npy'
 ppo_data = np.load(ppo_data_path, allow_pickle=True).item()
 ppo_traj_data = np.array(ppo_data['obs'])
 print(ppo_traj_data.shape)
 
-sac_data_path = script_path / f'../data/trajectory/nominal/traj_results_sac_{additional}.npy'
+sac_data_path = data_dir / f'trajectory/nominal/traj_results_sac_{additional}.npy'
 sac_data = np.load(sac_data_path, allow_pickle=True).item()
 sac_traj_data = np.array(sac_data['obs'])
 print(sac_traj_data.shape)
 
-dppo_data_path = script_path / f'../data/trajectory/nominal/traj_results_dppo_{additional}.npy'
+dppo_data_path = data_dir / f'trajectory/nominal/traj_results_dppo_{additional}.npy'
 dppo_data = np.load(dppo_data_path, allow_pickle=True).item()
 dppo_traj_data = np.array(dppo_data['obs'])
 print(dppo_traj_data.shape)
 
-ppo_mpc_data_path = script_path / f'../data/trajectory/nominal/traj_results_ppo_mpc_{additional}.npy'
+ppo_mpc_data_path = data_dir / f'trajectory/nominal/traj_results_ppo_mpc_{additional}.npy'
 ppo_mpc_data = np.load(ppo_mpc_data_path, allow_pickle=True).item()
 ppo_mpc_traj_data = np.array(ppo_mpc_data['obs'])
 print(ppo_mpc_traj_data.shape)

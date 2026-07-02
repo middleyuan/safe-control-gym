@@ -50,11 +50,17 @@ tag_ctrl_list = {
     'DPPO-ID': 'dppo_id',
 }
 
+def plotting_data_dir(script_dir):
+    """Return the plotting-owned data directory for generated plot inputs."""
+    return Path(script_dir) / 'data'
+
 def load_metric(script_dir, transfer_metric, method, tag=''):
     episode_len_list = [9, 10, 11, 12, 13, 14, 15]
     ctrl = tag_ctrl_list[method]
     res = np.load(
-        f'{script_dir}/../data/{ctrl}{tag}_gen_results.npy', allow_pickle=True).item()
+        plotting_data_dir(script_dir) / f'{ctrl}{tag}_gen_results.npy',
+        allow_pickle=True
+    ).item()
     transfer_metric[method] = {'rmse': [], 'rmse_std': [], 'inference_time': [], 'inference_time_std': []}
     for T in episode_len_list:
         T = '_'+str(T)
@@ -146,6 +152,8 @@ def run_rollouts(task_description):
     dw_height_scale = getattr(task_description, 'dw_height_scale', None)
     gp_model_tag = getattr(task_description, 'gp_model_tag', '')
     ctrl_tag = getattr(task_description, 'ctrl_tag', '')
+    output_root = getattr(task_description, 'output_root', 'Results')
+    exp_name = getattr(task_description, 'exp_name', None)
     
     for seed in range(start_seed, num_seed + start_seed):
         run(n_episodes=num_runs_per_seed,
@@ -159,6 +167,8 @@ def run_rollouts(task_description):
             eval_task=eval_task,
             gp_model_tag=gp_model_tag,
             ctrl_tag=ctrl_tag,
+            output_root=output_root,
+            exp_name=exp_name,
             )
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None, 

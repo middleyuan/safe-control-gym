@@ -1,6 +1,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ from matplotlib.patches import Polygon
 from safe_control_gym.utils.configuration import ConfigFactory
 from functools import partial
 from safe_control_gym.utils.registration import make
+from benchmarking_sim.quadrotor.benchmark_util.utils import plotting_data_dir
 
 def plot_xz_trajectory_with_hull(ax, traj_data, label=None, 
                                  traj_color='skyblue', hull_color='lightblue',
@@ -118,6 +120,7 @@ X_GOAL = random_env.X_GOAL
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+data_dir = plotting_data_dir(Path(script_path))
 
 
 if not generalization:
@@ -142,10 +145,11 @@ for d in data_name:
     data.append(np.load(d, allow_pickle=True))
 gpmpc_traj_data = [d['trajs_data']['obs'][0] for d in data]
 gpmpc_traj_data = np.array(gpmpc_traj_data)
+data_dir.mkdir(exist_ok=True)
 if generalization:
-    np.save('gpmpc_traj_data_gen.npy', gpmpc_traj_data)
+    np.save(data_dir / 'gpmpc_traj_data_gen.npy', gpmpc_traj_data)
 else:
-    np.save('gpmpc_traj_data.npy', gpmpc_traj_data)
+    np.save(data_dir / 'gpmpc_traj_data.npy', gpmpc_traj_data)
 print(gpmpc_traj_data.shape) # (10, 541, 6) seed, time_step, obs
 # take average of all seeds
 mean_traj_data = np.mean(gpmpc_traj_data, axis=0)
@@ -211,9 +215,9 @@ print(mpc_mean_traj_data.shape) # (mean_541, 6)
 
 # load ppo and sac data
 if not generalization:
-    ppo_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/traj_results_ppo.npy'
+    ppo_data_path = data_dir / 'traj_results_ppo.npy'
 else:
-    ppo_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/gen_traj_results_ppo.npy'
+    ppo_data_path = data_dir / 'gen_traj_results_ppo.npy'
 ppo_data = np.load(ppo_data_path, allow_pickle=True).item()
 print(ppo_data.keys()) # (x, 541, 6) seed, time_step, obs
 print(ppo_data['obs'][0].shape)
@@ -222,9 +226,9 @@ print(ppo_traj_data.shape) # (10, 541, 6) seed, time_step, obs
 
 
 if not generalization:
-    sac_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/traj_results_sac.npy'
+    sac_data_path = data_dir / 'traj_results_sac.npy'
 else:
-    sac_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/gen_traj_results_sac.npy'
+    sac_data_path = data_dir / 'gen_traj_results_sac.npy'
 sac_data = np.load(sac_data_path, allow_pickle=True).item()
 print(sac_data.keys()) # (x, 541, 6) seed, time_step, obs
 print(sac_data['obs'][0].shape)
@@ -233,9 +237,9 @@ print(sac_traj_data.shape) # (10, 541, 6) seed, time_step, obs
 
 
 if not generalization:
-    dppo_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/traj_results_dppo.npy'
+    dppo_data_path = data_dir / 'traj_results_dppo.npy'
 else:
-    dppo_data_path = '/home/mingxuan/Repositories/scg_tsung/benchmarking_sim/quadrotor/data/gen_traj_results_dppo.npy'
+    dppo_data_path = data_dir / 'gen_traj_results_dppo.npy'
 dppo_data = np.load(dppo_data_path, allow_pickle=True).item()
 print(dppo_data.keys()) # (x, 541, 6) seed, time_step, obs
 print(dppo_data['obs'][0].shape)
@@ -343,5 +347,3 @@ if not generalization:
 else:
     fig.savefig(os.path.join(script_path, f'{plot_name}_xz_path_generalization.png'), bbox_inches='tight')
     print(f'Saved at {os.path.join(script_path, f"{plot_name}_xz_path_generalization.png")}')
-
-

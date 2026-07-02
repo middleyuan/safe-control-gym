@@ -28,10 +28,11 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 
 def load_controller_data(controller_name, noise_type, include_dr=False):
     """Load data for a specific controller."""
@@ -54,7 +55,7 @@ def load_controller_data(controller_name, noise_type, include_dr=False):
     controller_data = {}
     
     # Load regular controller data
-    file_path = script_dir / f'../data/{controller_name}_{noise_type}_results.npy'
+    file_path = data_dir / f'{controller_name}_{noise_type}_results.npy'
     if file_path.exists():
         try:
             data = np.load(file_path, allow_pickle=True).item()
@@ -68,7 +69,7 @@ def load_controller_data(controller_name, noise_type, include_dr=False):
     
     # Load domain randomization data if requested and available
     if include_dr and controller_name in ['ppo', 'sac', 'dppo']:
-        dr_file = script_dir / f'../data/{controller_name}_domain_rand_robustness.npy'
+        dr_file = data_dir / f'{controller_name}_domain_rand_robustness.npy'
         if dr_file.exists():
             try:
                 dr_data = np.load(dr_file, allow_pickle=True).item()

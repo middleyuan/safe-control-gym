@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 # import seaborn
 import numpy as np
@@ -8,7 +9,7 @@ import pandas as pd
 import seaborn
 from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
 from benchmarking_sim.quadrotor.benchmark_util.utils \
-    import load_metric, tag_ctrl_list
+    import load_metric, plotting_data_dir, tag_ctrl_list
 
 script_dir = os.path.dirname(__file__)
 # set up Nature sytle plotting
@@ -78,8 +79,8 @@ inverted_axes_name = [
 inverted_axes_index = [metric_index[i] for i in inverted_axes_name]
 
 axis_legend_dict = {
-    'worst_generalization_performance': '$\qquad\qquad\qquad\quad$  Generalization',
-    'performance': '$\qquad\qquad\qquad\quad$ Performance',
+    'worst_generalization_performance': r'$\qquad\qquad\qquad\quad$  Generalization',
+    'performance': r'$\qquad\qquad\qquad\quad$ Performance',
     'inference_time': 'Online     \nComputation     \n\n',
     'model_complexity': 'Required Model                    \nKnowledge                    ',
     'sampling_complexity': '\n\n\nSampling\ncomplexity',
@@ -144,12 +145,12 @@ def load_robustness_failure_points():
     
     # Try to load the consolidated failure results
     script_dir = os.path.dirname(__file__)
-    data_dir = Path(script_dir) / 'data'
+    data_dir = plotting_data_dir(Path(script_dir))
     consolidated_file = data_dir / 'robustness_failure_points.json'
     
     if not consolidated_file.exists():
         print(f"Warning: Failure results file not found at {consolidated_file}")
-        print("Using hardcoded values. Run process_experiment_data.py for all noise types to generate failure data.")
+        print("Using hardcoded robustness values. Run process_experiment_data.py all to refresh robustness data.")
         return {}
     
     try:
@@ -206,6 +207,75 @@ def update_metrics_with_failure_data(metrics_data, failure_data, robustness_type
                     print(f"  Warning: Method '{method}' not found in metrics_data")
     
     return metrics_data
+
+def update_id_numbers_with_failure_data(ID_numbers, failure_data, robustness_type):
+    """Update the RL overlay robustness axes from DR robustness failures."""
+    if not failure_data:
+        return ID_numbers
+
+    failures = failure_data.get(
+        (
+            'domain_randomization_absolute_failures'
+            if robustness_type == 'abs'
+            else 'domain_randomization_relative_failures'
+        ),
+        {}
+    )
+    noise_to_metric = {
+        'obs_noise': 'robustness_obs',
+        'proc_noise': 'robustness_proc',
+        'param': 'robustness_param',
+    }
+
+    for noise_type, metric_name in noise_to_metric.items():
+        if noise_type not in failures or metric_name not in ID_numbers:
+            continue
+        for method, failure_point in failures[noise_type].items():
+            if method in ID_numbers[metric_name]:
+                ID_numbers[metric_name][method] = failure_point
+
+    return ID_numbers
+
+def update_id_numbers_with_generalization_data(ID_numbers):
+    """Update the RL overlay generalization axis from GEN generalization files."""
+    if 'worst_generalization_performance' not in ID_numbers:
+        return ID_numbers
+
+    method_to_file = {
+        'PPO': 'ppo',
+        'SAC': 'sac',
+        'DPPO': 'dppo',
+    }
+    data_dir = plotting_data_dir(Path(script_dir))
+
+    for method, file_stem in method_to_file.items():
+        if method not in ID_numbers['worst_generalization_performance']:
+            continue
+
+        candidates = [
+            data_dir / f'{file_stem}_gen_generalization.npy',
+            data_dir / f'{file_stem}_domain_rand_generalization.npy',
+        ]
+        gen_file = next((path for path in candidates if path.exists()), None)
+        if gen_file is None:
+            if method in transfer_metric:
+                ID_numbers['worst_generalization_performance'][method] = (
+                    worst_generalization_rmse(method)
+                )
+            continue
+
+        gen_data = np.load(gen_file, allow_pickle=True).item()
+        rmse_values = []
+        for episode_data in gen_data.get('generalization', {}).values():
+            rmse = episode_data.get('rmse')
+            if isinstance(rmse, dict) and 'mean' in rmse:
+                rmse_values.append(rmse['mean'])
+        if rmse_values:
+            ID_numbers['worst_generalization_performance'][method] = (
+                float(np.nanmax(rmse_values))
+            )
+
+    return ID_numbers
 
 # Load failure data and update metrics
 failure_data = load_robustness_failure_points()
@@ -272,6 +342,20 @@ def normalize_data(data, max_values, min_values, inverted_axes_name, lower_paddi
         normalized_data[key] = temp_value + lower_padding
     
     return normalized_data
+
+def format_radar_value(value, metric_name=None):
+    """Format numeric radar labels compactly."""
+    if isinstance(value, np.ndarray):
+        value = value.item()
+    if not isinstance(value, (float, int, np.floating, np.integer)):
+        return str(value)
+
+    value = float(value)
+    if metric_name in ['robustness_proc', 'robustness_obs', 'robustness_param']:
+        return f'{value:.1f}'
+    if metric_name in ['performance', 'worst_generalization_performance']:
+        return f'{value:.2f}'
+    return f'{value:.3f}'
 
 def spider(df, 
            *, 
@@ -348,16 +432,46 @@ def spider(df,
             ax.plot(angles, values_ID, label=model_name, color=plot_colors[model_name], linestyle='--')
             ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], alpha=ID_alpha)
             ax.fill(angles, values_ID, alpha=ID_alpha, color=plot_colors[model_name])
-            ax.text(angles[metric_index['robustness_proc']], values_ID[metric_index['robustness_proc']], ID_numbers['robustness_proc'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_obs']], values_ID[metric_index['robustness_obs']], ID_numbers['robustness_obs'][model_name], size=small_text_size)
-            ax.text(angles[metric_index['robustness_param']], values_ID[metric_index['robustness_param']], ID_numbers['robustness_param'][model_name], size=small_text_size)
+            ax.text(
+                angles[metric_index['robustness_proc']] - 0.025,
+                values_ID[metric_index['robustness_proc']] - 0.1,
+                format_radar_value(ID_numbers['robustness_proc'][model_name], 'robustness_proc'),
+                size=small_text_size,
+                color='black',
+            )
+            ax.text(
+                angles[metric_index['robustness_obs']],
+                values_ID[metric_index['robustness_obs']] - 0.1,
+                format_radar_value(ID_numbers['robustness_obs'][model_name], 'robustness_obs'),
+                size=small_text_size,
+                color='black',
+            )
+            ax.text(
+                angles[metric_index['robustness_param']] + 0.025,
+                values_ID[metric_index['robustness_param']] - 0.1,
+                format_radar_value(ID_numbers['robustness_param'][model_name], 'robustness_param'),
+                size=small_text_size,
+                color='black',
+            )
             # Format worst_generalization_performance with 2 decimal places
             worst_gen_value = ID_numbers['worst_generalization_performance'][model_name]
             formatted_worst_gen = f'{worst_gen_value:.2f}' if isinstance(worst_gen_value, float) else str(worst_gen_value)
-            ax.text(angles[metric_index['worst_generalization_performance']], values_ID[metric_index['worst_generalization_performance']], formatted_worst_gen, size=small_text_size)
+            ax.text(
+                angles[metric_index['worst_generalization_performance']] + 0.025, 
+                values_ID[metric_index['worst_generalization_performance']], 
+                formatted_worst_gen, 
+                size=small_text_size,
+                color='black',
+            )
 
         # customize the text
         for _x, _y, t in zip(angles, values, actual_values):
+            metric_name = None
+            for name, idx in metric_index.items():
+                if _x == angles[idx]:
+                    metric_name = name
+                    break
+
             if _x == angles[metric_index['inference_time']]:
                 t = f'{t:.1E}' if isinstance(t, float) else str(t)
             elif _x == angles[metric_index['sampling_complexity']]:
@@ -368,19 +482,23 @@ def spider(df,
                 if t == 1: t = '   Partially uncertain \n nonlinear model'
                 if model_name == 'PID': t = '   Kinematic \n   model'
                 if t == 0: t = 'Perfect nonlinear\n   model'
-            elif _x == angles[metric_index['robustness_param']]:
-                t = f'{t:.1f}' if isinstance(t, float) else str(t)
+            elif _x in [
+                angles[metric_index['robustness_proc']],
+                angles[metric_index['robustness_obs']],
+                angles[metric_index['robustness_param']],
+            ]:
+                t = format_radar_value(t, metric_name)
             elif _x in [angles[metric_index['performance']], angles[metric_index['worst_generalization_performance']]]:
                 t = f'{t:.2f}' if isinstance(t, float) else str(t)  # 2 decimal places for performance and generalization
             else:
                 t = f'{t:.3f}' if isinstance(t, float) else str(t)
 
             if _x == angles[metric_index['worst_generalization_performance']]:
-                ax.text(_x - 0.15, _y - 0.1, t, size=small_text_size)
+                ax.text(_x + 0.15, _y - 0.1, t, size=small_text_size)
             elif _x == angles[metric_index['model_complexity']]:
-                ax.text(_x + 0.3, _y + 0.2, t, size=small_text_size)
+                ax.text(_x - 0.05, _y + 0.0, t, size=small_text_size)
             elif _x == angles[metric_index['sampling_complexity']]:
-                ax.text(_x - 0.15, _y + 0.2, t, size=small_text_size)
+                ax.text(_x - 0.5, _y + 0.35, t, size=small_text_size)
             elif _x in [angles[metric_index['robustness_proc']], 
                         angles[metric_index['robustness_obs']],
                         angles[metric_index['robustness_param']]]:
@@ -425,6 +543,10 @@ methods = [
     'Geometric Control', 'iLQR', 'LQR'
 ]
 
+def worst_generalization_rmse(method):
+    """Return the worst RMSE across all processed generalization episode lengths."""
+    return float(np.nanmax(transfer_metric[method]['rmse']))
+
 metrics_data = {}
 # Initialize the dictionary structure
 for method in methods:
@@ -445,9 +567,9 @@ for method in methods:
 ######################## Nominal ###############################
 # Fill in the data
 # GP-MPC
-# metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
+# metrics_data['GP-MPC']['worst_generalization_performance'] = 0.03286539605493106 # worst_generalization_rmse('GP-MPC')
 # metrics_data['GP-MPC']['performance'] = 0.0147  # Manually set
-metrics_data['GP-MPC']['worst_generalization_performance'] = max(transfer_metric['GP-MPC']['rmse'][0], transfer_metric['GP-MPC']['rmse'][-1])
+metrics_data['GP-MPC']['worst_generalization_performance'] = worst_generalization_rmse('GP-MPC')
 metrics_data['GP-MPC']['performance'] = transfer_metric['GP-MPC']['rmse'][2]
 metrics_data['GP-MPC']['inference_time'] = transfer_metric['GP-MPC']['inference_time']
 metrics_data['GP-MPC']['model_complexity'] = 1
@@ -460,7 +582,7 @@ metrics_data['GP-MPC']['abs_robustness_proc'] = 8
 metrics_data['GP-MPC']['abs_robustness_param'] = 5.2
 
 # Linear MPC
-metrics_data['Linear MPC']['worst_generalization_performance'] = max(transfer_metric['Linear MPC']['rmse'][0], transfer_metric['Linear MPC']['rmse'][-1])
+metrics_data['Linear MPC']['worst_generalization_performance'] = worst_generalization_rmse('Linear MPC')
 # metrics_data['Linear MPC']['worst_generalization_performance'] = 0.036
 metrics_data['Linear MPC']['performance'] = transfer_metric['Linear MPC']['rmse'][2]
 # metrics_data['Linear MPC']['performance'] = 0.029
@@ -475,7 +597,7 @@ metrics_data['Linear MPC']['abs_robustness_proc'] = 7
 metrics_data['Linear MPC']['abs_robustness_param'] = 5.2
 
 # Nonlinear MPC
-metrics_data['Nonlinear MPC']['worst_generalization_performance'] = max(transfer_metric['Nonlinear MPC']['rmse'][0], transfer_metric['Nonlinear MPC']['rmse'][-1])
+metrics_data['Nonlinear MPC']['worst_generalization_performance'] = worst_generalization_rmse('Nonlinear MPC')
 # metrics_data['Nonlinear MPC']['worst_generalization_performance'] = 0.024
 metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
 # metrics_data['Nonlinear MPC']['performance'] = 0.008
@@ -491,7 +613,7 @@ metrics_data['Nonlinear MPC']['abs_robustness_proc'] = 8
 metrics_data['Nonlinear MPC']['abs_robustness_param'] = 5.0
 
 # F-MPC
-metrics_data['F-MPC']['worst_generalization_performance'] = max(transfer_metric['F-MPC']['rmse'][0], transfer_metric['F-MPC']['rmse'][-1])
+metrics_data['F-MPC']['worst_generalization_performance'] = worst_generalization_rmse('F-MPC')
 metrics_data['F-MPC']['performance'] = transfer_metric['F-MPC']['rmse'][2]
 metrics_data['F-MPC']['inference_time'] = transfer_metric['F-MPC']['inference_time']
 metrics_data['F-MPC']['model_complexity'] = 0
@@ -504,11 +626,11 @@ metrics_data['F-MPC']['abs_robustness_proc'] = 7
 metrics_data['F-MPC']['abs_robustness_param'] = 5.0
 
 # PPO
-metrics_data['PPO']['worst_generalization_performance'] = max(transfer_metric['PPO']['rmse'][0], transfer_metric['PPO']['rmse'][-1])
+metrics_data['PPO']['worst_generalization_performance'] = worst_generalization_rmse('PPO')
 metrics_data['PPO']['performance'] = transfer_metric['PPO']['rmse'][2]
 metrics_data['PPO']['inference_time'] = 7.31e-5
 metrics_data['PPO']['model_complexity'] = 3
-metrics_data['PPO']['sampling_complexity'] = 739200
+metrics_data['PPO']['sampling_complexity'] = 2402400.0 #739200
 metrics_data['PPO']['robustness_obs'] = 14
 metrics_data['PPO']['robustness_proc'] = 4
 metrics_data['PPO']['robustness_param'] = 1.5
@@ -517,11 +639,11 @@ metrics_data['PPO']['abs_robustness_proc'] = 16
 metrics_data['PPO']['abs_robustness_param'] = 6.0
 
 # SAC
-metrics_data['SAC']['worst_generalization_performance'] = max(transfer_metric['SAC']['rmse'][0], transfer_metric['SAC']['rmse'][-1])
+metrics_data['SAC']['worst_generalization_performance'] = worst_generalization_rmse('SAC')
 metrics_data['SAC']['performance'] = transfer_metric['SAC']['rmse'][2]
 metrics_data['SAC']['inference_time'] = 8.72e-5
 metrics_data['SAC']['model_complexity'] = 3
-metrics_data['SAC']['sampling_complexity'] = 250800
+metrics_data['SAC']['sampling_complexity'] = 673200.0 #250800
 metrics_data['SAC']['robustness_obs'] = 45
 metrics_data['SAC']['robustness_proc'] = 4
 metrics_data['SAC']['robustness_param'] = 2.5
@@ -530,11 +652,11 @@ metrics_data['SAC']['abs_robustness_proc'] = 7
 metrics_data['SAC']['abs_robustness_param'] = 5.0
 
 # DPPO
-metrics_data['DPPO']['worst_generalization_performance'] = max(transfer_metric['DPPO']['rmse'][0], transfer_metric['DPPO']['rmse'][-1])
+metrics_data['DPPO']['worst_generalization_performance'] = worst_generalization_rmse('DPPO')
 metrics_data['DPPO']['performance'] = transfer_metric['DPPO']['rmse'][2]
 metrics_data['DPPO']['inference_time'] = 7.28e-5
 metrics_data['DPPO']['model_complexity'] = 3
-metrics_data['DPPO']['sampling_complexity'] = 712800
+metrics_data['DPPO']['sampling_complexity'] = 2521200.0 #712800
 metrics_data['DPPO']['robustness_obs'] = 12
 metrics_data['DPPO']['robustness_proc'] = 4
 metrics_data['DPPO']['robustness_param'] = 2.0
@@ -543,11 +665,11 @@ metrics_data['DPPO']['abs_robustness_proc'] = 14
 metrics_data['DPPO']['abs_robustness_param'] = 4.0
 
 # PPO-MPC
-metrics_data['PPO-MPC']['worst_generalization_performance'] = max(transfer_metric['PPO-MPC']['rmse'][0], transfer_metric['PPO-MPC']['rmse'][-1])
+metrics_data['PPO-MPC']['worst_generalization_performance'] = worst_generalization_rmse('PPO-MPC')
 metrics_data['PPO-MPC']['performance'] = transfer_metric['PPO-MPC']['rmse'][2]
 metrics_data['PPO-MPC']['inference_time'] = 5.5e-4
 metrics_data['PPO-MPC']['model_complexity'] = 1
-metrics_data['PPO-MPC']['sampling_complexity'] = 224400
+metrics_data['PPO-MPC']['sampling_complexity'] = 389400.0 #224400
 metrics_data['PPO-MPC']['robustness_obs'] = 35
 metrics_data['PPO-MPC']['robustness_proc'] = 3
 metrics_data['PPO-MPC']['robustness_param'] = 2.0
@@ -556,7 +678,7 @@ metrics_data['PPO-MPC']['abs_robustness_proc'] = 9
 metrics_data['PPO-MPC']['abs_robustness_param'] = 7.
 
 # PID
-metrics_data['Geometric Control']['worst_generalization_performance'] = max(transfer_metric['Geometric Control']['rmse'][0], transfer_metric['Geometric Control']['rmse'][-1])
+metrics_data['Geometric Control']['worst_generalization_performance'] = worst_generalization_rmse('Geometric Control')
 metrics_data['Geometric Control']['performance'] = transfer_metric['Geometric Control']['rmse'][2]
 metrics_data['Geometric Control']['inference_time'] = transfer_metric['Geometric Control']['inference_time']
 metrics_data['Geometric Control']['model_complexity'] = 1
@@ -569,7 +691,7 @@ metrics_data['Geometric Control']['abs_robustness_proc'] = 14
 metrics_data['Geometric Control']['abs_robustness_param'] = 4.5
 
 # iLQR
-metrics_data['iLQR']['worst_generalization_performance'] = max(transfer_metric['iLQR']['rmse'][0], transfer_metric['iLQR']['rmse'][-1])
+metrics_data['iLQR']['worst_generalization_performance'] = worst_generalization_rmse('iLQR')
 metrics_data['iLQR']['performance'] = transfer_metric['iLQR']['rmse'][2]
 metrics_data['iLQR']['inference_time'] = transfer_metric['iLQR']['inference_time']
 metrics_data['iLQR']['model_complexity'] = 0
@@ -582,7 +704,7 @@ metrics_data['iLQR']['abs_robustness_proc'] = 12
 metrics_data['iLQR']['abs_robustness_param'] = 5.0
 
 # LQR
-metrics_data['LQR']['worst_generalization_performance'] = max(transfer_metric['LQR']['rmse'][0], transfer_metric['LQR']['rmse'][-1])
+metrics_data['LQR']['worst_generalization_performance'] = worst_generalization_rmse('LQR')
 metrics_data['LQR']['performance'] = transfer_metric['LQR']['rmse'][2]
 metrics_data['LQR']['inference_time'] = transfer_metric['LQR']['inference_time']
 metrics_data['LQR']['model_complexity'] = 2
@@ -596,9 +718,19 @@ metrics_data['LQR']['abs_robustness_param'] = 5.0
 
 # Update metrics with failure data from process_experiment_data.py
 metrics_data = update_metrics_with_failure_data(metrics_data, failure_data, robustness_type)
+ID_numbers = update_id_numbers_with_failure_data(ID_numbers, failure_data, robustness_type)
+ID_numbers = update_id_numbers_with_generalization_data(ID_numbers)
 
 max_values = {key: max([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
 min_values = {key: min([metrics_data[method][key] for method in metrics_data.keys()]) for key in metrics_data['GP-MPC'].keys()}
+
+for metric_name, method_values in ID_numbers.items():
+    if metric_name not in max_values:
+        continue
+    id_values = list(method_values.values())
+    if id_values:
+        max_values[metric_name] = max(max_values[metric_name], max(id_values))
+        min_values[metric_name] = min(min_values[metric_name], min(id_values))
 
 # handtune max and min to make the plot look better
 if robustness_type == 'abs':
@@ -617,6 +749,14 @@ max_values['abs_robustness_obs'] = 100
 max_values['abs_robustness_proc'] = 10.
 max_values['abs_robustness_param'] = 5.0
 max_values['inference_time'] = 1.7e-3
+
+for metric_name, method_values in ID_numbers.items():
+    if metric_name not in max_values:
+        continue
+    id_values = list(method_values.values())
+    if id_values:
+        max_values[metric_name] = max(max_values[metric_name], max(id_values))
+        min_values[metric_name] = min(min_values[metric_name], min(id_values))
 
 
 shared_performance_axis = False

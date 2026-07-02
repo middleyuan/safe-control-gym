@@ -1,4 +1,7 @@
+#!/bin/bash
+set -euo pipefail
 
+cd "$(dirname "$0")"
 
 for tag in 'mb' 'rl'
 do

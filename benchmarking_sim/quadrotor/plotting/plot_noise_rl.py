@@ -6,10 +6,11 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 print(script_dir)
 # if the output path does not exist, create it
 output_path = script_dir / 'noise'
@@ -59,9 +60,9 @@ SYS = 'quadrotor_2D_attitude'
 
 # Define data directory for RL methods
 if controller == 'sac':
-    data_folder_dir = script_dir.parent / 'data' / 'nominal' / f'{SYS}_{controller}_data2'
+    data_folder_dir = data_dir / 'nominal' / f'{SYS}_{controller}_data2'
 else:
-    data_folder_dir = script_dir.parent / 'data' / 'nominal' / f'{SYS}_{controller}_data'
+    data_folder_dir = data_dir / 'nominal' / f'{SYS}_{controller}_data'
 
 print(f'Data folder: {data_folder_dir}')
 
@@ -274,7 +275,7 @@ saved_results = {
 }
 
 # Save results
-results_file_name = script_dir.parent / 'data' / f'{controller}_{noise_type}_results.npy'
+results_file_name = data_dir / f'{controller}_{noise_type}_results.npy'
 np.save(results_file_name, saved_results)
 print(f'Saved results to {results_file_name}')
 

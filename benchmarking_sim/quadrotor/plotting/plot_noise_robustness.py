@@ -6,12 +6,13 @@ Usage:
     python plot_noise_robustness.py <noise_type> [method_type] [--include-dr] [--dr-only]
     
 Arguments:
-    noise_type: 'obs_noise', 'proc_noise', or 'param'
+    noise_type: 'obs_noise', 'proc_noise', 'param', or 'all'
     method_type: 'control', 'rl', or 'all' (default: 'all')
     --include-dr: Include domain randomization variants along with regular methods (optional)
     --dr-only: Plot ONLY domain randomization variants (automatically sets method_type to 'rl')
     
 Examples:
+    python plot_noise_robustness.py all                  # Plot all noise types for all available methods
     python plot_noise_robustness.py obs_noise all        # Plot all methods for observation noise (no DR)
     python plot_noise_robustness.py obs_noise rl --include-dr  # Plot RL methods including domain randomization
     python plot_noise_robustness.py obs_noise rl --dr-only     # Plot ONLY domain randomization variants
@@ -27,11 +28,208 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors
+import pandas as pd
+from benchmarking_sim.quadrotor.benchmark_util.utils import plot_colors, plotting_data_dir
 
 # script dir
 script_dir = Path(__file__).parent.resolve()
+data_dir = plotting_data_dir(script_dir)
 s = 2  # times std
+VALID_NOISE_TYPES = ['obs_noise', 'proc_noise', 'param']
+RELATIVE_FAILURE_THRESHOLD = 200
+ABSOLUTE_FAILURE_THRESHOLD = 0.25
+CONTROL_METHOD_NAMES = {
+    'Linear MPC', 'Nonlinear MPC', 'GP-MPC', 'iLQR', 'LQR',
+    'Geometric Control', 'F-MPC'
+}
+RL_METHOD_NAMES = {'PPO', 'SAC', 'DPPO', 'PPO-MPC'}
+NOISE_DISPLAY_NAMES = {
+    'obs_noise': 'Observation Noise',
+    'proc_noise': 'Process Noise',
+    'param': 'Parametric Uncertainty',
+}
+
+def infer_loaded_method_type(method_names, requested_method_type):
+    """Infer a truthful label from the methods that were actually loaded."""
+    base_methods = {method.replace(' (DR)', '') for method in method_names}
+    has_control = any(method in CONTROL_METHOD_NAMES for method in base_methods)
+    has_rl = any(method in RL_METHOD_NAMES for method in base_methods)
+
+    if has_control and has_rl:
+        return 'all'
+    if has_rl:
+        return 'rl'
+    if has_control:
+        return 'control'
+    return requested_method_type
+
+def method_sort_key(method_name):
+    """Keep table rows in the same broad order as the plots."""
+    order = [
+        'Geometric Control', 'Linear MPC', 'Nonlinear MPC', 'F-MPC',
+        'iLQR', 'LQR', 'GP-MPC', 'PPO', 'SAC', 'DPPO', 'PPO-MPC',
+        'PPO (DR)', 'SAC (DR)', 'DPPO (DR)',
+    ]
+    try:
+        return (0, order.index(method_name))
+    except ValueError:
+        return (1, method_name)
+
+def format_noise_scale(value):
+    """Format noise scales compactly for table cells."""
+    if value is None or np.isnan(value):
+        return 'n/a'
+    if float(value).is_integer():
+        return f'{int(value)}'
+    return f'{value:.2f}'.rstrip('0').rstrip('.')
+
+def format_threshold_cell(failure_scale, max_testing_range):
+    """Show first failure scale, or survival through the tested range."""
+    if failure_scale is None:
+        return f'> {format_noise_scale(max_testing_range)}'
+    return format_noise_scale(failure_scale)
+
+def save_dataframe_table(df, output_path, title):
+    """Render a DataFrame as a PNG/PDF table using the generalization-table style."""
+    if df.empty:
+        return
+
+    output_path.parent.mkdir(exist_ok=True)
+    fig_width = max(7, 1.5 + 1.55 * len(df.columns))
+    fig_height = max(2.5, 1.0 + 0.34 * len(df.index))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.axis('tight')
+    ax.axis('off')
+    ax.set_title(title, fontsize=12, pad=12)
+    table = ax.table(
+        cellText=df.values,
+        colLabels=df.columns,
+        rowLabels=df.index,
+        loc='center',
+        cellLoc='center',
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1.0, 1.25)
+    table.auto_set_column_width(col=list(range(len(df.columns))))
+    fig.savefig(output_path, bbox_inches='tight', dpi=300)
+    fig.savefig(output_path.with_suffix('.pdf'), bbox_inches='tight')
+    plt.close(fig)
+
+def create_single_noise_tables(noise_data, noise_option, method_type, double_results,
+                               abs_rmse_threshold_results, max_testing_range,
+                               include_domain_rand=False):
+    """Save relative and absolute threshold tables for one noise case."""
+    loaded_method_type = infer_loaded_method_type(noise_data.keys(), method_type)
+    dr_suffix = "_with_dr" if include_domain_rand and any('(DR)' in method for method in noise_data.keys()) else ""
+    output_dir = script_dir / 'noise'
+
+    methods = sorted(noise_data.keys(), key=method_sort_key)
+    relative_table = {}
+    absolute_table = {}
+
+    for method in methods:
+        rel_values = np.array(noise_data[method].get('rmse_degradation_mean', []), dtype=float)
+        abs_values = np.array(noise_data[method].get('rmse_mean', []), dtype=float)
+        relative_table[method] = {
+            f'First > {RELATIVE_FAILURE_THRESHOLD}%': format_threshold_cell(
+                double_results.get(method), max_testing_range
+            ),
+            'Max tested': format_noise_scale(max_testing_range),
+            'Peak %': 'n/a' if len(rel_values) == 0 or np.all(np.isnan(rel_values)) else f'{np.nanmax(rel_values):.1f}',
+        }
+        absolute_table[method] = {
+            f'First > {ABSOLUTE_FAILURE_THRESHOLD:.2f}m': format_threshold_cell(
+                abs_rmse_threshold_results.get(method), max_testing_range
+            ),
+            'Max tested': format_noise_scale(max_testing_range),
+            'Peak RMSE [m]': 'n/a' if len(abs_values) == 0 or np.all(np.isnan(abs_values)) else f'{np.nanmax(abs_values):.3f}',
+        }
+
+    noise_name = NOISE_DISPLAY_NAMES.get(noise_option, noise_option)
+    relative_df = pd.DataFrame.from_dict(relative_table, orient='index')
+    absolute_df = pd.DataFrame.from_dict(absolute_table, orient='index')
+
+    relative_name = f"robustness_{loaded_method_type}_methods_{noise_option}_relative_table{dr_suffix}"
+    absolute_name = f"robustness_{loaded_method_type}_methods_{noise_option}_absolute_table{dr_suffix}"
+    output_dir.mkdir(exist_ok=True)
+    relative_df.to_csv(output_dir / f'{relative_name}.csv', index_label='Method')
+    absolute_df.to_csv(output_dir / f'{absolute_name}.csv', index_label='Method')
+    save_dataframe_table(
+        relative_df,
+        output_dir / f'{relative_name}.png',
+        f'{noise_name}: first noise scale above {RELATIVE_FAILURE_THRESHOLD}% relative RMSE',
+    )
+    save_dataframe_table(
+        absolute_df,
+        output_dir / f'{absolute_name}.png',
+        f'{noise_name}: first noise scale above {ABSOLUTE_FAILURE_THRESHOLD:.2f}m RMSE',
+    )
+    print(f"Relative table saved as {output_dir / f'{relative_name}.png'}")
+    print(f"Absolute table saved as {output_dir / f'{absolute_name}.png'}")
+
+def create_combined_robustness_tables(noise_summaries, method_type, include_domain_rand=False):
+    """Save combined threshold tables across obs/process/param noise."""
+    summaries = {
+        noise_type: summary
+        for noise_type, summary in noise_summaries.items()
+        if summary is not None
+    }
+    if not summaries:
+        return
+
+    all_methods = sorted(
+        {method for summary in summaries.values() for method in summary['noise_data'].keys()},
+        key=method_sort_key,
+    )
+    relative_table = {}
+    absolute_table = {}
+
+    for method in all_methods:
+        relative_table[method] = {}
+        absolute_table[method] = {}
+        for noise_type in VALID_NOISE_TYPES:
+            summary = summaries.get(noise_type)
+            noise_name = NOISE_DISPLAY_NAMES.get(noise_type, noise_type)
+            if summary is None or method not in summary['noise_data']:
+                relative_table[method][noise_name] = 'n/a'
+                absolute_table[method][noise_name] = 'n/a'
+                continue
+
+            max_testing_range = summary['max_testing_range']
+            relative_table[method][noise_name] = format_threshold_cell(
+                summary['double_results'].get(method),
+                max_testing_range,
+            )
+            absolute_table[method][noise_name] = format_threshold_cell(
+                summary['abs_rmse_threshold_results'].get(method),
+                max_testing_range,
+            )
+
+    relative_df = pd.DataFrame.from_dict(relative_table, orient='index')
+    absolute_df = pd.DataFrame.from_dict(absolute_table, orient='index')
+
+    loaded_method_type = infer_loaded_method_type(all_methods, method_type)
+    dr_suffix = "_with_dr" if include_domain_rand and any('(DR)' in method for method in all_methods) else ""
+    output_dir = script_dir / 'noise'
+    relative_name = f"robustness_{loaded_method_type}_methods_all_relative_table{dr_suffix}"
+    absolute_name = f"robustness_{loaded_method_type}_methods_all_absolute_table{dr_suffix}"
+
+    output_dir.mkdir(exist_ok=True)
+    relative_df.to_csv(output_dir / f'{relative_name}.csv', index_label='Method')
+    absolute_df.to_csv(output_dir / f'{absolute_name}.csv', index_label='Method')
+    save_dataframe_table(
+        relative_df,
+        output_dir / f'{relative_name}.png',
+        f'First noise scale above {RELATIVE_FAILURE_THRESHOLD}% relative RMSE',
+    )
+    save_dataframe_table(
+        absolute_df,
+        output_dir / f'{absolute_name}.png',
+        f'First noise scale above {ABSOLUTE_FAILURE_THRESHOLD:.2f}m RMSE',
+    )
+    print(f"Combined relative table saved as {output_dir / f'{relative_name}.png'}")
+    print(f"Combined absolute table saved as {output_dir / f'{absolute_name}.png'}")
 
 def load_processed_data(noise_type, method_type='all', dr_only=False):
     """Load processed data from .npy files generated by process_experiment_data.py"""
@@ -62,7 +260,7 @@ def load_processed_data(noise_type, method_type='all', dr_only=False):
         if method_type in ['control', 'all']:
             print("Loading model-based controller data...")
             for display_name, file_name in model_based_files.items():
-                file_path = script_dir / f'../data/{file_name}_{noise_type}_results.npy'
+                file_path = data_dir / f'{file_name}_{noise_type}_results.npy'
                 if file_path.exists():
                     data = np.load(file_path, allow_pickle=True).item()
                     noise_data[display_name] = data
@@ -74,7 +272,7 @@ def load_processed_data(noise_type, method_type='all', dr_only=False):
         if method_type in ['rl', 'all']:
             print("Loading RL method data...")
             for display_name, file_name in rl_files.items():
-                file_path = script_dir / f'../data/{file_name}_{noise_type}_results.npy'
+                file_path = data_dir / f'{file_name}_{noise_type}_results.npy'
                 if file_path.exists():
                     data = np.load(file_path, allow_pickle=True).item()
                     noise_data[display_name] = data
@@ -105,7 +303,7 @@ def load_domain_randomization_robustness_data(noise_type, method_type='all'):
     if method_type in ['rl', 'all']:
         print("Loading domain randomization robustness data...")
         for controller in rl_controllers:
-            dr_file = script_dir / f'../data/{controller}_domain_rand_robustness.npy'
+            dr_file = data_dir / f'{controller}_domain_rand_robustness.npy'
             
             if dr_file.exists():
                 try:
@@ -162,9 +360,6 @@ def load_domain_randomization_robustness_data(noise_type, method_type='all'):
 def print_failure_analysis(noise_data, noise_type):
     """Print failure analysis from loaded data."""
     
-    relative_failure_threshold = 200  # 200% performance degradation
-    absolute_failure_threshold = 0.25  # 0.25m RMSE threshold
-    
     double_results = {}
     abs_rmse_threshold_results = {}
     
@@ -192,7 +387,7 @@ def print_failure_analysis(noise_data, noise_type):
     print(f"\nMaximum testing range: {max_testing_range:6.2f}")
     
     print("\n" + "="*80)
-    print("RELATIVE PERFORMANCE ANALYSIS (200% Degradation Threshold)")
+    print(f"RELATIVE PERFORMANCE ANALYSIS ({RELATIVE_FAILURE_THRESHOLD}% Degradation Threshold)")
     print("="*80)
     
     for method in noise_data.keys():
@@ -208,7 +403,7 @@ def print_failure_analysis(noise_data, noise_type):
             # Find when RMSE degradation exceeds threshold
             failure_found = False
             for i, scale in enumerate(x_valid):
-                if y_mean_valid[i] > relative_failure_threshold:
+                if y_mean_valid[i] > RELATIVE_FAILURE_THRESHOLD:
                     print(f"{method:15}: FAILS at noise scale {scale:6.2f} (degradation = {y_mean_valid[i]:6.1f}%)")
                     double_results[method] = scale
                     failure_found = True
@@ -222,7 +417,7 @@ def print_failure_analysis(noise_data, noise_type):
             print(f"{method:15}: NO VALID DATA")
     
     print("\n" + "="*80)
-    print(f"ABSOLUTE PERFORMANCE ANALYSIS ({absolute_failure_threshold:.2f}m RMSE Threshold)")
+    print(f"ABSOLUTE PERFORMANCE ANALYSIS ({ABSOLUTE_FAILURE_THRESHOLD:.2f}m RMSE Threshold)")
     print("="*80)
     
     for method in noise_data.keys():
@@ -239,7 +434,7 @@ def print_failure_analysis(noise_data, noise_type):
                 # Check when absolute rmse exceeds threshold
                 failure_found = False
                 for i, scale in enumerate(x_valid):
-                    if y_mean_valid[i] > absolute_failure_threshold:
+                    if y_mean_valid[i] > ABSOLUTE_FAILURE_THRESHOLD:
                         print(f"{method:15}: FAILS at noise scale {scale:6.2f} (RMSE = {y_mean_valid[i]:6.3f}m)")
                         abs_rmse_threshold_results[method] = scale
                         failure_found = True
@@ -262,17 +457,20 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     # Determine noise scale for plotting
     if noise_option in ['obs_noise']:
         noise_scale = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-                       12, 14, 16, 18, 20, 25, 30, 35, 40, 
-                       45, 50, 60, 70, 80, 90, 100]
+                        12, 14, 16, 18, 20, 25, 30, 35, 40,
+                        45, 50, 60, 70, 80, 90, 100, 110, 120,
+                        130, 140, 150, 160, 170, 180, 190, 200,]
     elif noise_option == 'proc_noise':
         noise_scale = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-                       12, 14, 16, 18, 20, 25, 30, 35, 40, 
-                       45, 50, 60, 70, 80, 90, 100]
+                        12, 14, 16, 18, 20, 25, 30, 35, 40,
+                        45, 50, 60, 70, 80, 90, 100, 110, 120,
+                        130, 140, 150, 160, 170, 180, 190, 200,]
     elif noise_option == 'param':
-        noise_scale = [0, 0.01, 0.02, 0.05, 0.1, 
-                       0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 
-                       1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 
-                       2.6, 2.8, 3.0, 3.5, 4.0, 4.5, 5.0]
+        noise_scale = [0, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0,
+                     2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 6.0,
+                     7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0,
+                     14.0, 15.0, 16.0, 17.0, 18.0, 19.0,
+                     20.0, 21.0, 22.0, 23.0, 24.0, 25.0]
         noise_scale.sort()
     
     # Determine legend columns based on number of methods
@@ -313,7 +511,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     if noise_option == 'obs_noise':
         plt.legend(ncol=legend_cols, fontsize=9)
         plt.ylim(0, 1200)
-        plt.xlim(0, 100)
+        plt.xlim(0, 200)
         plt.title("Performance Degradation with Observation Noise")
         for method in double_results.keys():
             plt.axvline(x=double_results[method], linestyle='--', color=plot_colors[method])
@@ -327,7 +525,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
         plt.title("Performance Degradation with Parametric Uncertainty")
         plt.xlabel("Randomization scale")
         plt.ylim(0, 2000)
-        plt.xlim(0, 5)
+        plt.xlim(0, 20)
         plt.legend(ncol=legend_cols, loc='upper right', fontsize=9)
         for method in double_results.keys():
             plt.axvline(x=double_results[method], linestyle='--', color=plot_colors[method])
@@ -335,8 +533,9 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     plt.plot(noise_scale, [200]*len(noise_scale), 
              color='grey', linestyle='-.', label='Relative Perf=200%')
     
+    loaded_method_type = infer_loaded_method_type(noise_data.keys(), method_type)
     dr_suffix = "_with_dr" if include_domain_rand and any('(DR)' in method for method in noise_data.keys()) else ""
-    plot_save_name = f"robustness_{method_type}_methods_{noise_option}{dr_suffix}"
+    plot_save_name = f"robustness_{loaded_method_type}_methods_{noise_option}{dr_suffix}"
     plot_save_path = script_dir / 'noise' / f'{plot_save_name}.png'
     plot_save_path.parent.mkdir(exist_ok=True)
     plt.savefig(plot_save_path, bbox_inches="tight", pad_inches=0.1)
@@ -345,7 +544,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     
     # Create absolute performance plot
     fig_abs = plt.figure(figsize=(8, 3))
-    abs_rmse_threshold = 0.25
+    abs_rmse_threshold = ABSOLUTE_FAILURE_THRESHOLD
     
     for method in noise_data.keys():
         if 'rmse_mean' in noise_data[method] and 'rmse_std' in noise_data[method]:
@@ -374,7 +573,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     
     if noise_option == 'obs_noise':
         plt.legend(ncol=legend_cols, fontsize=9)
-        plt.xlim(0, 100)
+        plt.xlim(0, 200)
         plt.ylim(0, 0.3)
         plt.title("Absolute Performance with Observation Noise")
         for method in abs_rmse_threshold_results.keys():
@@ -389,7 +588,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     elif noise_option == 'param':
         plt.title("Absolute Performance with Parametric Uncertainty")
         plt.xlabel("Randomization scale")
-        plt.xlim(0, 5)
+        plt.xlim(0, 20)
         plt.ylim(0, 0.5)
         plt.legend(ncol=legend_cols, loc='upper left', fontsize=9)
         for method in abs_rmse_threshold_results.keys():
@@ -398,7 +597,7 @@ def create_robustness_plots(noise_data, noise_option, method_type, double_result
     plt.plot(noise_scale, [abs_rmse_threshold]*len(noise_scale), 
              color='grey', linestyle='-.', label=f'RMSE={abs_rmse_threshold}')
     
-    plot_save_name_abs = f"robustness_{method_type}_methods_{noise_option}_absolute{dr_suffix}"
+    plot_save_name_abs = f"robustness_{loaded_method_type}_methods_{noise_option}_absolute{dr_suffix}"
     plot_save_path_abs = script_dir / 'noise' / f'{plot_save_name_abs}.png'
     plt.savefig(plot_save_path_abs, bbox_inches="tight", pad_inches=0.1)
     plt.savefig(plot_save_path_abs.with_suffix('.pdf'), bbox_inches="tight", pad_inches=0.1)
@@ -538,12 +737,15 @@ def print_summary_report(noise_data, double_results, abs_rmse_threshold_results,
         noise_unit = ""
     
     print(f"Noise Type: {noise_description}")
+    loaded_method_type = infer_loaded_method_type(noise_data.keys(), method_type)
     print(f"Method Filter: {method_type.upper()}")
+    if loaded_method_type != method_type:
+        print(f"Methods Plotted: {loaded_method_type.upper()} (based on available data)")
     print(f"Controllers Analyzed: {len(noise_data)}")
     print(f"Maximum Testing Range: {max_testing_range:6.2f}{noise_unit}")
     
     # Relative performance summary
-    print(f"\nRelative Performance (200% degradation threshold):")
+    print(f"\nRelative Performance ({RELATIVE_FAILURE_THRESHOLD}% degradation threshold):")
     if double_results:
         print("  Controllers that FAILED:")
         for method, failure_scale in sorted(double_results.items(), key=lambda x: x[1]):
@@ -559,7 +761,7 @@ def print_summary_report(noise_data, double_results, abs_rmse_threshold_results,
     
     # Absolute performance summary
     if any('rmse_mean' in data for data in noise_data.values()):
-        print(f"\nAbsolute Performance (0.25m RMSE threshold):")
+        print(f"\nAbsolute Performance ({ABSOLUTE_FAILURE_THRESHOLD:.2f}m RMSE threshold):")
         if abs_rmse_threshold_results:
             print("  Controllers that FAILED:")
             for method, failure_scale in sorted(abs_rmse_threshold_results.items(), key=lambda x: x[1]):
@@ -577,34 +779,8 @@ def print_summary_report(noise_data, double_results, abs_rmse_threshold_results,
     
     print("\n" + "="*80)
 
-def main():
-    """Main plotting function."""
-    
-    # Parse command line arguments
-    if len(sys.argv) > 1:
-        noise_option = sys.argv[1]
-    else:
-        noise_option = 'obs_noise'
-    
-    if len(sys.argv) > 2:
-        method_type = sys.argv[2].lower()
-        if method_type not in ['control', 'rl', 'all']:
-            print(f"Warning: Invalid method type '{method_type}'. Using 'all'.")
-            method_type = 'all'
-    else:
-        method_type = 'all'
-    
-    # Check for domain randomization flags
-    include_domain_rand = '--include-dr' in sys.argv or '--domain-rand' in sys.argv
-    dr_only = '--dr-only' in sys.argv
-    
-    # If dr_only is True, automatically include domain randomization and force method_type to rl
-    if dr_only:
-        include_domain_rand = True
-        if method_type not in ['rl', 'all']:
-            print("DR-only mode requires RL methods. Setting method_type to 'rl'.")
-            method_type = 'rl'
-    
+def plot_single_noise(noise_option, method_type, include_domain_rand=False, dr_only=False):
+    """Load data and create plots for one noise type."""
     print('noise_option', noise_option)
     print('method_type', method_type)
     print('include_domain_rand', include_domain_rand)
@@ -628,8 +804,8 @@ def main():
     all_data = {**noise_data, **dr_data}
     
     if not all_data:
-        print("No data files found. Please run process_experiment_data.py first.")
-        return
+        print(f"No data files found for {noise_option}. Please run process_experiment_data.py first.")
+        return False
     
     if dr_only:
         print(f"Loaded {len(dr_data)} domain randomization methods")
@@ -656,6 +832,17 @@ def main():
         
         # Create plots (pass appropriate flags for file naming)
         create_robustness_plots(all_data, noise_option, method_type, double_results, abs_rmse_threshold_results, include_domain_rand or dr_only)
+
+        # Create threshold summary tables for this noise type.
+        create_single_noise_tables(
+            all_data,
+            noise_option,
+            method_type,
+            double_results,
+            abs_rmse_threshold_results,
+            max_testing_range,
+            include_domain_rand or dr_only,
+        )
         
         # # Create ridge plot (pass appropriate flags for file naming)
         # create_ridge_plot(all_data, noise_option, method_type, include_domain_rand or dr_only)
@@ -665,6 +852,68 @@ def main():
     finally:
         # Restore original plot_colors
         plot_colors = original_plot_colors
+    
+    return {
+        'noise_data': all_data,
+        'double_results': double_results,
+        'abs_rmse_threshold_results': abs_rmse_threshold_results,
+        'max_testing_range': max_testing_range,
+    }
+
+def main():
+    """Main plotting function."""
+    
+    # Parse command line arguments
+    if len(sys.argv) > 1:
+        noise_option = sys.argv[1].lower()
+    else:
+        noise_option = 'obs_noise'
+    
+    if len(sys.argv) > 2:
+        method_type = sys.argv[2].lower()
+        if method_type not in ['control', 'rl', 'all']:
+            print(f"Warning: Invalid method type '{method_type}'. Using 'all'.")
+            method_type = 'all'
+    else:
+        method_type = 'all'
+    
+    # Check for domain randomization flags
+    include_domain_rand = '--include-dr' in sys.argv or '--domain-rand' in sys.argv
+    dr_only = '--dr-only' in sys.argv
+    
+    # If dr_only is True, automatically include domain randomization and force method_type to rl
+    if dr_only:
+        include_domain_rand = True
+        if method_type not in ['rl', 'all']:
+            print("DR-only mode requires RL methods. Setting method_type to 'rl'.")
+            method_type = 'rl'
+    
+    if noise_option == 'all':
+        success_count = 0
+        noise_summaries = {}
+        for noise_type in VALID_NOISE_TYPES:
+            print("\n" + "#" * 80)
+            print(f"PLOTTING {noise_type.upper()}")
+            print("#" * 80)
+            summary = plot_single_noise(noise_type, method_type, include_domain_rand, dr_only)
+            if summary:
+                noise_summaries[noise_type] = summary
+                success_count += 1
+        if success_count == 0:
+            print("No data files found for any noise type. Please run process_experiment_data.py first.")
+        else:
+            create_combined_robustness_tables(
+                noise_summaries,
+                method_type,
+                include_domain_rand or dr_only,
+            )
+        return
+    
+    if noise_option not in VALID_NOISE_TYPES:
+        print(f"Invalid noise type '{noise_option}'. Use one of {VALID_NOISE_TYPES}, or 'all'.")
+        return
+    
+    plot_single_noise(noise_option, method_type, include_domain_rand, dr_only)
 
 if __name__ == '__main__':
     main()

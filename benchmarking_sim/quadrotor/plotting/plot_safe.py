@@ -107,10 +107,10 @@ dt = 1/60  # 60 Hz
 # mpc_data = f'{script_path}/data/safe/no_noise.pkl'
 # gpmpc_data = f'{script_path}/../gpmpc_acados_TP/results/safety_safety/temp/seed1_May-06-23-10-49_0d011d1/gpmpc_acados_TP_data_quadrotor_traj_tracking.pkl'
 
-mpsf_data = f'{script_path}/../data/safe/no_noise.pkl'
-mpc_data = f'{script_path}/../data/safe/mpc_acados_data_quadrotor_traj_tracking.pkl'
-gpmpc_data = f'{script_path}/../data/safe/gpmpc_acados_TP_data_quadrotor_traj_tracking.pkl'
-ppo_mpc_data = f'{script_path}/../data/safe/ppo_mpc_safety_config_results.pkl'
+mpsf_data = f'{script_path}/data/safe/no_noise.pkl'
+mpc_data = f'{script_path}/data/safe/mpc_acados_data_quadrotor_traj_tracking.pkl'
+gpmpc_data = f'{script_path}/data/safe/gpmpc_acados_TP_data_quadrotor_traj_tracking.pkl'
+ppo_mpc_data = f'{script_path}/data/safe/ppo_mpc_safety_config_results.pkl'
 
 # Load the data
 mpsf_data = np.load(mpsf_data, allow_pickle=True)
