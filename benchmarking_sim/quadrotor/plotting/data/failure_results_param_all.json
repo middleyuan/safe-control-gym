@@ -1,0 +1,43 @@
+{
+  "relative_failures": {
+    "Linear MPC": 13.0,
+    "Nonlinear MPC": 3.5,
+    "GP-MPC": 8.0,
+    "iLQR": 2.0,
+    "LQR": 16.0,
+    "Geometric Control": 8.0,
+    "F-MPC": 25.0,
+    "PPO": 3.0,
+    "SAC": 5.0,
+    "DPPO": 3.0,
+    "PPO-MPC": 4.0
+  },
+  "absolute_failures": {
+    "Linear MPC": 23.0,
+    "Nonlinear MPC": 22.0,
+    "GP-MPC": 12.0,
+    "iLQR": 10.0,
+    "LQR": 18.0,
+    "Geometric Control": 8.0,
+    "F-MPC": 0.0,
+    "PPO": 16.0,
+    "SAC": 13.0,
+    "DPPO": 14.0,
+    "PPO-MPC": 13.0
+  },
+  "domain_randomization_relative_failures": {
+    "PPO": 4.0,
+    "SAC": 6.0,
+    "DPPO": 5.0
+  },
+  "domain_randomization_absolute_failures": {
+    "PPO": 14.0,
+    "SAC": 12.0,
+    "DPPO": 14.0
+  },
+  "max_testing_range": 25.0,
+  "relative_threshold": 200,
+  "absolute_threshold": 0.25,
+  "noise_type": "param",
+  "method_filter": "all"
+}

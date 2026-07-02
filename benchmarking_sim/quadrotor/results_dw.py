@@ -10,6 +10,7 @@ parallel = False
 
 algo = sys.argv[1]
 gp_model_tag = sys.argv[2] if len(sys.argv) > 2 else ''
+output_root = sys.argv[3] if len(sys.argv) > 3 else 'Results'
 
 # test
 additional = '_downwash'
@@ -37,6 +38,7 @@ for dw_height in np.arange(1.5, 4.0, 0.1):
                     'start_seed': seed,
                     'SYS': 'quadrotor_2D_attitude',
                     'gp_model_tag': gp_model_tag,
+                    'output_root': output_root,
                     }),)
                 )
                 for seed in seeds
@@ -57,6 +59,7 @@ for dw_height in np.arange(1.5, 4.0, 0.1):
                 'start_seed': start_seed,
                 'SYS': 'quadrotor_2D_attitude',
                 'gp_model_tag': gp_model_tag,
+                'output_root': output_root,
                 })
             run_rollouts(task_description)
 time2 = time.perf_counter()

@@ -19,7 +19,7 @@ num_seed = 10
 start_seed = 1
 seeds = range(start_seed, start_seed + num_seed)
 is_gp_controller = algo in ['gpmpc_acados', 'gpmpc_acados_TP', 'gpmpc_acados_TRP', 'gp_mpc']
-num_processes = 3 if is_gp_controller else 10
+num_processes = 3 if is_gp_controller else 5
 
 
 if parallel:

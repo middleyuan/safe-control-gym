@@ -1,0 +1,8 @@
+Method,Observation Noise,Process Noise,Parametric Uncertainty
+PPO,25,4,3
+SAC,50,3,5
+DPPO,25,4,3
+PPO-MPC,35,3,4
+PPO (DR),40,5,4
+SAC (DR),90,5,6
+DPPO (DR),35,6,5

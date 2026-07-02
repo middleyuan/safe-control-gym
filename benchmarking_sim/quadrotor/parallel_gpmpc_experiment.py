@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # parallel = False  # Set to True to run in parallel
     if parallel:
         # Run experiments in parallel
-        with Pool(processes=5) as pool:
+        with Pool(processes=3) as pool:
             async_results = [
                 pool.apply_async(run_experiment, args=(seed, ALGO, GP_TAG, ADDITIONAL, CTRL_ADD, OUTPUT_ROOT))
                 for seed in seeds

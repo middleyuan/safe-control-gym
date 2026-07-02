@@ -94,21 +94,25 @@ ID_numbers = {
         'PPO': 60,
         'SAC': 200,
         'DPPO': 80,
+        'PPO-MPC': 200,
     },
     'robustness_proc': {
         'PPO': 20,
         'SAC': 14,
         'DPPO': 25,
+        'PPO-MPC': 8,
     },
     'robustness_param': {
         'PPO': 200,
         'SAC': 200,
         'DPPO': 200,
+        'PPO-MPC': 13,
     },
     'worst_generalization_performance': {
         'PPO': 0.054727893216329365,
         'SAC': 0.02443952134274480,
-        'DPPO': 0.05276080159023642
+        'DPPO': 0.05276080159023642,
+        'PPO-MPC': 0.03715516806190815,
     }
 }
 
@@ -117,21 +121,25 @@ ID_numbers_abs = {
         'PPO': 100,
         'SAC': 0,
         'DPPO': 100,
+        'PPO-MPC': 200,
     },
     'robustness_proc': {
         'PPO': 35,
         'SAC': 0,
         'DPPO': 30,
+        'PPO-MPC': 8,
     },
     'robustness_param': {
         'PPO': 200,
         'SAC': 0.01,
         'DPPO': 200,
+        'PPO-MPC': 13,
     },
     'worst_generalization_performance': {
         'PPO': 0.054727893216329365,
         'SAC': 0.02443952134274480,
-        'DPPO': 0.05276080159023642
+        'DPPO': 0.05276080159023642,
+        'PPO-MPC': 0.03715516806190815,
     }
 }
 
@@ -245,6 +253,7 @@ def update_id_numbers_with_generalization_data(ID_numbers):
         'PPO': 'ppo',
         'SAC': 'sac',
         'DPPO': 'dppo',
+        'PPO-MPC': 'ppo_mpc',
     }
     data_dir = plotting_data_dir(Path(script_dir))
 
@@ -423,7 +432,7 @@ def spider(df,
                     alpha=OOD_alpha, 
                     color=plot_colors[model_name], )
 
-        if model_name in ['PPO', 'SAC', 'DPPO']:
+        if model_name in ['PPO', 'SAC', 'DPPO', 'PPO-MPC']:
             for metric_name in ID_numbers.keys():
                 normalized_data[metric_name] = ID_numbers_norm[metric_name][model_name]
             values_ID = [normalized_data[key] for key in data.keys()]
@@ -433,22 +442,22 @@ def spider(df,
             ax.scatter(angles, values_ID, facecolor=plot_colors[model_name], alpha=ID_alpha)
             ax.fill(angles, values_ID, alpha=ID_alpha, color=plot_colors[model_name])
             ax.text(
-                angles[metric_index['robustness_proc']] - 0.025,
-                values_ID[metric_index['robustness_proc']] - 0.1,
+                angles[metric_index['robustness_proc']] - 0.25,
+                values_ID[metric_index['robustness_proc']] + 0.1,
                 format_radar_value(ID_numbers['robustness_proc'][model_name], 'robustness_proc'),
                 size=small_text_size,
                 color='black',
             )
             ax.text(
-                angles[metric_index['robustness_obs']],
-                values_ID[metric_index['robustness_obs']] - 0.1,
+                angles[metric_index['robustness_obs']] - 0.15,
+                values_ID[metric_index['robustness_obs']] + 0.1,
                 format_radar_value(ID_numbers['robustness_obs'][model_name], 'robustness_obs'),
                 size=small_text_size,
                 color='black',
             )
             ax.text(
-                angles[metric_index['robustness_param']] + 0.025,
-                values_ID[metric_index['robustness_param']] - 0.1,
+                angles[metric_index['robustness_param']] + 0.0,
+                values_ID[metric_index['robustness_param']] + 0.,
                 format_radar_value(ID_numbers['robustness_param'][model_name], 'robustness_param'),
                 size=small_text_size,
                 color='black',
@@ -457,7 +466,7 @@ def spider(df,
             worst_gen_value = ID_numbers['worst_generalization_performance'][model_name]
             formatted_worst_gen = f'{worst_gen_value:.2f}' if isinstance(worst_gen_value, float) else str(worst_gen_value)
             ax.text(
-                angles[metric_index['worst_generalization_performance']] + 0.025, 
+                angles[metric_index['worst_generalization_performance']] - 0.15, 
                 values_ID[metric_index['worst_generalization_performance']], 
                 formatted_worst_gen, 
                 size=small_text_size,
@@ -466,6 +475,7 @@ def spider(df,
 
         # customize the text
         for _x, _y, t in zip(angles, values, actual_values):
+            axis_midpoint = lower_padding + 0.5
             metric_name = None
             for name, idx in metric_index.items():
                 if _x == angles[idx]:
@@ -494,15 +504,49 @@ def spider(df,
                 t = f'{t:.3f}' if isinstance(t, float) else str(t)
 
             if _x == angles[metric_index['worst_generalization_performance']]:
-                ax.text(_x + 0.15, _y - 0.1, t, size=small_text_size)
+                ax.text(_x + 0.05, _y - 0.1, t, size=small_text_size)
+            elif _x == angles[metric_index['performance']]:
+                ax.text(
+                    _x,
+                    axis_midpoint + 0.2*(_y-0.5),
+                    t,
+                    size=small_text_size,
+                    ha='center',
+                    va='center',
+                )
+            elif _x == angles[metric_index['inference_time']]:
+                ax.text(
+                    _x,
+                    axis_midpoint + 0.2*(_y-0.5),
+                    t,
+                    size=small_text_size,
+                    ha='center',
+                    va='center',
+                )
             elif _x == angles[metric_index['model_complexity']]:
-                ax.text(_x - 0.05, _y + 0.0, t, size=small_text_size)
+                ax.text(
+                    _x,
+                    axis_midpoint,
+                    t,
+                    size=small_text_size,
+                    ha='center',
+                    va='center',
+                )
             elif _x == angles[metric_index['sampling_complexity']]:
-                ax.text(_x - 0.5, _y + 0.35, t, size=small_text_size)
-            elif _x in [angles[metric_index['robustness_proc']], 
-                        angles[metric_index['robustness_obs']],
-                        angles[metric_index['robustness_param']]]:
-                ax.text(_x - 0., _y, t, size=small_text_size)
+                ax.text(
+                    _x,
+                    axis_midpoint + 0.2*(_y-0.5),
+                    t,
+                    size=small_text_size,
+                    ha='center',
+                    va='center',
+                )
+            elif _x == angles[metric_index['robustness_proc']]:
+                ax.text(_x - 0.15, _y, t, size=small_text_size)
+            elif _x == angles[metric_index['robustness_obs']]:
+                ax.text(_x - 0.1, _y, t, size=small_text_size)
+            elif _x == angles[metric_index['robustness_param']]:
+                ax.text(_x + 0.0, _y, t, size=small_text_size)
             else: # shift all the other axes 
                 ax.text(_x, _y - 0.01, t, size=small_text_size)
             
@@ -601,8 +645,8 @@ metrics_data['Nonlinear MPC']['worst_generalization_performance'] = worst_genera
 # metrics_data['Nonlinear MPC']['worst_generalization_performance'] = 0.024
 metrics_data['Nonlinear MPC']['performance'] = transfer_metric['Nonlinear MPC']['rmse'][2]
 # metrics_data['Nonlinear MPC']['performance'] = 0.008
-# metrics_data['Nonlinear MPC']['inference_time'] = transfer_metric['Nonlinear MPC']['inference_time']
-metrics_data['Nonlinear MPC']['inference_time'] = 5.5e-4
+metrics_data['Nonlinear MPC']['inference_time'] = transfer_metric['Nonlinear MPC']['inference_time']
+# metrics_data['Nonlinear MPC']['inference_time'] = 5.5e-4
 metrics_data['Nonlinear MPC']['model_complexity'] = 0
 metrics_data['Nonlinear MPC']['sampling_complexity'] = 1
 metrics_data['Nonlinear MPC']['robustness_proc'] = 3
@@ -628,9 +672,9 @@ metrics_data['F-MPC']['abs_robustness_param'] = 5.0
 # PPO
 metrics_data['PPO']['worst_generalization_performance'] = worst_generalization_rmse('PPO')
 metrics_data['PPO']['performance'] = transfer_metric['PPO']['rmse'][2]
-metrics_data['PPO']['inference_time'] = 7.31e-5
+metrics_data['PPO']['inference_time'] = 1.4064e-04  #1.4255e-04
 metrics_data['PPO']['model_complexity'] = 3
-metrics_data['PPO']['sampling_complexity'] = 2402400.0 #739200
+metrics_data['PPO']['sampling_complexity'] = 2019600 #739200
 metrics_data['PPO']['robustness_obs'] = 14
 metrics_data['PPO']['robustness_proc'] = 4
 metrics_data['PPO']['robustness_param'] = 1.5
@@ -641,9 +685,9 @@ metrics_data['PPO']['abs_robustness_param'] = 6.0
 # SAC
 metrics_data['SAC']['worst_generalization_performance'] = worst_generalization_rmse('SAC')
 metrics_data['SAC']['performance'] = transfer_metric['SAC']['rmse'][2]
-metrics_data['SAC']['inference_time'] = 8.72e-5
+metrics_data['SAC']['inference_time'] = 9.27636118e-05  #9.10130414e-05
 metrics_data['SAC']['model_complexity'] = 3
-metrics_data['SAC']['sampling_complexity'] = 673200.0 #250800
+metrics_data['SAC']['sampling_complexity'] = 607200 #250800
 metrics_data['SAC']['robustness_obs'] = 45
 metrics_data['SAC']['robustness_proc'] = 4
 metrics_data['SAC']['robustness_param'] = 2.5
@@ -654,9 +698,9 @@ metrics_data['SAC']['abs_robustness_param'] = 5.0
 # DPPO
 metrics_data['DPPO']['worst_generalization_performance'] = worst_generalization_rmse('DPPO')
 metrics_data['DPPO']['performance'] = transfer_metric['DPPO']['rmse'][2]
-metrics_data['DPPO']['inference_time'] = 7.28e-5
+metrics_data['DPPO']['inference_time'] = 1.0555e-04 #0.00014255
 metrics_data['DPPO']['model_complexity'] = 3
-metrics_data['DPPO']['sampling_complexity'] = 2521200.0 #712800
+metrics_data['DPPO']['sampling_complexity'] = 2310000 #712800
 metrics_data['DPPO']['robustness_obs'] = 12
 metrics_data['DPPO']['robustness_proc'] = 4
 metrics_data['DPPO']['robustness_param'] = 2.0
@@ -667,9 +711,9 @@ metrics_data['DPPO']['abs_robustness_param'] = 4.0
 # PPO-MPC
 metrics_data['PPO-MPC']['worst_generalization_performance'] = worst_generalization_rmse('PPO-MPC')
 metrics_data['PPO-MPC']['performance'] = transfer_metric['PPO-MPC']['rmse'][2]
-metrics_data['PPO-MPC']['inference_time'] = 5.5e-4
+metrics_data['PPO-MPC']['inference_time'] = 1.80392e-03 #5.5e-4
 metrics_data['PPO-MPC']['model_complexity'] = 1
-metrics_data['PPO-MPC']['sampling_complexity'] = 389400.0 #224400
+metrics_data['PPO-MPC']['sampling_complexity'] = 290400 #224400
 metrics_data['PPO-MPC']['robustness_obs'] = 35
 metrics_data['PPO-MPC']['robustness_proc'] = 3
 metrics_data['PPO-MPC']['robustness_param'] = 2.0
@@ -748,7 +792,7 @@ max_values['robustness_param'] = 5.0
 max_values['abs_robustness_obs'] = 100
 max_values['abs_robustness_proc'] = 10.
 max_values['abs_robustness_param'] = 5.0
-max_values['inference_time'] = 1.7e-3
+max_values['inference_time'] = 1.0e-2
 
 for metric_name, method_values in ID_numbers.items():
     if metric_name not in max_values:

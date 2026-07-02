@@ -6,6 +6,7 @@ This script processes experimental data for visualization and analysis, includin
 • Trajectory Analysis: Path tracking and error hull visualization  
 • Generalization Analysis: Performance across different episode lengths
 • Domain Randomization: RL training with environmental variations
+• Convergence: GP-MPC HPO convergence curve for training plots
 
 The script consolidates data processing that was previously scattered across multiple
 files, making it easier to prepare data for all plotting scripts.
@@ -32,6 +33,9 @@ python process_experiment_data.py generalization rl
 python process_experiment_data.py domain-randomization
 python process_experiment_data.py domain-randomization --controller=sac
 
+# Process convergence data for plot_convergence.py
+python process_experiment_data.py convergence
+
 # Process everything for specific controller
 python process_experiment_data.py all --controller=linear_mpc_acados
 
@@ -39,7 +43,7 @@ COMMAND LINE SYNTAX:
 python process_experiment_data.py <analysis_type> [noise_type] [method_filter] [--controller=<name>] [--input-data-root=<path>]
 
 ARGUMENTS:
-analysis_type:  'robustness', 'trajectory', 'generalization', 'domain-randomization', 'all'
+analysis_type:  'robustness', 'trajectory', 'generalization', 'domain-randomization', 'convergence', 'all'
 noise_type:     'obs_noise', 'proc_noise', 'param' (required for robustness analysis)
 method_filter:  'control', 'rl', 'all' (default: 'all')
 --controller:   Process specific controller only (optional)
@@ -60,6 +64,7 @@ from pathlib import Path
 import ast
 import numpy as np
 import json
+import pickle
 from benchmarking_sim.quadrotor.benchmark_util.utils import tag_ctrl_list
 
 # ==========================================
@@ -72,6 +77,7 @@ DATA_DIR = SCRIPT_DIR / 'data'
 DEFAULT_INPUT_DATA_ROOT = DATA_DIR
 DEFAULT_NAMED_INPUT_DATA_ROOT = DATA_DIR / 'Final_june'
 INPUT_DATA_ROOT = None
+PROCESSING_SUMMARIES = []
 
 # Experiment configuration
 MAX_SEED = 10
@@ -167,13 +173,31 @@ def print_header(title, level=1):
     else:
         print(f"\n• {title}")
 
-def print_summary(analysis_type, processed_count, details=None):
+def print_summary(analysis_type, processed_count, details=None, record=True):
     """Print processing summary."""
     print_header(f"{analysis_type} Processing Complete")
     print(f"Successfully processed: {processed_count} controllers")
     if details:
         for key, value in details.items():
             print(f"{key}: {value}")
+    if record:
+        PROCESSING_SUMMARIES.append({
+            'analysis_type': analysis_type,
+            'processed_count': processed_count,
+            'details': details or {},
+        })
+
+def print_final_summary_recap():
+    """Replay all processing summaries at the end of the command."""
+    if not PROCESSING_SUMMARIES:
+        return
+
+    print_header("Final Processing Recap")
+    for summary in PROCESSING_SUMMARIES:
+        print(f"\n{summary['analysis_type']}:")
+        print(f"  Successfully processed: {summary['processed_count']} controllers")
+        for key, value in summary['details'].items():
+            print(f"  {key}: {value}")
 
 def normalize_input_data_root(input_data_root):
     """Resolve an input root from an absolute or plotting-data-relative path."""
@@ -611,11 +635,13 @@ def process_robustness_analysis(noise_type, method_filter='all'):
     print_header(f"Robustness Analysis: {noise_type.upper()}")
     
     processed_data = {}
+    attempted_controllers = []
     
     # Process model-based controllers
     if method_filter in ['control', 'all']:
         print_header("Model-based Controllers", level=2)
         for display_name, folder_name in MODEL_BASED_CONTROLLERS.items():
+            attempted_controllers.append(display_name)
             results = process_robustness_controller(folder_name, noise_type, is_rl=False)
             if results is not None:
                 processed_data[display_name] = results
@@ -629,6 +655,7 @@ def process_robustness_analysis(noise_type, method_filter='all'):
     if method_filter in ['rl', 'all']:
         print_header("RL Controllers", level=2)
         for display_name, folder_name in RL_CONTROLLERS.items():
+            attempted_controllers.append(display_name)
             results = process_robustness_controller(folder_name, noise_type, is_rl=True)
             if results is not None:
                 processed_data[display_name] = results
@@ -640,6 +667,12 @@ def process_robustness_analysis(noise_type, method_filter='all'):
     
     if not processed_data:
         print("  Error: No data was processed successfully")
+        print_summary("Robustness Analysis", 0, {
+            'Noise type': noise_type,
+            'Method filter': method_filter,
+            'Processed controllers': 'none',
+            'Skipped controllers': ', '.join(attempted_controllers) or 'none',
+        })
         return
     
     # Calculate intersection testing range (minimum range tested by all controllers - both nominal and DR)
@@ -679,6 +712,10 @@ def process_robustness_analysis(noise_type, method_filter='all'):
     print_summary("Robustness Analysis", len(processed_data), {
         'Noise type': noise_type,
         'Method filter': method_filter,
+        'Processed controllers': ', '.join(processed_data.keys()) or 'none',
+        'Skipped controllers': ', '.join(
+            name for name in attempted_controllers if name not in processed_data
+        ) or 'none',
         'Relative failures': len(relative_failures),
         'Absolute failures': len(absolute_failures),
         'Max testing range': max_testing_range
@@ -968,6 +1005,85 @@ def refresh_domain_randomization_failure_results(noise_types=None):
 # TRAJECTORY ANALYSIS FUNCTIONS
 # ==========================================
 
+def extract_trajectory_obs(data):
+    """Return obs trajectories from supported trajectory result formats."""
+    if isinstance(data, np.ndarray):
+        if data.shape == () and hasattr(data.item(), 'keys'):
+            return extract_trajectory_obs(data.item())
+        return data
+
+    if isinstance(data, dict):
+        if 'obs' in data:
+            return np.asarray(data['obs'])
+        if 'trajs_data' in data and isinstance(data['trajs_data'], dict):
+            return extract_trajectory_obs(data['trajs_data'])
+
+    return None
+
+def load_trajectory_npy(traj_file):
+    """Load a trajectory .npy file and return obs, n_rollouts."""
+    traj_data = np.load(traj_file, allow_pickle=True)
+    obs_data = extract_trajectory_obs(traj_data)
+    if obs_data is None:
+        return None, 0
+    n_rollouts = obs_data.shape[0] if obs_data.ndim > 0 else 0
+    return obs_data, n_rollouts
+
+def load_trajectory_pickle(traj_file):
+    """Load a trajectory pickle file and return obs, n_rollouts."""
+    with open(traj_file, 'rb') as f:
+        traj_data = pickle.load(f)
+    obs_data = extract_trajectory_obs(traj_data)
+    if obs_data is None:
+        return None, 0
+    if obs_data.ndim == 2:
+        obs_data = obs_data[np.newaxis, ...]
+    n_rollouts = obs_data.shape[0] if obs_data.ndim > 0 else 0
+    return obs_data, n_rollouts
+
+def concatenate_trajectory_obs(obs_rollouts):
+    """Concatenate trajectory arrays, padding variable rollout lengths with NaN."""
+    try:
+        return np.concatenate(obs_rollouts, axis=0)
+    except ValueError:
+        max_time = max(obs.shape[1] for obs in obs_rollouts)
+        state_dim = max(obs.shape[2] for obs in obs_rollouts)
+        padded_rollouts = []
+
+        for obs in obs_rollouts:
+            padded = np.full((obs.shape[0], max_time, state_dim), np.nan)
+            padded[:, :obs.shape[1], :obs.shape[2]] = obs
+            padded_rollouts.append(padded)
+
+        return np.concatenate(padded_rollouts, axis=0)
+
+def resolve_trajectory_npy_candidates(controller_name, file_prefix, episode_length):
+    """Return likely aggregate trajectory .npy locations for staged datasets."""
+    candidates = [
+        *resolve_input_data_candidates('trajectory', 'nominal', f'traj_results_{file_prefix}_{episode_length}.npy'),
+        *resolve_input_data_candidates(f'traj_results_{file_prefix}_{episode_length}.npy')
+    ]
+
+    if controller_name in RL_DATA_FOLDERS:
+        controller_folder = RL_DATA_FOLDERS[controller_name]
+        for data_type in ['nominal', 'generalization', 'robustness_combo']:
+            candidates.extend(resolve_input_data_candidates(
+                data_type, controller_folder, f'traj_results_{file_prefix}_{episode_length}.npy'
+            ))
+
+    return candidates
+
+def resolve_trajectory_pickle_candidates(controller_name, episode_length):
+    """Return per-run model-based trajectory pickle files for staged datasets."""
+    candidates = []
+    pickle_name = f'{controller_name}_data_quadrotor_traj_tracking.pkl'
+
+    for episode_dir in resolve_input_data_candidates('generalization', controller_name, f'episode_{episode_length}'):
+        if episode_dir.exists():
+            candidates.extend(sorted(episode_dir.glob(f'*/{pickle_name}')))
+
+    return candidates
+
 def process_trajectory_controller(controller_name, episode_lengths=None):
     """Process trajectory data for a specific controller."""
     if episode_lengths is None:
@@ -995,36 +1111,14 @@ def process_trajectory_controller(controller_name, episode_lengths=None):
     file_prefix = file_mapping.get(controller_name, controller_name)
     
     for episode_length in episode_lengths:
-        # Try multiple potential file locations
-        potential_files = [
-            *resolve_input_data_candidates('trajectory', 'nominal', f'traj_results_{file_prefix}_{episode_length}.npy'),
-            *resolve_input_data_candidates(f'traj_results_{file_prefix}_{episode_length}.npy')
-        ]
-        
         trajectory_loaded = False
-        for traj_file in potential_files:
+        for traj_file in resolve_trajectory_npy_candidates(controller_name, file_prefix, episode_length):
             if traj_file.exists():
                 try:
-                    traj_data = np.load(traj_file, allow_pickle=True)
-                    
-                    # Handle different data formats
-                    if isinstance(traj_data, np.ndarray) and traj_data.ndim > 0:
-                        try:
-                            if traj_data.size == 1 and hasattr(traj_data.item(), 'keys'):
-                                # Dictionary stored in numpy array
-                                data_dict = traj_data.item()
-                                obs_data = data_dict.get('obs', None)
-                                n_rollouts = data_dict.get('n_rollouts', 0)
-                            else:
-                                # Raw trajectory array
-                                obs_data = traj_data
-                                n_rollouts = traj_data.shape[0] if traj_data.ndim > 0 else 0
-                        except:
-                            obs_data = traj_data
-                            n_rollouts = traj_data.shape[0] if traj_data.ndim > 0 else 0
-                    else:
-                        obs_data = None
-                        n_rollouts = 0
+                    obs_data, n_rollouts = load_trajectory_npy(traj_file)
+                    if obs_data is None:
+                        print(f"    Episode {episode_length}: No obs data in {traj_file}")
+                        continue
                     
                     trajectory_data[f'episode_{episode_length}'] = {
                         'obs': obs_data,
@@ -1040,6 +1134,37 @@ def process_trajectory_controller(controller_name, episode_lengths=None):
                     
                 except Exception as e:
                     print(f"    Episode {episode_length}: Error loading {traj_file} - {e}")
+
+        if not trajectory_loaded:
+            pickle_files = resolve_trajectory_pickle_candidates(controller_name, episode_length)
+            obs_rollouts = []
+            source_files = []
+            for traj_file in pickle_files:
+                try:
+                    obs_data, _ = load_trajectory_pickle(traj_file)
+                    if obs_data is not None:
+                        obs_rollouts.append(obs_data)
+                        source_files.append(str(traj_file))
+                except Exception as e:
+                    print(f"    Episode {episode_length}: Error loading {traj_file} - {e}")
+
+            if obs_rollouts:
+                try:
+                    obs_data = concatenate_trajectory_obs(obs_rollouts)
+                    trajectory_data[f'episode_{episode_length}'] = {
+                        'obs': obs_data,
+                        'n_rollouts': obs_data.shape[0],
+                        'timestamp': None,
+                        'source_file': source_files
+                    }
+
+                    print(
+                        f"    Episode {episode_length}: {obs_data.shape} "
+                        f"from {len(source_files)} rollout files"
+                    )
+                    trajectory_loaded = True
+                except Exception as e:
+                    print(f"    Episode {episode_length}: Error combining trajectory rollouts - {e}")
         
         if not trajectory_loaded:
             print(f"    Episode {episode_length}: No trajectory file found")
@@ -1063,6 +1188,8 @@ def process_trajectory_analysis(method_filter='all', controller=None):
         print(f"  Processing {method_filter} controllers: {len(controllers_to_process)} total")
     
     processed_count = 0
+    processed_controllers = []
+    skipped_controllers = []
     
     for controller_name in controllers_to_process:
         traj_data = process_trajectory_controller(controller_name)
@@ -1073,13 +1200,18 @@ def process_trajectory_analysis(method_filter='all', controller=None):
                 np.save(output_file, traj_data)
                 print(f"    Saved: {output_file}")
                 processed_count += 1
+                processed_controllers.append(controller_name)
             except Exception as e:
                 print(f"    Error saving trajectory data for {controller_name}: {e}")
+                skipped_controllers.append(controller_name)
         else:
             print(f"    No trajectory data processed for {controller_name}")
+            skipped_controllers.append(controller_name)
     
     print_summary("Trajectory Analysis", processed_count, {
         'Method filter': method_filter,
+        'Processed controllers': ', '.join(processed_controllers) or 'none',
+        'Skipped controllers': ', '.join(skipped_controllers) or 'none',
         'Episode lengths': len(EPISODE_LENGTHS)
     })
 
@@ -1408,6 +1540,8 @@ def process_generalization_analysis(method_filter='all', controller=None):
         print(f"  Processing {method_filter} controllers: {len(controllers_to_process)} total")
     
     processed_count = 0
+    processed_controllers = []
+    skipped_controllers = []
     
     for controller_name in controllers_to_process:
         gen_data = process_generalization_controller(controller_name)
@@ -1418,13 +1552,18 @@ def process_generalization_analysis(method_filter='all', controller=None):
                 np.save(output_file, gen_data)
                 print(f"    Saved: {output_file}")
                 processed_count += 1
+                processed_controllers.append(controller_name)
             except Exception as e:
                 print(f"    Error saving generalization data for {controller_name}: {e}")
+                skipped_controllers.append(controller_name)
         else:
             print(f"    No generalization data processed for {controller_name}")
+            skipped_controllers.append(controller_name)
     
     print_summary("Generalization Analysis", processed_count, {
         'Method filter': method_filter,
+        'Processed controllers': ', '.join(processed_controllers) or 'none',
+        'Skipped controllers': ', '.join(skipped_controllers) or 'none',
         'Episode lengths': len(EPISODE_LENGTHS)
     })
 
@@ -1437,8 +1576,8 @@ def process_domain_randomization_controller(controller_name, data_type='generali
     if controller_name not in RL_CONTROLLERS.values():
         print(f"    Domain randomization only available for RL methods, skipping {controller_name}")
         return None
-    
-    # PPO-MPC doesn't have domain randomization setup, skip it
+
+    # PPO-MPC is treated as a nominal RL method, not a GEN/DR variant.
     if controller_name == 'ppo_mpc':
         print(f"    PPO-MPC doesn't have domain randomization setup, skipping")
         return None
@@ -1598,8 +1737,13 @@ def process_domain_randomization_analysis(controller=None):
         print(f"  Processing all RL controllers: {controllers_to_process}")
     
     processed_count = 0
+    gen_processed_controllers = []
+    dr_processed_controllers = []
+    skipped_controllers = []
     
     for controller_name in controllers_to_process:
+        controller_processed = False
+
         # Process generalization-trained RL variant.
         gen_data = process_domain_randomization_controller(controller_name, 'generalization')
         if gen_data is not None:
@@ -1611,6 +1755,8 @@ def process_domain_randomization_analysis(controller=None):
                 legacy_output_file = DATA_DIR / f'{controller_name}_domain_rand_generalization.npy'
                 np.save(legacy_output_file, gen_data)
                 print(f"    Saved legacy generalization data: {legacy_output_file}")
+                gen_processed_controllers.append(controller_name)
+                controller_processed = True
             except Exception as e:
                 print(f"    Error saving GEN generalization data: {e}")
         
@@ -1626,17 +1772,137 @@ def process_domain_randomization_analysis(controller=None):
                 np.save(output_file, dr_data)
                 print(f"    Saved robustness DR data: {output_file}")
                 processed_count += 1
+                dr_processed_controllers.append(controller_name)
+                controller_processed = True
             except Exception as e:
                 print(f"    Error saving robustness DR data: {e}")
             
             # Save domain randomization robustness data to JSON
             save_domain_randomization_robustness_data(controller_name, dr_data)
 
+        if not controller_processed:
+            skipped_controllers.append(controller_name)
+
     refresh_domain_randomization_failure_results()
 
     print_summary("Domain Randomization Analysis", processed_count, {
         'Data types': 'generalization + robustness',
+        'GEN controllers': ', '.join(gen_processed_controllers) or 'none',
+        'DR controllers': ', '.join(dr_processed_controllers) or 'none',
+        'Skipped controllers': ', '.join(skipped_controllers) or 'none',
         'RL controllers only': True
+    })
+
+
+def process_gpmpc_convergence_data(tag='hpo'):
+    """Generate GP-MPC convergence data from per-seed learning-curve CSV files."""
+    print_header(f"Processing GP-MPC convergence data ({tag})", level=3)
+
+    candidates = resolve_input_data_candidates(
+        'gp_models', 'gpmpc_acados_TP', tag
+    )
+    data_path = next((path for path in candidates if path.exists()), None)
+    if data_path is None:
+        print("    GP-MPC convergence folder not found. Checked:")
+        for path in candidates:
+            print(f"      {path}")
+        return None
+
+    print(f"    Loading GP-MPC convergence CSVs from: {data_path}")
+    seed_folders = sorted(
+        [
+            path for path in data_path.iterdir()
+            if path.is_dir() and path.name.startswith('seed')
+        ],
+        key=lambda path: int(path.name.split('seed')[1].split('_')[0])
+    )
+    if not seed_folders:
+        print(f"    No seed folders found in {data_path}")
+        return None
+
+    seed_data = []
+    skipped = []
+    for seed_folder in seed_folders:
+        csv_file = seed_folder / 'figs' / 'rmse_error_learning_curve.csv'
+        if not csv_file.exists():
+            skipped.append(seed_folder.name)
+            continue
+
+        data = np.genfromtxt(csv_file, delimiter=',')
+        if data.ndim == 1:
+            data = data.reshape(1, -1)
+        if data.shape[1] < 2:
+            skipped.append(seed_folder.name)
+            continue
+        seed_data.append((seed_folder.name, data[:, :2]))
+
+    if not seed_data:
+        print("    No GP-MPC convergence CSVs could be loaded")
+        return None
+
+    max_epochs = max(data.shape[0] for _, data in seed_data)
+    complete_seed_data = [
+        data for _, data in seed_data
+        if data.shape[0] == max_epochs and np.all(np.isfinite(data[:, 1]))
+    ]
+    early_stopped = [
+        name for name, data in seed_data
+        if data.shape[0] != max_epochs or not np.all(np.isfinite(data[:, 1]))
+    ]
+
+    if not complete_seed_data:
+        print("    No complete GP-MPC convergence seeds found")
+        return None
+
+    merged_data = np.asarray(complete_seed_data, dtype=float)
+    train_steps = np.rint(np.nanmean(merged_data[:, :, 0], axis=0)).astype(int)
+    train_steps[0] = max(train_steps[0], 1)
+    rmse_data = merged_data[:, :, 1]
+
+    convergence_data = {
+        'rmse': rmse_data,
+        'rmse_mean': np.nanmean(rmse_data, axis=0),
+        'rmse_std': np.nanstd(rmse_data, axis=0),
+        'train_steps': train_steps,
+        'train_steps_data': np.arange(max_epochs) * 20,
+        'train_steps_seconds': train_steps / 60,
+        'source_data_root': str(data_path),
+        'complete_seeds': len(complete_seed_data),
+        'skipped_seeds': skipped,
+        'early_stopped_seeds': early_stopped,
+    }
+
+    print(
+        f"    Loaded {len(complete_seed_data)} complete seeds "
+        f"with {max_epochs} convergence points"
+    )
+    if skipped:
+        print(f"    Skipped missing/invalid seeds: {', '.join(skipped)}")
+    if early_stopped:
+        print(f"    Ignored early-stopped seeds: {', '.join(early_stopped)}")
+
+    return convergence_data
+
+
+def process_convergence_analysis():
+    """Process convergence data used by plot_convergence.py."""
+    processed_count = 0
+    processed = []
+    skipped = []
+
+    gpmpc_data = process_gpmpc_convergence_data('hpo')
+    if gpmpc_data is not None:
+        output_file = DATA_DIR / 'gpmpc_acados_TP_hpo_convergence_results.npy'
+        np.save(output_file, gpmpc_data)
+        print(f"    Saved GP-MPC convergence data: {output_file}")
+        processed_count += 1
+        processed.append('GP-MPC')
+    else:
+        skipped.append('GP-MPC')
+
+    print_summary("Convergence Analysis", processed_count, {
+        'Processed controllers': ', '.join(processed) or 'none',
+        'Skipped controllers': ', '.join(skipped) or 'none',
     })
 
 # ==========================================
@@ -1708,6 +1974,9 @@ def process_single_controller(controller_name, analysis_types, noise_type=None, 
             np.save(save_path, dr_data)
             print(f"    Saved: {save_path}")
 
+            save_domain_randomization_robustness_data(controller_name, dr_data)
+            refresh_domain_randomization_failure_results()
+
 def print_usage():
     """Print usage information."""
     print(__doc__)
@@ -1767,6 +2036,9 @@ def parse_arguments():
     
     elif analysis_type == 'domain-randomization':
         return analysis_type, None, 'rl', controller
+
+    elif analysis_type == 'convergence':
+        return analysis_type, None, 'all', controller
     
     elif analysis_type == 'all':
         method_filter = cleaned_args[1] if len(cleaned_args) > 1 else 'all'
@@ -1774,7 +2046,7 @@ def parse_arguments():
     
     else:
         print(f"Error: Invalid analysis type '{analysis_type}'")
-        print("Valid analysis types: robustness, trajectory, generalization, domain-randomization, all")
+        print("Valid analysis types: robustness, trajectory, generalization, domain-randomization, convergence, all")
         sys.exit(1)
 
 def main():
@@ -1795,7 +2067,14 @@ def main():
         method_filter = 'all'
     
     # Process based on analysis type and scope
-    if controller:
+    if analysis_type == 'convergence':
+        if controller and controller != 'gpmpc_acados_TP':
+            print(
+                f"Warning: convergence processing is GP-MPC specific; "
+                f"ignoring --controller={controller}."
+            )
+        process_convergence_analysis()
+    elif controller:
         # Process specific controller
         if controller not in ALL_CONTROLLERS.values():
             print(f"Error: Unknown controller '{controller}'")
@@ -1803,13 +2082,14 @@ def main():
             sys.exit(1)
         
         if analysis_type == 'all':
-            analysis_types = ['robustness', 'trajectory', 'generalization', 'domain-randomization']
+            analysis_types = ['robustness', 'trajectory', 'generalization', 'domain-randomization', 'convergence']
             # For 'all' with specific controller, process all noise types for robustness
             for nt in ['obs_noise', 'proc_noise', 'param']:
                 process_single_controller(controller, ['robustness'], nt, method_filter)
             # Process other analysis types
             for at in ['trajectory', 'generalization', 'domain-randomization']:
                 process_single_controller(controller, [at], None, method_filter)
+            process_convergence_analysis()
         else:
             analysis_types = [analysis_type]
             process_single_controller(controller, analysis_types, noise_type, method_filter)
@@ -1824,6 +2104,8 @@ def main():
             process_generalization_analysis(method_filter)
         elif analysis_type == 'domain-randomization':
             process_domain_randomization_analysis()
+        elif analysis_type == 'convergence':
+            process_convergence_analysis()
         elif analysis_type == 'all':
             # Process all analysis types
             for nt in ['obs_noise', 'proc_noise', 'param']:
@@ -1832,6 +2114,9 @@ def main():
             process_generalization_analysis(method_filter)
             if method_filter in ['rl', 'all']:
                 process_domain_randomization_analysis()
+            process_convergence_analysis()
+
+    print_final_summary_recap()
 
 if __name__ == '__main__':
     main()

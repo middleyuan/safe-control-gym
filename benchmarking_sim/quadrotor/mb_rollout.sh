@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 # GP_BASE_TAG='100_300'
 # GP_BASE_TAG='100_300'
 GP_BASE_TAG='hpo'
-OUTPUT_ROOT='Results/Final_june'
+OUTPUT_ROOT='Results/Final_july'
 
 # get the time
 START_TIME=$(date +%s)
@@ -61,22 +61,22 @@ done
 # done
 
 # nominal
-# for RAND_TYPE in ''
-# do
-#     GP_TAG=$GP_BASE_TAG$RAND_TYPE
-#     python3 parallel_gpmpc_experiment.py 'gpmpc_acados_TP' "$GP_BASE_TAG" "$RAND_TYPE" "$RAND_TYPE" "$OUTPUT_ROOT"
-#     # python3 results_dw.py 'gpmpc_acados_TP' $GP_TAG
-#     python3 results_noise.py 'gpmpc_acados_TP' 'obs_noise' "$GP_TAG" "$OUTPUT_ROOT"
-#     python3 results_noise.py 'gpmpc_acados_TP' 'proc_noise' "$GP_TAG" "$OUTPUT_ROOT"
-#     python3 results_param.py 'gpmpc_acados_TP' 'param' "$GP_TAG" "$OUTPUT_ROOT"
-#     for ADDITIOANL in '_9' '_10' '_11' '_12' '_13' '_14' '_15'
-#     do
-#         for algo in 'gpmpc_acados_TP'
-#         do
-#             python3 results_rollout.py "$ADDITIOANL" "$algo" "$GP_TAG" "$OUTPUT_ROOT"
-#         done
-#     done
-# done
+for RAND_TYPE in ''
+do
+    GP_TAG=$GP_BASE_TAG$RAND_TYPE
+    python3 parallel_gpmpc_experiment.py 'gpmpc_acados_TP' "$GP_BASE_TAG" "$RAND_TYPE" "$RAND_TYPE" "$OUTPUT_ROOT"
+    # python3 results_dw.py 'gpmpc_acados_TP' $GP_TAG
+    python3 results_noise.py 'gpmpc_acados_TP' 'obs_noise' "$GP_TAG" "$OUTPUT_ROOT"
+    python3 results_noise.py 'gpmpc_acados_TP' 'proc_noise' "$GP_TAG" "$OUTPUT_ROOT"
+    python3 results_param.py 'gpmpc_acados_TP' 'param' "$GP_TAG" "$OUTPUT_ROOT"
+    for ADDITIOANL in '_9' '_10' '_11' '_12' '_13' '_14' '_15'
+    do
+        for algo in 'gpmpc_acados_TP'
+        do
+            python3 results_rollout.py "$ADDITIOANL" "$algo" "$GP_TAG" "$OUTPUT_ROOT"
+        done
+    done
+done
 
 # for RAND_TYPE in '_ob_ns=5_proc_ns=3' \
 #                  '_ob_ns=5'

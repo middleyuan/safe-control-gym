@@ -1,0 +1,118 @@
+{
+  "relative_failures": {
+    "obs_noise": {
+      "Linear MPC": 100.0,
+      "Nonlinear MPC": 60.0,
+      "GP-MPC": 60.0,
+      "iLQR": 60.0,
+      "LQR": 200.0,
+      "Geometric Control": 200.0,
+      "F-MPC": 200.0,
+      "PPO": 25.0,
+      "SAC": 50.0,
+      "DPPO": 25.0,
+      "PPO-MPC": 35.0
+    },
+    "proc_noise": {
+      "Linear MPC": 4.0,
+      "Nonlinear MPC": 3.0,
+      "GP-MPC": 4.0,
+      "iLQR": 3.0,
+      "LQR": 18.0,
+      "Geometric Control": 6.0,
+      "F-MPC": 14.0,
+      "PPO": 4.0,
+      "SAC": 3.0,
+      "DPPO": 4.0,
+      "PPO-MPC": 3.0
+    },
+    "param": {
+      "Linear MPC": 13.0,
+      "Nonlinear MPC": 3.5,
+      "GP-MPC": 8.0,
+      "iLQR": 2.0,
+      "LQR": 16.0,
+      "Geometric Control": 8.0,
+      "F-MPC": 25.0,
+      "PPO": 3.0,
+      "SAC": 5.0,
+      "DPPO": 3.0,
+      "PPO-MPC": 4.0
+    }
+  },
+  "absolute_failures": {
+    "obs_noise": {
+      "Linear MPC": 190.0,
+      "Nonlinear MPC": 200.0,
+      "GP-MPC": 200.0,
+      "iLQR": 200.0,
+      "LQR": 200.0,
+      "Geometric Control": 200.0,
+      "F-MPC": 0.0,
+      "PPO": 130.0,
+      "SAC": 200.0,
+      "DPPO": 120.0,
+      "PPO-MPC": 200.0
+    },
+    "proc_noise": {
+      "Linear MPC": 5.0,
+      "Nonlinear MPC": 9.0,
+      "GP-MPC": 7.0,
+      "iLQR": 18.0,
+      "LQR": 35.0,
+      "Geometric Control": 7.0,
+      "F-MPC": 0.0,
+      "PPO": 25.0,
+      "SAC": 7.0,
+      "DPPO": 25.0,
+      "PPO-MPC": 8.0
+    },
+    "param": {
+      "Linear MPC": 23.0,
+      "Nonlinear MPC": 22.0,
+      "GP-MPC": 12.0,
+      "iLQR": 10.0,
+      "LQR": 18.0,
+      "Geometric Control": 8.0,
+      "F-MPC": 0.0,
+      "PPO": 16.0,
+      "SAC": 13.0,
+      "DPPO": 14.0,
+      "PPO-MPC": 13.0
+    }
+  },
+  "domain_randomization_relative_failures": {
+    "obs_noise": {
+      "PPO": 40.0,
+      "SAC": 90.0,
+      "DPPO": 35.0
+    },
+    "proc_noise": {
+      "PPO": 5.0,
+      "SAC": 5.0,
+      "DPPO": 6.0
+    },
+    "param": {
+      "PPO": 4.0,
+      "SAC": 6.0,
+      "DPPO": 5.0
+    }
+  },
+  "domain_randomization_absolute_failures": {
+    "obs_noise": {
+      "PPO": 160.0,
+      "SAC": 200.0,
+      "DPPO": 160.0
+    },
+    "proc_noise": {
+      "PPO": 25.0,
+      "SAC": 7.0,
+      "DPPO": 25.0
+    },
+    "param": {
+      "PPO": 14.0,
+      "SAC": 12.0,
+      "DPPO": 14.0
+    }
+  }
+}

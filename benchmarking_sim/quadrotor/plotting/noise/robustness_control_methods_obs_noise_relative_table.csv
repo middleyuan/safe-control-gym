@@ -1,0 +1,8 @@
+Method,First > 200%,Max tested,Peak %
+Geometric Control,> 200,200,115.2
+Linear MPC,100,200,858.1
+Nonlinear MPC,60,200,1269.0
+F-MPC,> 200,200,140.4
+iLQR,60,200,779.6
+LQR,> 200,200,181.6
+GP-MPC,60,200,1186.7

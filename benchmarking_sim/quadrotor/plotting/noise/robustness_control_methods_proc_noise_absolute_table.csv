@@ -1,0 +1,8 @@
+Method,First > 0.25m,Max tested,Peak RMSE [m]
+Geometric Control,7,200,1.244
+Linear MPC,5,200,1.128
+Nonlinear MPC,9,200,1.159
+F-MPC,0,200,1.239
+iLQR,18,200,1.570
+LQR,35,200,1.718
+GP-MPC,7,200,1.391

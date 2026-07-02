@@ -1,0 +1,5 @@
+Method,First > 0.25m,Max tested,Peak RMSE [m]
+PPO,25,200,1.175
+SAC,7,200,1.137
+DPPO,25,200,1.219
+PPO-MPC,8,200,1.141
