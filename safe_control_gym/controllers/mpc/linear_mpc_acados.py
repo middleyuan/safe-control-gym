@@ -199,8 +199,27 @@ class LinearMPC_ACADOS(MPC_ACADOS):
         #     else:
         #         raise ValueError('Constraint type not supported. Support only for BoundedConstraint and descendants. Check constraints.py.')
 
+        # slack costs for nonlinear constraints (same treatment as MPC_ACADOS)
         if self.soft_constraints:
-            print(colored('Linear MPC soft constraints not implemented yet.', 'yellow'))
+            # slack variables for all constraints
+            ocp.constraints.Jsh_0 = np.eye(h0_expr.shape[0])
+            ocp.constraints.Jsh = np.eye(h_expr.shape[0])
+            ocp.constraints.Jsh_e = np.eye(he_expr.shape[0])
+            # slack penalty
+            L2_pen = self.soft_penalty
+            L1_pen = self.soft_penalty
+            ocp.cost.Zl_0 = L2_pen * np.ones(h0_expr.shape[0])
+            ocp.cost.Zu_0 = L2_pen * np.ones(h0_expr.shape[0])
+            ocp.cost.zl_0 = L1_pen * np.ones(h0_expr.shape[0])
+            ocp.cost.zu_0 = L1_pen * np.ones(h0_expr.shape[0])
+            ocp.cost.Zu = L2_pen * np.ones(h_expr.shape[0])
+            ocp.cost.Zl = L2_pen * np.ones(h_expr.shape[0])
+            ocp.cost.zl = L1_pen * np.ones(h_expr.shape[0])
+            ocp.cost.zu = L1_pen * np.ones(h_expr.shape[0])
+            ocp.cost.Zl_e = L2_pen * np.ones(he_expr.shape[0])
+            ocp.cost.Zu_e = L2_pen * np.ones(he_expr.shape[0])
+            ocp.cost.zl_e = L1_pen * np.ones(he_expr.shape[0])
+            ocp.cost.zu_e = L1_pen * np.ones(he_expr.shape[0])
 
         # placeholder initial state constraint
         x_init = np.zeros((nx))
