@@ -513,8 +513,10 @@ class MPCFunction:
             "jit": self.jit,
             "jit_cleanup": True,
             "jit_temp_suffix": True,
-            "jit_options": self.jit_options,
+            "jit_options": {"flags": self.jit_options["flags_solver"]},
         }
+        jit_opts_fns = jit_opts.copy()
+        jit_opts_fns["jit_options"] = {"flags": self.jit_options["flags_fns"]}
         opts_setting.update(jit_opts)
         vnlp_prob = {
             "f": cost,
@@ -558,6 +560,7 @@ class MPCFunction:
             "qupper_bound": qcon_ubg,
             "qsolver": qsolver,
             "jit_options": jit_opts,
+            "jit_options_fns": jit_opts_fns,
         }
         start_time = time.time()
 
@@ -638,6 +641,7 @@ class MPCFunction:
             "dRdz_fn": dRdz_fn,
             "dpi_fn": dPi_fn,
             "jit_options": jit_opts,
+            "jit_options_fns": jit_opts_fns,
         }
         print(
             f"[MPC Setup] Sensitivity setup time: {time.time() - start_time:.3f} seconds."
@@ -649,7 +653,7 @@ class MPCFunction:
             "all_fn",
             [z, fixed_param, ref_param, theta],
             [cs.norm_2(R_kkt), dPi],
-            jit_opts,
+            jit_opts_fns,
         )
         # all_fn.save("all_fn.casadi")
         print(
