@@ -13,12 +13,12 @@ algo_config:
     mpc_config:
       horizon: 30
       warmstart: True
-      n_parallel_solver: 10
-      n_train_solver: 8
+      cs_workers: 16
       jit: True
       jit_options:
         # compiler: "clang"  # gcc, ccache gcc, clang
-        flags: ["-O0"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
+        flags_solver: ["-O2"]
+        flags_fns: ["-O0"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
 
   # loss args
   gamma: 0.95
@@ -31,20 +31,20 @@ algo_config:
   exploration_init: -1.0
 
   # optim args
-  opt_epochs: 5
+  opt_epochs: 20
   mini_batch_size: 64
-  actor_lr: 0.0003
-  critic_lr: 0.0003
+  actor_lr: 0.0001
+  critic_lr: 0.0001
 
   # runner args
-  max_env_steps: 660000
+  max_env_steps: 1320000
   rollout_batch_size: 10
   rollout_steps: 330
   eval_batch_size: 10
 
   # misc
   log_interval: 6600
-  save_interval: 660000
+  save_interval: 1320000
   num_checkpoints: 0
   eval_interval: 6600
   eval_save_best: True

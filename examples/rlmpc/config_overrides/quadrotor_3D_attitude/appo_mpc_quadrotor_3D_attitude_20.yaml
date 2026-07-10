@@ -5,9 +5,9 @@ algo_config:
 
   # actor args
   actor_config:
-    q_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+    q_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 1., 1., 1., 0.001, 0.001, 0.001, 1.]
     r_mpc: [0.5, 0.5, 0.5, 0.5]
-    qt_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+    qt_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 1., 1., 1., 0.001, 0.001, 0.001, 1.]
     back_off: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     model_param: [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]
     mpc_config:
@@ -32,20 +32,20 @@ algo_config:
 
   # optim args
   opt_epochs: 20
-  mini_batch_size: 64
+  mini_batch_size: 256
   actor_lr: 0.0001
   critic_lr: 0.0001
 
   # runner args
-  max_env_steps: 1320000
+  max_env_steps: 2460000
   rollout_batch_size: 10
-  rollout_steps: 330
+  rollout_steps: 615
   eval_batch_size: 10
 
   # misc
-  log_interval: 6600
-  save_interval: 1320000
+  log_interval: 12300
+  save_interval: 2460000
   num_checkpoints: 0
-  eval_interval: 6600
+  eval_interval: 12300
   eval_save_best: True
   tensorboard: True

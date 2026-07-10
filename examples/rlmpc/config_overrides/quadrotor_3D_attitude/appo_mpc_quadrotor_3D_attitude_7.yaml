@@ -1,98 +1,51 @@
-task_config:
-  info_in_reset: True
-  ctrl_freq: 60
-  pyb_freq: 60
-  physics: dyn_si_3d_delay
-  quad_type: 9
-  normalized_rl_action_space: False
+algo_config:
+  # model args
+  hidden_dim: 256
+  activation: "relu"
 
-  init_state:
-    init_x: 0.0
-    init_x_dot: 0
-    init_y: 0.0
-    init_y_dot: 0
-    init_z: 1
-    init_z_dot: 0
-    init_theta: 0
-    init_theta_dot: 0
-    init_tau: 0.3626
+  # actor args
+  actor_config:
+    q_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+    r_mpc: [0.5, 0.5, 0.5, 0.5]
+    qt_mpc: [10., 0.1, 10., 0.1, 10., 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
+    back_off: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    model_param: [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]
+    mpc_config:
+      horizon: 30
+      warmstart: True
+      cs_workers: 10
+      jit: True
+      jit_options:
+        # compiler: "clang"  # gcc, ccache gcc, clang
+        flags_solver: ["-O2"]
+        flags_fns: ["-O0"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
 
-  randomized_init: True
-  randomized_inertial_prop: False
+  # loss args
+  gamma: 0.95
+  use_gae: True
+  gae_lambda: 0.95  # 95
+  use_clipped_value: False  # or True
+  clip_param: 0.2
+  target_kl: 0.01
+  entropy_coef: 0.01
+  exploration_init: -1.0
 
-  init_state_randomization_info:
-    init_x:
-      distrib: 'normal'
-      scale: 0.0011629923113331312
-    init_x_dot:
-      distrib: 'normal'
-      scale: 0.003635597781389117
-    init_y:
-      distrib: 'normal'
-      scale: 0.001670549279531124
-    init_y_dot:
-      distrib: 'normal'
-      scale: 0.004965500657569368
-    init_z:
-      distrib: 'normal'
-      scale: 0.0024990695232428458
-    init_z_dot:
-      distrib: 'normal'
-      scale: 0.010193088084183025
-    init_phi:
-      distrib: 'normal'
-      scale: 0.0026984744060397532
-    init_theta:
-      distrib: 'normal'
-      scale: 0.0024088251667187467
-    init_psi:
-      distrib: 'normal'
-      scale: 0.0023822834889102923
-    init_p:
-      distrib: 'normal'
-      scale: 0.03452115832640752
-    init_q:
-      distrib: 'normal'
-      scale: 0.02387283406599296
-    init_r:
-      distrib: 'normal'
-      scale: 0.03123258323211547
+  # optim args
+  opt_epochs: 20
+  mini_batch_size: 64
+  actor_lr: 0.0001
+  critic_lr: 0.0001
 
-  task: traj_tracking
-  task_info:
-    trajectory_type: figure8
-    num_cycles: 2
-    trajectory_plane: 'xy'
-    trajectory_position_offset: [0, 0, 1]
-    trajectory_scale: 1.0
+  # runner args
+  max_env_steps: 1260000
+  rollout_batch_size: 10
+  rollout_steps: 210
+  eval_batch_size: 10
 
-  inertial_prop:
-    M: 0.037
-
-  episode_len_sec: 7
-  cost: rl_reward
-  obs_goal_horizon: 10
-  rew_exponential: True
-
-  rew_state_weight: [20.0, 0.1, 20.0, 0.1, 20.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.1]
-  rew_act_weight: [0.1, 0.1, 0.1, 0.1]  #set to 1 if action noise is too large
-
-  constraints:
-    - constraint_form: default_constraint
-      constrained_variable: state
-    - constraint_form: default_constraint
-      constrained_variable: input
-
-  done_on_out_of_bound: True
-  done_on_violation: False
-  disturbances:
-    action:
-      - disturbance_func: white_noise
-        std: [0.021, 0.078, 0.071, 0.064]
-        # std: [0.063, 0.234, 0.213, 0.192]  # 3 times
-        # std: [0.1558, 0.1725]  # 5 times
-        # std: [0.21812, 0.2415]  # 7 times
-        # std: [0.3116, 0.345]  # 10 times
-    observation:
-      - disturbance_func: white_noise
-        std: [1.31e-05, 5.09e-04, 1.42e-05, 5.23e-04, 1.47e-05, 5.91e-04, 1.23e-03, 6.11e-04, 6.04e-04, 5.25e-02, 2.62e-02, 2.53e-02, 0.0001]
+  # misc
+  log_interval: 4200
+  save_interval: 1260000
+  num_checkpoints: 0
+  eval_interval: 4200
+  eval_save_best: True
+  tensorboard: True

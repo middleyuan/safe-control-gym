@@ -8,9 +8,9 @@ task_config:
   init_state:
     init_x: 1.4
     init_x_dot: 0
-    init_y: 0.5
+    init_y: 1.0
     init_y_dot: 0
-    init_z: 1.0
+    init_z: 1.1
     init_z_dot: 0
     init_theta: 0
     init_theta_dot: 0
@@ -67,11 +67,11 @@ task_config:
     trajectory_plane: 'xy'
     trajectory_position_offset: [0.0, 0.0, 1.0]
     trajectory_scale: 1.0
-    custom_snap_ref_traj: "/home/savvyfox/Projects/scg-exp/benchmarking_sim/quadrotor/data/custom_snap_ref_traj_final_v6_2.npy"
+    custom_snap_ref_traj: "/home/benchmark/safe-control-gym/benchmarking_sim/quadrotor/obstacle_course_generation/data/20_5/trajectory/custom_snap_ref_traj_20_5.npy"
 
   cost: rl_reward
   obs_goal_horizon: 1
-  rew_state_weight: [15.0, 0.1, 15.0, 0.1, 15.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
+  rew_state_weight: [10.0, 0.1, 10.0, 0.1, 10.0, 0.1, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001]
   rew_act_weight: [0.1, 0.1, 0.1, 0.1] #set to 1 if action noise is too large
   # rew_act_weight: [1.00, 1.00, 1.00, 1.00] #set to 1 if action noise is too large
   rew_exponential: True
@@ -81,8 +81,8 @@ task_config:
     action:
       - disturbance_func: white_noise
         # std: [ 0.005, 0.019, 0.017, 0.016 ]  # 0.25 times
-        std: [ 0.010, 0.034, 0.035, 0.032 ]  # 0.5 times
-        # std: [ 0.021, 0.078, 0.071, 0.064 ]  # 1 times (original)
+        # std: [ 0.010, 0.034, 0.035, 0.032 ]  # 0.5 times
+        std: [ 0.021, 0.078, 0.071, 0.064 ]  # 1 times (original)
         # std: [0.063, 0.234, 0.213, 0.192]  # 3 times
         # std: [0.105, 0.390, 0.355, 0.320]  # 5 times
         # std: [0.147, 0.546, 0.497, 0.448]  # 7 times

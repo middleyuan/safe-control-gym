@@ -18,7 +18,8 @@ algo_config:
       jit: True
       jit_options:
         # compiler: "clang"  # gcc, ccache gcc, clang
-        flags: ["-O2"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
+        flags_solver: ["-O2"]
+        flags_fns: ["-O2"]    # -O0, -Og, -O1, -O2, -O3 (-O1 and above may lead to very high compile times)
 
   # loss args
   gamma: 0.95
