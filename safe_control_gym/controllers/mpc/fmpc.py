@@ -316,9 +316,16 @@ class FlatMPC(BaseController):
         z_horizon = self.mpc.x_prev #8xN set in linearMPC
         v_horizon = self.mpc.u_prev #2xN
 
-        # flat input transformation: z and v to action u
-        # Note: using z_horizon[:,0] yeilds really poor performance.
-        # Note: using the feedforward v_horizon[:,1] works slightly better than v_horizon[:,0]
+        # Flat input transformation: z and v to action u.
+        # Always use z_horizon[:,1] (one-step prediction), never z_horizon[:,0]: stage 0 is
+        # hard-constrained to the observed state, so z_0 feeds the raw state estimate straight
+        # back through the transform and the loop diverges (verified: crashes at all speeds).
+        # The v index differs by model because of who estimates the flat state:
+        # - 3D delay model: flat state comes directly from measurement + previous action (no
+        #   observer), so the time-consistent pair (z_1, v_1) is safe and tracks slightly better.
+        # - 2D / 3D_10: the FlatStateObserver reconstructs u_dot assuming the applied action
+        #   belongs to v_0's interval; pairing z_1 with v_1 adds a one-step feedforward lead
+        #   that breaks that bookkeeping (verified: crashes at 9/11 s, ~70x error at 15 s).
         if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             action = self.action_from_flat_states_func(z_horizon[:, 1], v_horizon[:, 1], self.inertial_prop, g=self.mpc.env.GRAVITY_ACC)
             action[0] = np.clip(action[0], 0.08, 0.45)
