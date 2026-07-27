@@ -57,7 +57,7 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
             TRAJ_LEN = int(TRAJ_LEN) if TRAJ_LEN is not None else 11
             ADDITIONAL = ''
     else:
-        # ALGO = 'ilqr'
+        ALGO = 'ilqr'
         # ALGO = 'gp_mpc'
         # ALGO = 'gpmpc_acados'
         # ALGO = 'gpmpc_acados_TP'
@@ -69,11 +69,11 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
         # ALGO = 'lqr'
         # ALGO = 'lqr_c'
         # ALGO = 'pid'
-        ALGO = 'fmpc'
+        # ALGO = 'fmpc'
         output_root = 'Results'
         # ALGO = 'ppo_mpc_acados'
-        #ADDITIONAL = ''
-        #CTRL_ADD = ''
+        ADDITIONAL = ''
+        CTRL_ADD = ''
         # gp_tag = 'safety'
         # ADDITIONAL = '_param'
         # ADDITIONAL = '_safety'
@@ -91,12 +91,12 @@ def run(gui=False, n_episodes=1, n_steps=None, save_data=True, seed=1):
     # ADDITIONAL = ''
     # ADDITIONAL = '_tr'
     # ADDITIONAL = '_9'
-    # ADDITIONAL = '_11'
+    ADDITIONAL = '_11'
     # ADDITIONAL='_snap'
     PRIOR = '100'
     if ALGO == 'ppo_mpc_acados':
         ALGO = 'mpc_acados'
-        episode_len = 7
+        episode_len = 11
         PRIOR = f'{episode_len}_ppo_mpc_100'
     agent = 'quadrotor' if SYS in ['quadrotor_2D', 'quadrotor_2D_attitude', 'quadrotor_3D_attitude'] else SYS
     SAFETY_FILTER = None

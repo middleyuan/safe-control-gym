@@ -149,6 +149,12 @@ class SACAgent:
         '''Updates model parameters based on current training batch.'''
         results = defaultdict(list)
 
+        # critic update
+        critic_loss = self.compute_q_loss(batch)
+        self.critic_opt.zero_grad()
+        critic_loss.backward()
+        self.critic_opt.step()
+
         # actor update
         policy_loss, entropy_loss = self.compute_policy_loss(batch)
         if self.count%self.update_freq == 0:
@@ -160,12 +166,6 @@ class SACAgent:
             self.alpha_opt.zero_grad()
             entropy_loss.backward()
             self.alpha_opt.step()
-
-        # critic update
-        critic_loss = self.compute_q_loss(batch)
-        self.critic_opt.zero_grad()
-        critic_loss.backward()
-        self.critic_opt.step()
 
         # update target networks
         if self.count%self.update_freq == 0:

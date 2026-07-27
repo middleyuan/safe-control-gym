@@ -84,7 +84,7 @@ MAX_SEED = 10
 METRIC_FILE = 'metrics.txt'
 
 # Failure thresholds for robustness analysis
-RELATIVE_FAILURE_THRESHOLD = 200  # 200% performance degradation
+RELATIVE_FAILURE_THRESHOLD = 200   # 200% performance degradation
 ABSOLUTE_FAILURE_THRESHOLD = 0.25  # 0.25m RMSE
 
 # Controller definitions

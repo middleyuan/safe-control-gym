@@ -361,9 +361,9 @@ def format_radar_value(value, metric_name=None):
 
     value = float(value)
     if metric_name in ['robustness_proc', 'robustness_obs', 'robustness_param']:
-        return f'{value:.1f}'
+        return f'{value:.0f}'
     if metric_name in ['performance', 'worst_generalization_performance']:
-        return f'{value:.2f}'
+        return f'{value:.3f}'
     return f'{value:.3f}'
 
 def spider(df, 
@@ -462,9 +462,11 @@ def spider(df,
                 size=small_text_size,
                 color='black',
             )
-            # Format worst_generalization_performance with 2 decimal places
             worst_gen_value = ID_numbers['worst_generalization_performance'][model_name]
-            formatted_worst_gen = f'{worst_gen_value:.2f}' if isinstance(worst_gen_value, float) else str(worst_gen_value)
+            formatted_worst_gen = format_radar_value(
+                worst_gen_value,
+                'worst_generalization_performance',
+            )
             ax.text(
                 angles[metric_index['worst_generalization_performance']] - 0.15, 
                 values_ID[metric_index['worst_generalization_performance']], 
@@ -499,7 +501,7 @@ def spider(df,
             ]:
                 t = format_radar_value(t, metric_name)
             elif _x in [angles[metric_index['performance']], angles[metric_index['worst_generalization_performance']]]:
-                t = f'{t:.2f}' if isinstance(t, float) else str(t)  # 2 decimal places for performance and generalization
+                t = format_radar_value(t, metric_name)
             else:
                 t = f'{t:.3f}' if isinstance(t, float) else str(t)
 

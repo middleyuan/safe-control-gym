@@ -252,16 +252,14 @@ class SAC(BaseController):
         rew = self.reward_normalizer(rew, done)
         mask = 1 - np.asarray(done)
 
-        # time truncation is not true termination
+        # Time truncation is not true termination, so it should bootstrap.
+        # Out-of-bounds is a true failure termination, so it should not bootstrap.
         terminal_idx, terminal_obs = [], []
         for idx, inf in enumerate(info['n']):
             if 'terminal_info' not in inf:
                 continue
             inff = inf['terminal_info']
             if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
-                terminal_idx.append(idx)
-                terminal_obs.append(inf['terminal_observation'])
-            elif inff['out_of_bounds']:
                 terminal_idx.append(idx)
                 terminal_obs.append(inf['terminal_observation'])
         if len(terminal_obs) > 0:
